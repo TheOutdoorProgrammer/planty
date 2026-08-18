@@ -38,6 +38,21 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/plants/{slug}/observations", s.listObservations)
 	mux.HandleFunc("POST /v1/plants/{slug}/observations", s.addObservation)
 
+	mux.HandleFunc("POST /v1/plants/{slug}/harvests", s.addHarvest)
+
+	mux.HandleFunc("GET /v1/today", s.today)
+	mux.HandleFunc("POST /v1/verdicts/{id}/ack", s.ackVerdict)
+
+	mux.HandleFunc("GET /v1/sensors", s.listSensors)
+	mux.HandleFunc("POST /v1/sensors", s.linkSensor)
+	mux.HandleFunc("PATCH /v1/sensors/{id}", s.calibrateSensor)
+
+	mux.HandleFunc("GET /v1/questions", s.listQuestions)
+	mux.HandleFunc("POST /v1/questions", s.askOwner)
+	mux.HandleFunc("POST /v1/questions/{id}/answer", s.answerQuestion)
+
+	mux.HandleFunc("POST /v1/away", s.goAway)
+
 	mux.HandleFunc("GET /v1/cold-watch", s.coldWatch)
 
 	return mux

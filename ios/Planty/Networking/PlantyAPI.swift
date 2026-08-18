@@ -1,0 +1,93 @@
+import Foundation
+
+/// The whole HTTP contract from docs/DATA-MODEL.md, as one seam. Screens talk
+/// to this, never to URLSession, which is what makes the state logic testable.
+protocol PlantyAPI: Sendable {
+    func today() async throws -> Digest
+    func plants(filter: PlantFilter) async throws -> [Plant]
+    func plant(slug: String) async throws -> PlantDetail
+    func createPlant(_ draft: NewPlant) async throws -> Plant
+    func updatePlant(slug: String, patch: PlantPatch) async throws -> Plant
+    func archivePlant(slug: String, status: PlantStatus) async throws
+    func addObservation(slug: String, observation: NewObservation) async throws -> Observation
+    func timeline(slug: String) async throws -> PlantTimeline
+    func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo
+    func acknowledge(verdictID: UUID) async throws
+    func sensors() async throws -> [SensorLink]
+    func logHarvest(_ harvest: NewHarvest) async throws -> Harvest
+    func health() async throws
+}
+
+/// Query parameters GET /v1/plants accepts. Nil means "do not filter".
+struct PlantFilter: Sendable, Hashable {
+    var domain: PlantDomain?
+    var steward: String?
+    var status: PlantStatus?
+    var wateringMethod: WateringMethod?
+    var includeArchived = false
+
+    static let live = PlantFilter()
+
+    var queryItems: [URLQueryItem] {
+        var items: [URLQueryItem] = []
+        if let domain { items.append(URLQueryItem(name: "domain", value: domain.rawValue)) }
+        if let steward { items.append(URLQueryItem(name: "steward", value: steward)) }
+        if let status { items.append(URLQueryItem(name: "status", value: status.rawValue)) }
+        if let wateringMethod {
+            items.append(URLQueryItem(name: "watering_method", value: wateringMethod.rawValue))
+        }
+        if includeArchived {
+            items.append(URLQueryItem(name: "include_archived", value: "true"))
+        }
+        return items
+    }
+}
+
+/// A sparse create: the service fills in domain, status, steward, access and
+/// watering method, so an app can add a plant from a photo and a name.
+struct NewPlant: Codable, Sendable, Hashable {
+    var commonName: String
+    var botanicalName: String?
+    var location: String?
+    var steward: String?
+    var domain: PlantDomain?
+    var wateringMethod: WateringMethod?
+    var accessibility: PlantAccessibility?
+
+    init(commonName: String) {
+        self.commonName = commonName
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case commonName = "common_name"
+        case botanicalName = "botanical_name"
+        case location
+        case steward
+        case domain
+        case wateringMethod = "watering_method"
+        case accessibility
+    }
+}
+
+/// PATCH /v1/plants/{slug}. Only what changed goes on the wire.
+struct PlantPatch: Codable, Sendable, Hashable {
+    var commonName: String?
+    var botanicalName: String?
+    var location: String?
+    var status: PlantStatus?
+    var steward: String?
+    var lightExposure: LightExposure?
+    var minTempF: Double?
+
+    init() {}
+
+    enum CodingKeys: String, CodingKey {
+        case commonName = "common_name"
+        case botanicalName = "botanical_name"
+        case location
+        case status
+        case steward
+        case lightExposure = "light_exposure"
+        case minTempF = "min_temp_f"
+    }
+}

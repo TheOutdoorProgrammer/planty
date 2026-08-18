@@ -1,0 +1,196 @@
+package api
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+
+	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+)
+
+// StaleAfter is how old the newest verdict may be before the digest says so.
+// Sized past a missed daily run so one hiccup does not cry stale.
+const StaleAfter = 36 * time.Hour
+
+// today answers "what should I do right now" for both clients.
+func (s *Server) today(w http.ResponseWriter, r *http.Request) {
+	digest, err := s.store.Digest(r.Context(), StaleAfter)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{
+		"date":        digest.Date,
+		"entries":     digest.Entries,
+		"checked":     digest.Checked,
+		"stale_since": digest.StaleSince,
+		"all_clear":   digest.AllClear(),
+	})
+}
+
+func (s *Server) ackVerdict(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.store.AckVerdict(r.Context(), id); err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]string{"acknowledged": id.String()})
+}
+
+func (s *Server) listSensors(w http.ResponseWriter, r *http.Request) {
+	links, err := s.store.SensorLinks(r.Context(), nil)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{"sensors": links, "count": len(links)})
+}
+
+func (s *Server) linkSensor(w http.ResponseWriter, r *http.Request) {
+	var link plant.SensorLink
+	if err := json.NewDecoder(r.Body).Decode(&link); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	created, err := s.store.LinkSensor(r.Context(), link)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	s.ok(w, http.StatusCreated, created)
+}
+
+// calibrateSensor records this probe's own dry and wet marks. Nothing may drive
+// an automated watering decision until it has them.
+func (s *Server) calibrateSensor(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var body struct {
+		Dry float64 `json:"dry_baseline"`
+		Wet float64 `json:"wet_baseline"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+
+	link, err := s.store.Calibrate(r.Context(), id, body.Dry, body.Wet)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	s.ok(w, http.StatusOK, link)
+}
+
+func (s *Server) listQuestions(w http.ResponseWriter, r *http.Request) {
+	status := plant.QuestionStatus(r.URL.Query().Get("status"))
+	if status == "" {
+		status = plant.QuestionOpen
+	}
+	questions, err := s.store.Questions(r.Context(), r.URL.Query().Get("asked_of"), status)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{
+		"questions": questions,
+		"count":     len(questions),
+		"as_text":   questionText(questions),
+	})
+}
+
+// questionText renders the queue as one message worth sending, which is the
+// whole point of batching them.
+func questionText(questions []plant.Question) string {
+	if len(questions) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("A few questions about the plants:\n")
+	for i, q := range questions {
+		fmt.Fprintf(&b, "\n%d. %s", i+1, q.Question)
+	}
+	return b.String()
+}
+
+func (s *Server) askOwner(w http.ResponseWriter, r *http.Request) {
+	var q plant.Question
+	if err := json.NewDecoder(r.Body).Decode(&q); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	created, err := s.store.AskOwner(r.Context(), q)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	s.ok(w, http.StatusCreated, created)
+}
+
+func (s *Server) answerQuestion(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	var body struct {
+		Answer string `json:"answer"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	answered, err := s.store.AnswerQuestion(r.Context(), id, body.Answer)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, answered)
+}
+
+func (s *Server) goAway(w http.ResponseWriter, r *http.Request) {
+	var a plant.AwayPeriod
+	if err := json.NewDecoder(r.Body).Decode(&a); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	created, err := s.store.GoAway(r.Context(), a)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	s.ok(w, http.StatusCreated, created)
+}
+
+func (s *Server) addHarvest(w http.ResponseWriter, r *http.Request) {
+	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	var h plant.Harvest
+	if err := json.NewDecoder(r.Body).Decode(&h); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	h.PlantID = p.ID
+
+	created, err := s.store.AddHarvest(r.Context(), h)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	s.ok(w, http.StatusCreated, created)
+}

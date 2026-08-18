@@ -1,9 +1,11 @@
-// Command planty serves the API behind the iOS app and the Dusk plugin.
+// Command planty serves the API behind the iOS app and the Dusk plugin, and
+// runs the scheduled jobs.
 package main
 
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,8 +14,19 @@ import (
 	"time"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/api"
+	"github.com/TheOutdoorProgrammer/planty/internal/ha"
+	"github.com/TheOutdoorProgrammer/planty/internal/job"
+	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
+
+const usage = `planty <command>
+
+  serve    run the HTTP API
+  ingest   pull current sensor values from Home Assistant
+  daily    judge every plant and send the digest
+  cold     check tonight's forecast and warn about plants to bring in
+  migrate  apply database migrations and exit`
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -24,13 +37,14 @@ func main() {
 }
 
 func run(log *slog.Logger) error {
+	if len(os.Args) < 2 {
+		fmt.Fprintln(os.Stderr, usage)
+		return errors.New("no command given")
+	}
+
 	dsn := os.Getenv("PLANTY_DATABASE_URL")
 	if dsn == "" {
 		return errors.New("PLANTY_DATABASE_URL is required")
-	}
-	addr := os.Getenv("PLANTY_ADDR")
-	if addr == "" {
-		addr = ":8080"
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -45,7 +59,30 @@ func run(log *slog.Logger) error {
 	if err := db.Migrate(ctx); err != nil {
 		return err
 	}
-	log.Info("migrations applied")
+
+	switch os.Args[1] {
+	case "serve":
+		return serve(ctx, db, log)
+	case "migrate":
+		log.Info("migrations applied")
+		return nil
+	case "ingest":
+		return job.Ingest{Store: db, HA: homeAssistant(), Log: log}.Run(ctx)
+	case "daily":
+		return daily(db, log).Run(ctx)
+	case "cold":
+		return coldWatch(db, log).Run(ctx)
+	default:
+		fmt.Fprintln(os.Stderr, usage)
+		return fmt.Errorf("unknown command %q", os.Args[1])
+	}
+}
+
+func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
+	addr := os.Getenv("PLANTY_ADDR")
+	if addr == "" {
+		addr = ":8080"
+	}
 
 	srv := &http.Server{
 		Addr:              addr,
@@ -65,4 +102,39 @@ func run(log *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+func homeAssistant() *ha.Client {
+	return ha.New(os.Getenv("PLANTY_HA_URL"), os.Getenv("PLANTY_HA_TOKEN"))
+}
+
+func daily(db *store.Store, log *slog.Logger) job.Daily {
+	return job.Daily{
+		Store:    db,
+		HA:       homeAssistant(),
+		Judge:    judge.New(os.Getenv("ANTHROPIC_API_KEY")),
+		Log:      log,
+		Notifier: notifier(),
+	}
+}
+
+func coldWatch(db *store.Store, log *slog.Logger) job.ColdWatch {
+	weather := os.Getenv("PLANTY_WEATHER_ENTITY")
+	if weather == "" {
+		weather = "weather.nws_home"
+	}
+	return job.ColdWatch{
+		Store:    db,
+		HA:       homeAssistant(),
+		Log:      log,
+		Weather:  weather,
+		Notifier: notifier(),
+	}
+}
+
+func notifier() string {
+	if n := os.Getenv("PLANTY_NOTIFY_SERVICE"); n != "" {
+		return n
+	}
+	return "notify"
 }
