@@ -72,6 +72,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/away", s.goAway)
 
 	mux.HandleFunc("GET /v1/cold-watch", s.coldWatch)
+	mux.HandleFunc("POST /v1/shelter", s.shelter)
+	mux.HandleFunc("POST /v1/unshelter", s.unshelter)
 
 	return mux
 }

@@ -434,6 +434,91 @@ func TestSoilSensorMustNameAPlant(t *testing.T) {
 	}
 }
 
+// The cold warning is only answerable through these routes. Without them it
+// repeats every afternoon and nothing ever becomes eligible to go back out.
+func TestShelterRoundTripCanBeRecorded(t *testing.T) {
+	h, db, ctx := newServer(t)
+	minTemp := 55.0
+	slug := createPlant(t, h, map[string]any{
+		"common_name": "Carried in", "slug": unique("carried"), "min_temp_f": minTemp,
+	})
+
+	rec, out := do(t, h, http.MethodPost, "/v1/shelter",
+		map[string]any{"slugs": []string{slug}})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("shelter: got %d, body %s", rec.Code, rec.Body.String())
+	}
+	if out["moved"] != 1.0 {
+		t.Errorf("moved %v plants, want 1", out["moved"])
+	}
+
+	p, err := db.GetPlant(ctx, slug)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if p.ShelteredAt == nil {
+		t.Fatal("the plant was not recorded as indoors")
+	}
+
+	if rec, _ := do(t, h, http.MethodPost, "/v1/unshelter",
+		map[string]any{"slugs": []string{slug}}); rec.Code != http.StatusOK {
+		t.Fatalf("unshelter: got %d", rec.Code)
+	}
+
+	back, err := db.GetPlant(ctx, slug)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if back.ShelteredAt != nil {
+		t.Error("the plant is still recorded as indoors")
+	}
+}
+
+// At dusk the real answer is "I brought them all in", not a list of slugs.
+func TestShelterAllTakesEverythingWithAThreshold(t *testing.T) {
+	h, db, ctx := newServer(t)
+	minTemp := 55.0
+	tender := createPlant(t, h, map[string]any{
+		"common_name": "Tender", "slug": unique("tender"), "min_temp_f": minTemp,
+	})
+	indifferent := createPlant(t, h, map[string]any{
+		"common_name": "Indifferent", "slug": unique("indifferent"),
+	})
+
+	if rec, _ := do(t, h, http.MethodPost, "/v1/shelter",
+		map[string]any{"all": true}); rec.Code != http.StatusOK {
+		t.Fatalf("shelter all: got %d", rec.Code)
+	}
+
+	withThreshold, err := db.GetPlant(ctx, tender)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if withThreshold.ShelteredAt == nil {
+		t.Error("a plant with a threshold should have come in")
+	}
+
+	without, err := db.GetPlant(ctx, indifferent)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+	if without.ShelteredAt != nil {
+		t.Error("a plant nobody recorded a threshold for should have been left alone")
+	}
+
+	_, _ = do(t, h, http.MethodPost, "/v1/unshelter", map[string]any{"all": true})
+}
+
+// Naming nothing at all is a mistake worth catching rather than a silent no-op.
+func TestShelterNeedsToKnowWhatMoved(t *testing.T) {
+	h, _, _ := newServer(t)
+
+	rec, _ := do(t, h, http.MethodPost, "/v1/shelter", map[string]any{})
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("got %d, want 400 when nothing is named", rec.Code)
+	}
+}
+
 func TestPostmortemsListIsEmptyNotNull(t *testing.T) {
 	h, _, _ := newServer(t)
 

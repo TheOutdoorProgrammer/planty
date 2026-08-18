@@ -134,6 +134,9 @@ func coldMessage(low float64, plants []plant.Plant, away plant.AwayPeriod) strin
 	if away.BackupContact != "" {
 		fmt.Fprintf(&b, "\n\nJoey is away. %s is covering.", away.BackupContact)
 	}
+	// Without the confirmation this warning has no ending: it repeats every
+	// afternoon, and nothing becomes eligible to go back out.
+	b.WriteString("\n\nTell Planty once they are inside, so it stops asking and knows to say when they can go back out.")
 	return b.String()
 }
 

@@ -30,6 +30,32 @@ func (s *Store) Unshelter(ctx context.Context, slugs []string) (int64, error) {
 	return tag.RowsAffected(), nil
 }
 
+// ShelterAll marks every plant that has a cold threshold and is still outside.
+// At dusk the real answer is "I brought them all in", not a list of slugs.
+func (s *Store) ShelterAll(ctx context.Context) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE plants SET sheltered_at = now(), updated_at = now()
+		WHERE archived_at IS NULL
+		  AND status <> 'dead'
+		  AND min_temp_f IS NOT NULL
+		  AND sheltered_at IS NULL`)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
+// UnshelterAll puts everything back outside.
+func (s *Store) UnshelterAll(ctx context.Context) (int64, error) {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE plants SET sheltered_at = NULL, updated_at = now()
+		WHERE archived_at IS NULL AND sheltered_at IS NOT NULL`)
+	if err != nil {
+		return 0, err
+	}
+	return tag.RowsAffected(), nil
+}
+
 // Sheltered returns plants currently indoors for cold, oldest first so the ones
 // that have been stuck inside longest are named first.
 func (s *Store) Sheltered(ctx context.Context) ([]plant.Plant, time.Time, error) {
