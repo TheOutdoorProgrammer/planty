@@ -175,6 +175,46 @@ func (s *Store) DeadWithoutPostmortem(ctx context.Context) ([]plant.Plant, error
 	return out, rows.Err()
 }
 
+// PostmortemRecord pairs an autopsy with the slug of the plant it is about, so
+// a caller can attach it without a second lookup per plant.
+type PostmortemRecord struct {
+	Slug string `json:"slug"`
+	Name string `json:"common_name"`
+	plant.Postmortem
+}
+
+// Postmortems returns every autopsy written, newest first.
+func (s *Store) Postmortems(ctx context.Context) ([]PostmortemRecord, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT p.slug, p.common_name,
+		       m.id, m.plant_id, m.likely_cause, m.narrative, m.evidence,
+		       coalesce(m.lesson,''), m.created_at
+		FROM postmortems m
+		JOIN plants p ON p.id = m.plant_id
+		ORDER BY m.created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []PostmortemRecord
+	for rows.Next() {
+		var r PostmortemRecord
+		var evidence []byte
+		if err := rows.Scan(&r.Slug, &r.Name, &r.ID, &r.PlantID, &r.LikelyCause,
+			&r.Narrative, &evidence, &r.Lesson, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+		if len(evidence) > 0 {
+			if err := json.Unmarshal(evidence, &r.Evidence); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
 // Postmortem returns a dead plant's analysis.
 func (s *Store) Postmortem(ctx context.Context, plantID uuid.UUID) (plant.Postmortem, error) {
 	row := s.pool.QueryRow(ctx, `

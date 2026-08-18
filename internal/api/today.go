@@ -41,6 +41,21 @@ func (s *Server) ackVerdict(w http.ResponseWriter, r *http.Request) {
 	s.ok(w, http.StatusOK, map[string]string{"acknowledged": id.String()})
 }
 
+// listPostmortems is what the Dusk plugin reads to attach each lesson to its
+// plant as a gotcha, so a death teaches every future session and not just the
+// one that noticed.
+func (s *Server) listPostmortems(w http.ResponseWriter, r *http.Request) {
+	records, err := s.store.Postmortems(r.Context())
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{
+		"postmortems": records,
+		"count":       len(records),
+	})
+}
+
 func (s *Server) listSensors(w http.ResponseWriter, r *http.Request) {
 	links, err := s.store.SensorLinks(r.Context(), nil)
 	if err != nil {
