@@ -110,7 +110,7 @@ struct SecondaryButtonStyle: ButtonStyle {
 /// screen in SCREENS.md.
 struct StateMessage<Actions: View>: View {
     let title: String
-    let body: String
+    let message: String
     var accent: Color = PlantyColor.foreground
     var icon: String?
     @ViewBuilder var actions: Actions
@@ -126,7 +126,7 @@ struct StateMessage<Actions: View>: View {
             Text(title)
                 .font(.title2.weight(.bold))
                 .foregroundStyle(accent)
-            Text(self.body)
+            Text(message)
                 .font(.body)
                 .foregroundStyle(PlantyColor.secondaryText)
             actions

@@ -1,7 +1,8 @@
 import Foundation
 
 /// One recorded event in a plant's life. Sensor samples are Reading instead.
-struct Observation: Codable, Sendable, Hashable, Identifiable {
+/// Not named Observation: that shadows the module @Observable expands against.
+struct PlantObservation: Codable, Sendable, Hashable, Identifiable {
     let id: UUID
     let plantID: UUID
     let kind: ObservationKind
@@ -60,7 +61,7 @@ struct NewObservation: Codable, Sendable, Hashable {
     }
 }
 
-/// Kept out of Observation because yield per plant per season has to aggregate.
+/// Kept out of the observation log: yield per season has to aggregate.
 struct Harvest: Codable, Sendable, Hashable, Identifiable {
     let id: UUID
     let plantID: UUID

@@ -41,7 +41,7 @@ struct PlantyClient: PlantyAPI {
         _ = try await perform(request)
     }
 
-    func addObservation(slug: String, observation: NewObservation) async throws -> Observation {
+    func addObservation(slug: String, observation: NewObservation) async throws -> PlantObservation {
         try await send("POST", "/v1/plants/\(escaped(slug))/observations", body: observation)
     }
 

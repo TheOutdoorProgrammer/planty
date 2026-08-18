@@ -49,11 +49,18 @@ final class CaptureStore {
     /// never be resolved silently.
     private(set) var suggestion: Plant?
 
-    private let api: any PlantyAPI
+    private var api: any PlantyAPI
 
     init(api: any PlantyAPI, selectedPlant: Plant? = nil) {
         self.api = api
         self.selectedPlant = selectedPlant
+    }
+
+    func replace(api: any PlantyAPI) {
+        self.api = api
+        stage = .ready
+        selectedPlant = nil
+        note = ""
     }
 
     func accept(jpeg: Data) {

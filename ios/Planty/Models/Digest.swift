@@ -3,7 +3,7 @@ import Foundation
 /// The answer to "what should I do right now". Mirrors internal/plant.Digest.
 struct Digest: Codable, Sendable, Hashable {
     let date: Date
-    let entries: [DigestEntry]
+    private(set) var entries: [DigestEntry]
 
     /// checked and staleSince are what let the app tell "nothing needs doing"
     /// apart from "no fresh data". They must never render the same.
@@ -19,6 +19,14 @@ struct Digest: Codable, Sendable, Hashable {
 
     /// Nothing to do AND the data behind that claim is actually fresh.
     var isAllClear: Bool { entries.isEmpty && staleSince == nil }
+
+    /// Drops entries the user already settled, without touching `checked`:
+    /// the freshness count has to keep describing what the service did.
+    func hiding(verdictIDs: Set<UUID>) -> Digest {
+        var copy = self
+        copy.entries = entries.filter { !verdictIDs.contains($0.verdict.id) }
+        return copy
+    }
 
     /// Friend-owned first, then by the service's own neglect risk. Ownership
     /// changes the order and nothing else about how the card looks.

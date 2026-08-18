@@ -9,7 +9,7 @@ protocol PlantyAPI: Sendable {
     func createPlant(_ draft: NewPlant) async throws -> Plant
     func updatePlant(slug: String, patch: PlantPatch) async throws -> Plant
     func archivePlant(slug: String, status: PlantStatus) async throws
-    func addObservation(slug: String, observation: NewObservation) async throws -> Observation
+    func addObservation(slug: String, observation: NewObservation) async throws -> PlantObservation
     func timeline(slug: String) async throws -> PlantTimeline
     func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo
     func acknowledge(verdictID: UUID) async throws

@@ -15,6 +15,10 @@ final class TodayStore {
     /// Cards the user postponed, and when they may come back.
     private(set) var postponedUntil: [UUID: Date] = [:]
 
+    /// Verdicts settled on this device since the last load. Kept beside the
+    /// digest rather than edited into it, so `checked` stays honest.
+    private(set) var resolvedIDs: Set<UUID> = []
+
     var isConfigured: Bool
     private var api: any PlantyAPI
     private let policy: FreshnessPolicy
@@ -39,6 +43,8 @@ final class TodayStore {
         knownPlantCount = nil
         error = nil
         lastLoadedAt = nil
+        resolvedIDs = []
+        postponedUntil = [:]
     }
 
     var presentation: TodayPresentation {
@@ -58,12 +64,12 @@ final class TodayStore {
     /// Postponed cards drop out until their interval passes. They are never
     /// marked done: "Not now" and "I handled it" are different claims.
     private var visibleDigest: Digest? {
-        guard var digest else { return nil }
+        guard let digest else { return nil }
         let now = clock()
-        let hidden = postponedUntil.filter { $0.value > now }.keys
+        var hidden = resolvedIDs
+        hidden.formUnion(postponedUntil.filter { $0.value > now }.keys)
         guard !hidden.isEmpty else { return digest }
-        digest.entries.removeAll { hidden.contains($0.verdict.id) }
-        return digest
+        return digest.hiding(verdictIDs: hidden)
     }
 
     func load() async {
@@ -87,7 +93,7 @@ final class TodayStore {
     func acknowledge(_ entry: DigestEntry) async {
         do {
             try await api.acknowledge(verdictID: entry.verdict.id)
-            digest?.entries.removeAll { $0.verdict.id == entry.verdict.id }
+            resolvedIDs.insert(entry.verdict.id)
         } catch {
             self.error = PlantyError.from(error)
         }
@@ -102,7 +108,7 @@ final class TodayStore {
                 observation: NewObservation(kind: kind)
             )
             try? await api.acknowledge(verdictID: entry.verdict.id)
-            digest?.entries.removeAll { $0.verdict.id == entry.verdict.id }
+            resolvedIDs.insert(entry.verdict.id)
         } catch {
             self.error = PlantyError.from(error)
         }

@@ -17,6 +17,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/job"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
+	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/seed"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -88,9 +89,18 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
 		addr = ":8080"
 	}
 
+	server := api.New(db, log)
+	if store, err := photoStore(ctx); err != nil {
+		// Photos are worth having, not worth refusing to serve plants over.
+		log.Warn("photo storage unavailable, photo routes disabled", "error", err)
+	} else if store != nil {
+		server = server.WithPhotos(store, judge.New(os.Getenv("ANTHROPIC_API_KEY")))
+		log.Info("photo storage ready")
+	}
+
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           api.New(db, log).Handler(),
+		Handler:           server.Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -106,6 +116,26 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
 		return err
 	}
 	return nil
+}
+
+// photoStore returns nil without error when object storage is not configured,
+// which is the normal state before MinIO credentials are set.
+func photoStore(ctx context.Context) (*photos.Store, error) {
+	endpoint := os.Getenv("PLANTY_S3_ENDPOINT")
+	if endpoint == "" {
+		return nil, nil
+	}
+	bucket := os.Getenv("PLANTY_S3_BUCKET")
+	if bucket == "" {
+		bucket = "planty"
+	}
+	return photos.Open(ctx, photos.Config{
+		Endpoint:  endpoint,
+		AccessKey: os.Getenv("PLANTY_S3_ACCESS_KEY"),
+		SecretKey: os.Getenv("PLANTY_S3_SECRET_KEY"),
+		Bucket:    bucket,
+		UseSSL:    os.Getenv("PLANTY_S3_SSL") == "true",
+	})
 }
 
 func homeAssistant() *ha.Client {

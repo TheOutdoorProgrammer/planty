@@ -8,6 +8,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/judge"
+	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
@@ -15,13 +17,22 @@ import (
 //
 // There is no authentication by deliberate choice; keep it on the LAN.
 type Server struct {
-	store *store.Store
-	log   *slog.Logger
+	store  *store.Store
+	log    *slog.Logger
+	photos *photos.Store
+	judge  *judge.Judge
 }
 
-// New builds a server.
+// New builds a server. Photo storage and the judge are optional: without them
+// the photo routes report unavailable rather than the whole service failing.
 func New(s *store.Store, log *slog.Logger) *Server {
 	return &Server{store: s, log: log}
+}
+
+// WithPhotos enables the photo timeline and vision diagnosis routes.
+func (s *Server) WithPhotos(p *photos.Store, j *judge.Judge) *Server {
+	s.photos, s.judge = p, j
+	return s
 }
 
 // Handler returns the routed, authenticated mux.
@@ -39,6 +50,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/plants/{slug}/observations", s.addObservation)
 
 	mux.HandleFunc("POST /v1/plants/{slug}/harvests", s.addHarvest)
+	mux.HandleFunc("POST /v1/plants/{slug}/photos", s.uploadPhoto)
+	mux.HandleFunc("GET /v1/plants/{slug}/timeline", s.timeline)
+	mux.HandleFunc("POST /v1/plants/{slug}/diagnose", s.diagnose)
 
 	mux.HandleFunc("GET /v1/today", s.today)
 	mux.HandleFunc("POST /v1/verdicts/{id}/ack", s.ackVerdict)

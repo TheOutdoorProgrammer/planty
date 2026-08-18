@@ -29,6 +29,7 @@ final class AppSession {
 
     let today: TodayStore
     let library: PlantsStore
+    let capture: CaptureStore
 
     private let defaults: UserDefaults
     private let tokens: any TokenStoring
@@ -50,6 +51,7 @@ final class AppSession {
 
         today = TodayStore(api: client, isConfigured: resolved.isConfigured)
         library = PlantsStore(api: client, isConfigured: resolved.isConfigured)
+        capture = CaptureStore(api: client)
     }
 
     /// Rebuilds the client and re-asks, because a new base URL invalidates
@@ -68,8 +70,10 @@ final class AppSession {
         let client = PlantyClient(configuration: configuration)
         api = client
 
+        diagnosis = StubDiagnosisService()
         today.replace(api: client, isConfigured: configuration.isConfigured)
         library.replace(api: client, isConfigured: configuration.isConfigured)
+        capture.replace(api: client)
     }
 
     func storyStore(for plant: Plant) -> PlantStoryStore {

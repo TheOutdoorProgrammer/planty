@@ -51,7 +51,7 @@ struct StaleBanner: View {
     var body: some View {
         StateMessage(
             title: summary.headline,
-            body: summary.body,
+            message: summary.body,
             accent: PlantyColor.yellow,
             icon: "clock.badge.exclamationmark.fill"
         ) {
@@ -76,7 +76,7 @@ struct TodayErrorView: View {
     var body: some View {
         StateMessage(
             title: "Today's check did not finish.",
-            body: """
+            message: """
                 Your saved photos and notes are still here. Planty will try \
                 again, or you can take a photo now if something looks wrong.
                 """,
@@ -104,7 +104,7 @@ struct EmptySetupView: View {
             PlantyMascot(wobbles: false)
             StateMessage(
                 title: "No plants to worry about yet.",
-                body: """
+                message: """
                     Add the first one with a photo. If you do not know its name, \
                     Planty can help after the picture.
                     """,
@@ -159,7 +159,7 @@ struct UnconfiguredCard: View {
     var body: some View {
         StateMessage(
             title: "Planty is not connected yet.",
-            body: """
+            message: """
                 Point the app at your Planty service and paste its token. \
                 Until then there is no evidence to be calm about.
                 """,

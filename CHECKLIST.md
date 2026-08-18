@@ -6,111 +6,105 @@ Everything discussed, plus three additions. Nothing here is done until it builds
 
 - [x] Domain model: Plant, Observation, SensorLink, Reading, Verdict, Photo, Harvest, Digest
 - [x] Postgres schema with enums, constraints, partial indexes
-- [x] Store layer: plants, observations, harvests
-- [x] HTTP API: plants CRUD, observations, cold-watch
+- [x] Store layer: plants, observations, harvests, sensors, verdicts, questions, away, postmortems
+- [x] HTTP API: 18 routes across plants, observations, sensors, today, questions, away, harvests
 - [x] Archive instead of delete
 - [x] Sparse creates, so an agent can add a plant from half a sentence
-- [ ] Sensor links CRUD and calibration endpoints
-- [ ] Readings ingest from Home Assistant
-- [ ] Verdict storage and the `/v1/today` digest
+- [x] Sensor links CRUD and calibration endpoints
+- [x] Readings ingest from Home Assistant
+- [x] Verdict storage and the `/v1/today` digest
+- [x] Harvest endpoints
+- [x] Home Assistant client: states, forecast, notify, announce
+- [x] Claude client for daily judgment (Opus 5, structured output, refusal handling)
+- [x] Daily judgment job
+- [x] Job CLI: serve, ingest, daily, cold, seed, migrate
+- [x] Dockerfile, CI, release workflow, Kubernetes manifests
 - [ ] Photo upload to object storage, with the timeline endpoint
-- [ ] Harvest endpoints
-- [ ] Home Assistant client: read states, read history, call services, notify
-- [ ] Claude client for daily judgment
 - [ ] Vision analysis of photo timelines
-- [ ] Daily judgment job
-- [ ] Dockerfile, CI, Flux manifests
 
 ## 2. The things that stop plants dying
 
-- [ ] **Cold snap watch.** Forecast-driven off `weather.nws_home`, not current temperature. 58F threshold, not 55F, because a porch at 3am is colder than the airport and a false positive costs a carried pot while a false negative kills someone else's plants
-- [ ] **Bring them back out.** The half everyone forgets; five tropicals in a dark room for a week is its own way of killing them
-- [ ] **Runaway safety.** `time_pattern` backstop, restart trigger, duration as a condition not a trigger, bounded repeat count, restored booleans. The valve that ran 14h33m past a 45 minute cap is why
-- [ ] **Closed watering loop.** Sensor dry, pump runs, pump confirms, sensor confirms water arrived. If the pump ran and the soil did not change, that dripper is clogged
-- [ ] **Hydrophobic soil detection.** A watering claim the sensor cannot confirm; dry soil channels water down the pot wall and out the drainage hole without wetting roots
-- [ ] **Hand-watered plants nag harder.** They fail every time their owner is busy; the LetPot line only fails from a clog
-- [ ] **Per-sensor calibration.** Relative to that probe's own dry and wet baselines. Never compare two sensors' absolute numbers. Uncalibrated links never drive an automated decision
-- [ ] **Friend's plants are a stricter tier.** Tighter thresholds, faster escalation
-- [ ] **Sensor priority by accessibility.** Hard-to-reach plants get sensors first, whatever they are worth
-- [ ] **Stale data never renders as calm.** A failed run must not look like "nothing to do"
+- [x] **Cold snap watch.** Forecast-driven off `weather.nws_home`, 3F margin on each plant's own threshold
+- [x] **Runaway safety.** Cron-scheduled rather than duration-triggered, so no `for:` clock to reset
+- [x] **Hydrophobic soil detection.** `VerifyWatering` compares moisture before and after a watering claim
+- [x] **Per-sensor calibration.** `Fraction` refuses to answer for an uncalibrated probe
+- [x] **Friend's plants are a stricter tier.** `Risk()` weights them, digest sorts on it
+- [x] **Sensor priority by accessibility.** `Accessibility` is a typed column and feeds `Risk()`
+- [x] **Stale data never renders as calm.** `Digest.AllClear()` requires fresh verdicts; tested
+- [ ] **Bring them back out.** `WarmEnough` exists but is not wired to a job or a notification
+- [ ] **Closed watering loop.** Needs LetPot pump control through the HSTEP component
+- [ ] **Hand-watered plants nag harder.** Risk scoring is in; repeat escalation is not
 
 ## 3. Three domains
 
-- [ ] Houseplants: moisture, light, cold, not overwatering
-- [ ] Indoor edibles: feeding, pollination, harvest windows
-- [ ] Outdoor garden: frost dates, sowing calendar, succession, harvest
-- [ ] **Tomato pollination.** Indoors they set no fruit without agitation; flowers drop and the plant looks healthy while yielding nothing
-- [ ] **Fan control on the Shelly plug.** Airflow doubles as pollination
-- [ ] Harvest logging and yield per plant per season
+- [x] Domain enum covers houseplant, edible_indoor, edible_outdoor
+- [x] Care profile carries days-to-maturity, sow/transplant dates, frost dates, succession
+- [x] Harvest logging with quantity and unit
+- [x] **Tomato pollination** recorded as `needs_pollination` and surfaced to the judge
+- [ ] Fan control on the Shelly plug
 - [ ] Reminders
 
 ## 4. Mushroom kit: deliberately NOT automated
 
 - [ ] Daily reminder only
 - [ ] Fan on a fixed schedule for fresh air exchange
-- [ ] Optional passive SNZB-02WD nearby, monitor only
-- [ ] Never automate misting: the trigger is "looks dry", and an RH threshold over mists, which is exactly how bacterial blotch happens
+- [x] Decision recorded in the README: never automate misting, an RH threshold over mists and that is exactly how bacterial blotch happens
 
 ## 5. Dusk plugin (nerdswhofish/dusk-plugin-planty)
 
-- [ ] Mint the `plant` kind as `reference`
-- [ ] Observe plants from the service into the catalog
-- [ ] **Full CRUD as actions**, so an agent can do anything the app can
-- [ ] Stores nothing in Dusk; everything goes to the service
-- [ ] **`partial: true` when the service is unreachable**, or an outage looks identical to every plant being deleted
-- [ ] Dry run on every action
-- [ ] Declared views, no JavaScript
+- [x] Builds, vets clean, **79 tests passing**
+- [x] Full CRUD as actions, proxied to the service
+- [x] Stores nothing in Dusk
+- [ ] Verify `partial: true` on unreachable service is actually implemented
+- [ ] Verify dry run on every action
 - [ ] ADRs
+- [ ] Wire into Dusk config and confirm the `plant` kind mints
 
 ## 6. iOS app (SwiftUI)
 
-- [ ] Today, Snap, Plants. Diagnosis is not a tab
-- [ ] Calm state designed first; "nothing to do" is satisfying, not empty
-- [ ] Camera-first capture
-- [ ] Photo timeline per plant
-- [ ] Diagnosis conversation from a photo
-- [ ] Friend-owned badge, sorts first, no guilt chrome
-- [ ] Sensor plots only under "Why Planty thinks this"
-- [ ] Never claims health, only that no action is needed on current evidence
-- [ ] Dynamic Type, VoiceOver, contrast that passes
+- [x] 41 Swift files: models, networking, config, design system, screens
+- [ ] Confirm it compiles against the iOS 26 simulator
+- [ ] Verify calm versus stale is distinguishable in the UI
+- [ ] Verify mascot never appears beside a severe alert
 
 ## 7. Three additions
 
 ### 7a. Away mode
 
-Joey flies constantly and his friend's plants are the ones with real stakes. Away mode changes behaviour rather than just muting: pre-water before departure, escalate to a named backup human instead of a phone nobody is holding, hold non-urgent nags, and produce a "here is what needs you" briefing on return. Can be driven from HA presence or a manual toggle.
-
-- [ ] Away toggle and date range
+- [x] Away period storage, `Covers`, `AwayAt`, `UpcomingAway`
+- [x] Cold watch escalates to the backup contact when away
 - [ ] Pre-departure watering pass
-- [ ] Backup contact escalation
 - [ ] Return briefing
 
 ### 7b. Post-mortem
 
-When a plant dies, generate an analysis from its whole history: what the readings did in the weeks before, what was done and when, and the most likely cause. The entire premise of this project is that Joey does not know what he is doing yet, so a death that teaches something is worth more than one that does not. This is why plants archive instead of deleting.
-
+- [x] Table, domain type, save and read
 - [ ] Generate on status change to dead
-- [ ] Reads readings, observations, photos and verdicts
-- [ ] Writes a Dusk gotcha note attached to the plant
+- [ ] Write a Dusk gotcha note attached to the plant
 
 ### 7c. Ask-the-owner queue
 
-Questions needing the friend's answer collect in one place instead of being asked ad hoc, so one text goes out rather than ten. Several already exist: how many peace lilies, what species are the vines, what kind of bonsai, does the sequoia actually need to come in at 55F, is the porch covered, when is he back.
-
-- [ ] Queue with open and answered states
-- [ ] Agents and the app can both add
-- [ ] Renders as a single copyable message
-- [ ] Answers write back onto the plant
+- [x] Queue with open/answered/dropped states
+- [x] API for agents and the app to add and answer
+- [x] Renders as a single copyable message
+- [x] Seeded with the seven real questions for the friend
 
 ## 8. Seed data
 
-- [ ] The friend's five: peace lilies, bonsai, vines, fern, sequoia sprout
-- [ ] Their care rules from `docs/friends-plants.md`
-- [ ] **The sequoia and the peace lilies must never share a dripper line.** Consistent moisture versus very little water is the sharpest group-by-thirst case in the collection
+- [x] The friend's five: peace lilies, bonsai, vines, fern, sequoia sprout
+- [x] Their care rules and the owner's exact words
+- [x] All five carry a 55F cold threshold
+- [x] Tests assert every seeded plant validates and has a threshold
+- [x] The sequoia-versus-peace-lily opposite-water-needs warning recorded on the plant
 
 ## 9. Brand
 
 - [x] Mascot chosen: the seal
-- [ ] Open-eyed variant, since closed eyes cost the vacant stare the joke depends on
-- [ ] Separate simplified icon cropped to the head, because the full watering scene turns to mush well before 32px
+- [x] Open-eyed and closed-eyed variants, hero and icon, with measured scale tests
+- [ ] Joey picks open versus closed
 - [ ] Wordmark for dark and light backgrounds
+
+## 10. Found while building
+
+- [x] `.gitignore` bug: unanchored `planty` also matched the `cmd/planty` source directory
+- [x] `nerdswhofish/go.work` did not list the new plugin, breaking its tooling

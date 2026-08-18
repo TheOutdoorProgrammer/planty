@@ -5,7 +5,7 @@ import Foundation
 struct PlantDetail: Decodable, Sendable, Hashable {
     let plant: Plant
     var risk: Int?
-    var observations: [Observation]?
+    var observations: [PlantObservation]?
     var lastWatered: Date?
     var verdict: Verdict?
     var photos: [Photo]?
@@ -28,7 +28,7 @@ struct PlantDetail: Decodable, Sendable, Hashable {
 /// readings and verdicts merged; the app does the merging so it can group them
 /// into a story rather than render a log.
 struct PlantTimeline: Decodable, Sendable, Hashable {
-    var observations: [Observation]
+    var observations: [PlantObservation]
     var photos: [Photo]
     var verdicts: [Verdict]
     var sensors: [SensorLink]
@@ -43,7 +43,7 @@ struct PlantTimeline: Decodable, Sendable, Hashable {
     }
 
     init(
-        observations: [Observation] = [],
+        observations: [PlantObservation] = [],
         photos: [Photo] = [],
         verdicts: [Verdict] = [],
         sensors: [SensorLink] = [],
@@ -58,7 +58,7 @@ struct PlantTimeline: Decodable, Sendable, Hashable {
 
     init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        observations = try container.decodeIfPresent([Observation].self, forKey: .observations) ?? []
+        observations = try container.decodeIfPresent([PlantObservation].self, forKey: .observations) ?? []
         photos = try container.decodeIfPresent([Photo].self, forKey: .photos) ?? []
         verdicts = try container.decodeIfPresent([Verdict].self, forKey: .verdicts) ?? []
         sensors = try container.decodeIfPresent([SensorLink].self, forKey: .sensors) ?? []
@@ -94,5 +94,5 @@ struct SensorListResponse: Decodable, Sendable {
 }
 
 struct ObservationListResponse: Decodable, Sendable {
-    let observations: [Observation]
+    let observations: [PlantObservation]
 }
