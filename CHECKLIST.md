@@ -62,6 +62,8 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] `partial: true` on an unreachable service, tested both ways
 - [x] Dry run on every action, four ADRs
 - [x] Added to `nerdswhofish/go.work`
+- [x] Emits autopsy lessons as `gotcha` notes on the plant they are about
+- [x] Repo initialised and committed; the agent had left it untracked
 - [ ] Wire into Dusk config and mint the `plant` kind as `reference` (Joey's call)
 
 ## 6. iOS app
@@ -85,7 +87,7 @@ Nothing is done until it builds, is tested, and is committed.
 
 - [x] History gathering, reading thinning, Claude analysis, storage, `planty autopsy`
 - [x] Sweeps automatically with the daily job
-- [ ] Write a Dusk gotcha note attached to the plant
+- [x] **Writes a Dusk gotcha attached to the plant**, so a death teaches every future session and not just the one that noticed. `GET /v1/postmortems` on the service, emitted as notes by the plugin, deduped by Dusk on content hash
 
 ### 7c. Ask-the-owner queue
 
@@ -113,3 +115,5 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] iOS requested camera permission on launch, because `TabView` builds neighbouring tabs eagerly
 - [x] **Client and server had drifted apart:** the app assumed multipart upload and `/diagnosis`, the service shipped raw bytes and `/diagnose`. Server now accepts both upload shapes and uses `/diagnosis`
 - [x] `GET /v1/plants/{slug}` did not return what the contract promised. Now includes readings and the current verdict
+- [x] The plugin's budget test asserted a magic number (two requests) rather than the invariant it cared about. Rewritten to assert the count does not scale with garden size, which is the property that actually matters
+- [x] The first autopsy note was rejected by the SDK's own conformance validator: notes require `Provenance`, because Dusk never infers where a claim came from
