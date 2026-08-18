@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -29,6 +30,7 @@ const usage = `planty <command>
   daily    judge every plant and send the digest
   cold     check tonight's forecast, both bringing in and putting back out
   away     pre-departure watering pass, or the briefing on return
+  water    decide whether to run the LetPot line, then verify it worked
   autopsy  work out what killed a plant: planty autopsy <slug>
   seed     load the sabbatical plants and their open questions
   migrate  apply database migrations and exit`
@@ -79,6 +81,8 @@ func run(log *slog.Logger) error {
 		return coldWatch(db, log).Run(ctx)
 	case "away":
 		return job.Away{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
+	case "water":
+		return water(db, log).Run(ctx)
 	case "autopsy":
 		return autopsy(ctx, db, log)
 	case "seed":
@@ -169,6 +173,24 @@ func coldWatch(db *store.Store, log *slog.Logger) job.ColdWatch {
 		Log:      log,
 		Weather:  weather,
 		Notifier: notifier(),
+	}
+}
+
+func water(db *store.Store, log *slog.Logger) job.Water {
+	runFor := 2 * time.Minute
+	if raw := os.Getenv("PLANTY_PUMP_SECONDS"); raw != "" {
+		if secs, err := strconv.Atoi(raw); err == nil && secs > 0 {
+			runFor = time.Duration(secs) * time.Second
+		}
+	}
+	return job.Water{
+		Store:      db,
+		HA:         homeAssistant(),
+		Log:        log,
+		Notifier:   notifier(),
+		PumpSwitch: os.Getenv("PLANTY_PUMP_SWITCH"),
+		PumpSensor: os.Getenv("PLANTY_PUMP_SENSOR"),
+		RunFor:     runFor,
 	}
 }
 

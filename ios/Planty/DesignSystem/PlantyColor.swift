@@ -6,10 +6,11 @@ enum PlantyColor {
     static let surface = Color(hex: 0x44475A)
     static let foreground = Color(hex: 0xF8F8F2)
 
-    /// Dracula comment blue. Dividers and ornament only, never small body text.
+    /// Dracula comment blue. Strokes and dividers only. It fails contrast for
+    /// small text on the canvas, so it is never a foregroundStyle.
     static let quietDecoration = Color(hex: 0x6272A4)
 
-    /// Stands in for comment blue wherever text has to stay legible.
+    /// What secondary copy uses instead of comment blue.
     static let secondaryText = Color(hex: 0xC8CAE0)
 
     static let green = Color(hex: 0x50FA7B)

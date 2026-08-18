@@ -53,7 +53,7 @@ struct VerdictEvidenceBlock: View {
             if let model = verdict.evidence.modelVersion {
                 Text("Model \(model)")
                     .font(.caption2)
-                    .foregroundStyle(PlantyColor.quietDecoration)
+                    .foregroundStyle(PlantyColor.secondaryText)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
