@@ -31,7 +31,7 @@ struct PlantyMascot: View {
 }
 
 /// Draws a plant photo, or an honest stand-in when the bytes are not here.
-/// Fetching by storage key has no documented URL yet; see ios/README.md.
+/// Bytes just taken win over the network, so a capture shows itself instantly.
 struct PlantPhotoView: View {
     let plant: Plant
     var photo: Photo?
@@ -44,6 +44,8 @@ struct PlantPhotoView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
+            } else if let url = photo?.url {
+                remote(url)
             } else {
                 placeholder
             }
@@ -57,6 +59,24 @@ struct PlantPhotoView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
+    }
+
+    /// A presigned link expires, so a failure here is ordinary rather than an
+    /// error worth shouting about: it falls back to the same stand-in.
+    private func remote(_ url: URL) -> some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .success(let image):
+                image.resizable().scaledToFill()
+            case .empty:
+                ZStack {
+                    placeholder
+                    ProgressView().tint(PlantyColor.green)
+                }
+            default:
+                placeholder
+            }
+        }
     }
 
     /// A thumbnail and a hero need different furniture: the caption pill and a

@@ -16,6 +16,10 @@ struct Photo: Codable, Sendable, Hashable, Identifiable {
 
     let createdAt: Date
 
+    /// A presigned link the timeline mints, good for about half an hour. It is
+    /// absent on a photo that came from anywhere else, so it cannot be stored.
+    var url: URL?
+
     enum CodingKeys: String, CodingKey {
         case id
         case plantID = "plant_id"
@@ -25,6 +29,7 @@ struct Photo: Codable, Sendable, Hashable, Identifiable {
         case visionFindings = "vision_findings"
         case analyzedAt = "analyzed_at"
         case createdAt = "created_at"
+        case url
     }
 
     var isAnalyzed: Bool { analyzedAt != nil }

@@ -69,6 +69,19 @@ struct PlantTimeline: Decodable, Sendable, Hashable {
         observations.isEmpty && photos.isEmpty && verdicts.isEmpty
     }
 
+    /// The timeline endpoint returns photos and nothing else; the plant
+    /// endpoint returns the observations, readings and current verdict. A story
+    /// built from only one of them is the photos with no reason for any of it.
+    func merging(_ detail: PlantDetail) -> PlantTimeline {
+        PlantTimeline(
+            observations: observations.isEmpty ? detail.observations ?? [] : observations,
+            photos: photos.isEmpty ? detail.photos ?? [] : photos,
+            verdicts: verdicts.isEmpty ? [detail.verdict].compactMap { $0 } : verdicts,
+            sensors: sensors.isEmpty ? detail.sensors ?? [] : sensors,
+            readings: readings.isEmpty ? detail.readings ?? [] : readings
+        )
+    }
+
     /// Series for the "Why Planty thinks this" disclosure, newest link first.
     var series: [SensorSeries] {
         sensors.map { link in

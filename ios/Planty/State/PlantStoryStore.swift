@@ -67,7 +67,7 @@ final class PlantStoryStore {
             let (loadedDetail, loadedTimeline) = try await (detailTask, timelineTask)
             detail = loadedDetail
             plant = loadedDetail.plant
-            timeline = loadedTimeline
+            timeline = loadedTimeline.merging(loadedDetail)
             hasLoaded = true
         } catch {
             self.error = PlantyError.from(error)

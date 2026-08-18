@@ -204,7 +204,55 @@ struct PlantyClientTests {
 
         let request = try #require(StubResponder.shared.requests.first)
         #expect(request.httpMethod == "DELETE")
+        #expect(request.url?.path == "/v1/plants/mona")
         #expect(request.url?.query?.contains("status=dead") == true)
+    }
+
+    /// Every write asserts its own method and path. Two clients have already
+    /// shipped a route the service does not serve, each caught by nothing.
+    @Test("Every remaining write goes to the path the contract documents")
+    func writesGoWhereTheyAreDocumented() async throws {
+        let plantJSON = try encoded(Plant.fixture())
+
+        StubTransport.respond(status: 201, json: plantJSON)
+        _ = try await StubTransport.client().createPlant(NewPlant(commonName: "Mona"))
+        var request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/plants")
+
+        StubTransport.respond(json: plantJSON)
+        _ = try await StubTransport.client().updatePlant(slug: "mona", patch: PlantPatch())
+        request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "PATCH")
+        #expect(request.url?.path == "/v1/plants/mona")
+
+        StubTransport.respond(status: 201, json: try encoded(photoFixture()))
+        _ = try await StubTransport.client().uploadPhoto(
+            slug: "mona",
+            jpeg: Data([0xFF, 0xD8, 0xFF]),
+            caption: nil,
+            takenAt: Date()
+        )
+        request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/plants/mona/photos")
+    }
+
+    /// Encoding a real model beats hand-written JSON: a response the client
+    /// cannot decode would fail this test for the wrong reason.
+    private func encoded(_ value: some Encodable) throws -> String {
+        let data = try PlantyCoders.encoder().encode(value)
+        return try #require(String(bytes: data, encoding: .utf8))
+    }
+
+    private func photoFixture() -> Photo {
+        Photo(
+            id: UUID(),
+            plantID: UUID(),
+            storageKey: "plants/mona/1.jpg",
+            takenAt: Date(),
+            createdAt: Date()
+        )
     }
 
     @Test("A slug with a space still builds a usable path")

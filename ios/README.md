@@ -110,25 +110,21 @@ The networking layer has been driven end to end against a mock service shaped li
 
 | Thing | State | Why |
 | --- | --- | --- |
-| **Diagnosis replies** | `StubDiagnosisService` returns the design's mock copy | `docs/DATA-MODEL.md` documents no diagnosis endpoint at all. `RemoteDiagnosisService` is written against a proposed `POST /v1/plants/{slug}/diagnosis` and swapping it in is one line in `AppSession`. Settings says "Sample answers, not connected" so nobody mistakes canned text for a reading. |
-| **Photo bytes** | Placeholder surfaces, with the real accessibility description | Photos carry a `storage_key` into MinIO and nothing documents how a client turns that into a URL. Guessing one that 404s is worse than an honest placeholder. `PlantPhotoView` is the single place to wire it. |
-| **Photo upload body** | multipart with `photo`, `taken_at`, `caption` | The endpoint is documented, its body is not. Assumption is marked in `PlantyClient.uploadPhoto`. |
-| **Timeline shape** | separate `observations` / `photos` / `verdicts` / `sensors` / `readings` arrays, all optional | `/v1/plants/{slug}/timeline` is documented as "merged" without a shape. This mirrors the style of the one handler that exists, and the app merges client-side into story chapters. Every key is optional so a partial service still renders. |
-| **Sensor calibration** | read-only list in Settings | `PATCH /v1/sensors/{id}` is documented but not implemented server-side. |
-| **Away mode, post-mortem, ask-the-owner** | absent | Checklist section 7, no endpoints yet. |
-| **Notifications** | absent | Deep links need a push payload contract that does not exist. |
-| **Full-screen photo comparison scrubber** | absent | Needs real photo bytes first. |
+| **Away mode, post-mortem, ask-the-owner** | absent from the app | The endpoints exist (`POST /v1/away`, `GET /v1/postmortems`, `GET\|POST /v1/questions`); no screen has been built on them yet. |
+| **Notifications** | absent | Deep links need a push payload contract that does not exist. The cold watch and escalation already notify through Home Assistant, which is where a phone actually gets told. |
+| **Full-screen photo comparison scrubber** | absent | No longer blocked: the timeline mints a presigned link per photo and `PlantPhotoView` loads it. |
 
-## Endpoints the service has not shipped
+## Assumptions that turned out to be wrong
 
-The client implements the whole documented contract, but only some of it is live in `internal/api` today.
-Missing ones surface as a normal error state, never as calm.
+Four rows used to sit above saying the service had not shipped something.
+Three of them were wrong in a way worth recording, because in each case the client had quietly invented a contract rather than reading the documented one.
 
-Live: `GET /v1/plants`, `POST /v1/plants`, `GET /v1/plants/{slug}`, `DELETE /v1/plants/{slug}`, `GET|POST /v1/plants/{slug}/observations`, `GET /healthz`.
+- **Photo bytes were never going to arrive.** The timeline mints a presigned `url` per photo and always had; the app's `Photo` did not decode it and `PlantPhotoView` had no remote path, so every photo it did not just take rendered as a placeholder. Both fixed.
+- **The timeline was assumed to return five merged arrays.** It returns photos and a count, exactly as documented. The observations, readings and current verdict come from `GET /v1/plants/{slug}`, which the app already fetched alongside it and then ignored. `PlantTimeline.merging(_:)` joins them, which is what makes the story more than a row of pictures and what fills the sensor evidence disclosure.
+- **`POST /v1/harvests` does not exist and never did.** The documented route is `POST /v1/plants/{slug}/harvests`. The Dusk plugin had guessed the same wrong path independently. Both fixed, and the path is now pinned by a test on each side.
 
-Not yet: `GET /v1/today`, `PATCH /v1/plants/{slug}`, `POST /v1/plants/{slug}/photos`, `GET /v1/plants/{slug}/timeline`, `POST /v1/verdicts/{id}/ack`, `GET|POST /v1/sensors`, `POST /v1/harvests`.
-
-Today is the screen that needs `/v1/today` most, so it is the first one worth shipping.
+The lesson is the same one each time: nothing tested which URL was called, only what went in the body.
+`PlantyClientTests` now asserts method and path for every write.
 
 ## Notes for whoever picks this up
 
