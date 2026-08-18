@@ -1,0 +1,123 @@
+import SwiftUI
+
+/// Orientation before capture. Designed from the calm state outward: the most
+/// common screen is a completion, not an empty list.
+struct TodayScreen: View {
+    @Environment(AppSession.self) private var session
+    @State private var postponing: DigestEntry?
+    @State private var completing: DigestEntry?
+
+    private var store: TodayStore { session.today }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 20) {
+                    content
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .plantyPage()
+            .navigationTitle("Planty")
+            .toolbar { profileButton }
+            .refreshable { await store.load() }
+            .task { await store.load() }
+            .sheet(item: $postponing) { entry in
+                PostponeSheet(entry: entry) { interval in
+                    store.postpone(entry, by: interval)
+                    postponing = nil
+                } handled: {
+                    completing = entry
+                    postponing = nil
+                }
+            }
+            .sheet(item: $completing) { entry in
+                HandledSheet(entry: entry) { kind in
+                    Task { await store.complete(entry, kind: kind) }
+                    completing = nil
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch store.presentation {
+        case .unconfigured:
+            UnconfiguredCard { session.isShowingSettings = true }
+        case .loadingCold:
+            LoadingColdView()
+        case .loadingWarm(let previous, let checkedAt):
+            LoadingWarmView(checkedAt: checkedAt)
+            cards(for: previous.sortedEntries)
+        case .emptySetup:
+            EmptySetupView()
+        case .calm(let summary):
+            CalmHero(summary: summary) { session.selectedTab = .snap }
+        case .actions(let summary):
+            actionState(summary)
+        case .stale(let summary):
+            StaleBanner(summary: summary) {
+                session.isShowingSettings = true
+            } takePhoto: {
+                session.selectedTab = .snap
+            }
+            cards(for: summary.pending)
+        case .failed(let error, let cached):
+            TodayErrorView(error: error) {
+                Task { await store.load() }
+            } takePhoto: {
+                session.selectedTab = .snap
+            }
+            if let cached {
+                cards(for: cached.sortedEntries)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func actionState(_ summary: ActionSummary) -> some View {
+        Text(summary.headline)
+            .font(.title.weight(.bold))
+            .foregroundStyle(PlantyColor.foreground)
+
+        cards(for: summary.featured)
+
+        if let deferredLabel = summary.deferredLabel {
+            DisclosureGroup(deferredLabel) {
+                cards(for: summary.deferred)
+                    .padding(.top, 8)
+            }
+            .tint(PlantyColor.secondaryText)
+            .font(.subheadline.weight(.semibold))
+        }
+
+        Text(summary.footnote)
+            .font(.subheadline)
+            .foregroundStyle(PlantyColor.secondaryText)
+    }
+
+    @ViewBuilder
+    private func cards(for entries: [DigestEntry]) -> some View {
+        ForEach(entries) { entry in
+            CareCard(entry: entry) {
+                session.beginCapture(for: entry)
+            } notNow: {
+                postponing = entry
+            }
+        }
+    }
+
+    private var profileButton: some ToolbarContent {
+        ToolbarItem(placement: .topBarTrailing) {
+            Button {
+                session.isShowingSettings = true
+            } label: {
+                Image(systemName: "person.crop.circle")
+            }
+            .accessibilityLabel("Settings, sensors and data freshness")
+        }
+    }
+}

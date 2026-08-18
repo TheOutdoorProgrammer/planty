@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: planty-config
+  namespace: planty
+data:
+  PLANTY_ADDR: ":8080"
+  PLANTY_HA_URL: "https://home.stout.zone"
+  PLANTY_WEATHER_ENTITY: "weather.nws_home"
+  PLANTY_NOTIFY_SERVICE: "notify"
+  PLANTY_FRIEND_NAME: "friend"
