@@ -33,6 +33,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha,format=long
+            # deploy/*.yaml reference :latest, so it has to exist or anyone
+            # following the README gets ImagePullBackOff.
+            type=raw,value=latest,enable={{is_default_branch}}
 
       # arm64 matters here: the cluster is Mac minis.
       - uses: docker/build-push-action@v6
