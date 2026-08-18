@@ -1,6 +1,13 @@
 package job
 
-import "testing"
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/TheOutdoorProgrammer/planty/internal/store"
+)
 
 // The gap between the two is the whole safety margin: inside it, doing nothing
 // is the right answer, and a system with no dead band oscillates.
@@ -29,8 +36,44 @@ func TestSettleWindowOutlastsASensorReportingInterval(t *testing.T) {
 	}
 }
 
-func TestWaterRefusesWithoutAPumpConfigured(t *testing.T) {
-	if err := (Water{}).Run(t.Context()); err == nil {
-		t.Fatal("running with no pump switch configured must be an error")
+// onTheLine creates a plant the LetPot pump is responsible for.
+func onTheLine(t *testing.T, s *store.Store, ctx context.Context, name string) plant.Plant {
+	t.Helper()
+
+	p, err := s.CreatePlant(ctx, plant.Plant{
+		CommonName:     name,
+		Slug:           store.Slugify(name) + "-" + time.Now().Format("150405.000000000"),
+		Domain:         plant.DomainEdibleIndoor,
+		Status:         plant.StatusAlive,
+		Steward:        plant.StewardSelf,
+		Location:       "greenhouse cabinet",
+		Accessibility:  plant.AccessEasy,
+		WateringMethod: plant.WateringLetPot,
+	})
+	if err != nil {
+		t.Fatalf("create %s: %v", name, err)
+	}
+	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusGone) })
+	return p
+}
+
+// A garden that waters by hand is not a broken pump. Erroring on it would fail
+// the hourly job forever on a system that has no LetPot line at all, and a
+// failure that fires every hour is one nobody reads.
+func TestNothingOnTheLineIsNotAFault(t *testing.T) {
+	s, ctx := testStore(t)
+
+	if err := (Water{Store: s, Log: quietLog()}).Run(ctx); err != nil {
+		t.Fatalf("a garden with no LetPot plants has nothing to do, not a fault: %v", err)
+	}
+}
+
+// The opposite case has to stay loud: this is watering silently not happening.
+func TestPlantsOnTheLineWithNoPumpIsAFault(t *testing.T) {
+	s, ctx := testStore(t)
+	onTheLine(t, s, ctx, "Tomato")
+
+	if err := (Water{Store: s, Log: quietLog()}).Run(ctx); err == nil {
+		t.Fatal("plants on the line with no pump configured must be an error")
 	}
 }

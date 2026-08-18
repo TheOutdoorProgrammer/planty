@@ -37,10 +37,6 @@ type Water struct {
 
 // Run decides whether to water the line, does it, and verifies the result.
 func (w Water) Run(ctx context.Context) error {
-	if w.PumpSwitch == "" {
-		return errors.New("no LetPot pump switch configured")
-	}
-
 	onLine, err := w.Store.ListPlants(ctx, store.PlantFilter{
 		Status:         plant.StatusAlive,
 		WateringMethod: plant.WateringLetPot,
@@ -48,8 +44,15 @@ func (w Water) Run(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
+	// Nothing on the line is a garden that waters by hand, not a fault. Only a
+	// line with plants on it and no pump behind it is broken, and that has to
+	// stay loud: it is watering silently not happening.
 	if len(onLine) == 0 {
 		return nil
+	}
+	if w.PumpSwitch == "" {
+		return errors.New("plants are on the LetPot line but no pump switch is configured")
 	}
 
 	thirsty, soaked, blind := w.survey(ctx, onLine)
