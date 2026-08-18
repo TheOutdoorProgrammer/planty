@@ -7,11 +7,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 	"time"
-
-	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/anthropics/anthropic-sdk-go/option"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
@@ -22,24 +20,56 @@ const Model = "claude-opus-5"
 
 // Judge turns evidence into a verdict.
 type Judge struct {
-	client anthropic.Client
-	model  string
+	backend Backend
 }
 
-// New builds a judge, or nil when there is no key to call the API with. The
-// cold watch and the watering line keep plants alive without a model, so a
-// Planty with no key has to run rather than fail every morning at eight.
-func New(apiKey string) *Judge {
-	if apiKey == "" {
-		apiKey = os.Getenv("ANTHROPIC_API_KEY")
-	}
-	if apiKey == "" {
+// New builds a judge, or nil when nothing can answer, because the watering
+// line has to keep running on a morning the model cannot be reached.
+// PLANTY_JUDGE names the backend; unset, an API key wins over the CLI.
+func New() *Judge {
+	backend := backendFor(os.Getenv("PLANTY_JUDGE"))
+	if backend == nil {
 		return nil
 	}
-	return &Judge{
-		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
-		model:  Model,
+	return &Judge{backend: backend}
+}
+
+// Backend names which of the two answered, for logs and error messages.
+func (j *Judge) Backend() string { return j.backend.Name() }
+
+func backendFor(choice string) Backend {
+	model := Model
+	if override := os.Getenv("PLANTY_JUDGE_MODEL"); override != "" {
+		model = override
 	}
+	key := os.Getenv("ANTHROPIC_API_KEY")
+
+	switch choice {
+	case "api":
+		if key == "" {
+			return nil
+		}
+		return newAPIBackend(key, model)
+	case "cli":
+		return cliIfInstalled(model)
+	}
+
+	if key != "" {
+		return newAPIBackend(key, model)
+	}
+	return cliIfInstalled(model)
+}
+
+func cliIfInstalled(model string) Backend {
+	binary := os.Getenv("PLANTY_CLAUDE_BIN")
+	if binary == "" {
+		found, err := exec.LookPath("claude")
+		if err != nil {
+			return nil
+		}
+		binary = found
+	}
+	return newCLIBackend(binary, model)
 }
 
 // Evidence is everything known about one plant at judgment time.
@@ -102,37 +132,24 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 		return Result{}, err
 	}
 
-	message, err := j.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(j.model),
+	answer, err := j.backend.Judge(ctx, Request{
+		System:    system,
+		Turns:     []Turn{ask(text(describe(e)))},
+		Schema:    schema,
 		MaxTokens: 2048,
-		System:    []anthropic.TextBlockParam{{Text: system}},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(describe(e))),
-		},
-		OutputConfig: anthropic.OutputConfigParam{
-			// One small judgment per plant per day, run many times over: medium
-			// is where this model's quality holds without paying for depth.
-			Effort: anthropic.OutputConfigEffortMedium,
-			Format: anthropic.JSONOutputFormatParam{Schema: schema},
-		},
+		// One small judgment per plant per day, run many times over: medium is
+		// where this model's quality holds without paying for depth.
+		Effort: EffortMedium,
 	})
 	if err != nil {
 		return Result{}, err
 	}
-	if message.StopReason == anthropic.StopReasonRefusal {
-		return Result{}, ErrRefused
-	}
 
-	for _, block := range message.Content {
-		if text, ok := block.AsAny().(anthropic.TextBlock); ok {
-			var out Result
-			if err := json.Unmarshal([]byte(text.Text), &out); err != nil {
-				return Result{}, fmt.Errorf("decode verdict: %w", err)
-			}
-			return out, nil
-		}
+	var out Result
+	if err := json.Unmarshal([]byte(answer), &out); err != nil {
+		return Result{}, fmt.Errorf("decode verdict: %w", err)
 	}
-	return Result{}, fmt.Errorf("no verdict in response")
+	return out, nil
 }
 
 func resultSchema() (map[string]any, error) {

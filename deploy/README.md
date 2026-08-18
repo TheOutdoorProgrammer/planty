@@ -25,12 +25,26 @@ Then create the real secret from the example, SOPS-encrypt it, and commit.
 | `deployment.yaml` | The API, plus its ClusterIP service |
 | `cronjobs.yaml` | Sensor ingest, the thirst report, the daily digest, the chase, the away pass, and the cold snap watch. No watering |
 | `configmap.yaml` | Non-secret configuration |
-| `secret.yaml.example` | Template for the database DSN, the Home Assistant token, and the Anthropic key |
+| `secret.yaml.example` | Template for the database DSN, the Home Assistant token, the MinIO keys, and whichever credential the judge is being paid with |
+
+## Signing the judge in
+
+With `PLANTY_JUDGE: "cli"` the pod runs the Claude Code binary against a subscription, so it needs a token rather than an API key:
+
+```sh
+claude setup-token          # on a machine already signed in
+```
+
+Put the result in the secret as `CLAUDE_CODE_OAUTH_TOKEN` and leave `ANTHROPIC_API_KEY` out entirely, because setting a key makes it the default.
+The CLI writes state on every run, which is why the deployment and the daily CronJob mount two `emptyDir` volumes; `readOnlyRootFilesystem` stays true and nothing there is worth surviving a restart.
+
+Photo links are signed for `PLANTY_S3_PUBLIC_ENDPOINT`, not for the endpoint the pod dials.
+Leave it unset and the app is handed URLs on a cluster DNS name it cannot resolve, which looks exactly like photographs failing to upload.
 
 ## No ingress, deliberately
 
 There is **no IngressRoute and no external DNS entry here**, and that is not an oversight.
-The service has no authentication, and while the plant data is dull, the pod holds a long-lived Home Assistant token and an Anthropic API key.
+The service has no authentication, and while the plant data is dull, the pod holds a long-lived Home Assistant token and a credential that can spend a Claude subscription.
 It stays reachable only from inside the cluster and the LAN.
 
 The iOS app reaches it over the LAN.

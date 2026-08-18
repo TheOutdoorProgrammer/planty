@@ -8,6 +8,11 @@ data:
   # Your Home Assistant base URL. Set per deployment; this repository is public.
   PLANTY_HA_URL: ""
   PLANTY_WEATHER_ENTITY: "weather.nws_home"
+
+  # Which way judgments get bought: "cli" runs the Claude Code binary against a
+  # subscription, "api" meters tokens against ANTHROPIC_API_KEY. Unset, a key
+  # wins if the secret carries one.
+  PLANTY_JUDGE: "cli"
   PLANTY_NOTIFY_SERVICE: "notify"
   PLANTY_FRIEND_NAME: "friend"
 

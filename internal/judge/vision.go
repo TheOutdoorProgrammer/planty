@@ -2,13 +2,10 @@ package judge
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/anthropics/anthropic-sdk-go"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
@@ -103,85 +100,64 @@ func (j *Judge) Diagnose(ctx context.Context, p plant.Plant, frames []Frame, ask
 		return Diagnosis{}, err
 	}
 
-	blocks := []anthropic.ContentBlockParamUnion{
-		anthropic.NewTextBlock(visionPreamble(p, frames)),
-	}
+	opening := []Part{text(visionPreamble(p, frames))}
 	for _, f := range frames {
-		blocks = append(blocks,
-			anthropic.NewTextBlock(fmt.Sprintf("Taken %s ago%s:", ago(f.TakenAt), caption(f))),
-			anthropic.NewImageBlockBase64(f.Media, base64.StdEncoding.EncodeToString(f.Bytes)),
+		opening = append(opening,
+			text(fmt.Sprintf("Taken %s ago%s:", ago(f.TakenAt), caption(f))),
+			picture(f.Media, f.Bytes),
 		)
 	}
 	if asked == "" {
 		asked = "What do these photographs show, and what should I do about it?"
 	}
-	blocks = append(blocks, anthropic.NewTextBlock(asked))
+	opening = append(opening, text(asked))
 
 	// The images ride on the first turn only; later turns refer back to them.
-	messages := []anthropic.MessageParam{
-		{Role: anthropic.MessageParamRoleUser, Content: blocks},
-	}
+	turns := []Turn{ask(opening...)}
 	if len(prior) > 0 {
-		messages = replay(prior, blocks, asked)
+		turns = replay(prior, opening, asked)
 	}
 
-	message, err := j.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(j.model),
+	answer, err := j.backend.Judge(ctx, Request{
+		System:    visionSystem,
+		Turns:     turns,
+		Schema:    schema,
 		MaxTokens: 2048,
-		System:    []anthropic.TextBlockParam{{Text: visionSystem}},
-		Messages:  messages,
-		OutputConfig: anthropic.OutputConfigParam{
-			// Comparing frames over time is the hard part; worth the depth.
-			Effort: anthropic.OutputConfigEffortHigh,
-			Format: anthropic.JSONOutputFormatParam{Schema: schema},
-		},
+		// Comparing frames over time is the hard part; worth the depth.
+		Effort: EffortHigh,
 	})
 	if err != nil {
 		return Diagnosis{}, err
 	}
-	if message.StopReason == anthropic.StopReasonRefusal {
-		return Diagnosis{}, ErrRefused
-	}
 
-	for _, block := range message.Content {
-		if text, ok := block.AsAny().(anthropic.TextBlock); ok {
-			var out Diagnosis
-			if err := json.Unmarshal([]byte(text.Text), &out); err != nil {
-				return Diagnosis{}, fmt.Errorf("decode diagnosis: %w", err)
-			}
-			return out, nil
-		}
+	var out Diagnosis
+	if err := json.Unmarshal([]byte(answer), &out); err != nil {
+		return Diagnosis{}, fmt.Errorf("decode diagnosis: %w", err)
 	}
-	return Diagnosis{}, fmt.Errorf("no diagnosis in response")
+	return out, nil
 }
 
 // replay rebuilds the conversation: the photographs and the original question
 // first, then each earlier answer, then what is being asked now.
-func replay(prior []PriorTurn, opening []anthropic.ContentBlockParamUnion, asked string) []anthropic.MessageParam {
-	first := prior[0]
-
+func replay(prior []PriorTurn, opening []Part, asked string) []Turn {
 	// The opening user turn already carries the images; swap its trailing
 	// question for the one that was actually asked first.
-	openingBlocks := append([]anthropic.ContentBlockParamUnion{}, opening[:len(opening)-1]...)
-	openingBlocks = append(openingBlocks, anthropic.NewTextBlock(first.Asked))
+	restored := append([]Part{}, opening[:len(opening)-1]...)
+	restored = append(restored, text(prior[0].Asked))
 
-	messages := []anthropic.MessageParam{
-		{Role: anthropic.MessageParamRoleUser, Content: openingBlocks},
-	}
+	turns := []Turn{ask(restored...)}
 	for i, turn := range prior {
 		reply, err := json.Marshal(turn.Reply)
 		if err != nil {
 			continue
 		}
-		messages = append(messages, anthropic.NewAssistantMessage(
-			anthropic.NewTextBlock(string(reply))))
+		turns = append(turns, answered(string(reply)))
 
 		if i+1 < len(prior) {
-			messages = append(messages, anthropic.NewUserMessage(
-				anthropic.NewTextBlock(prior[i+1].Asked)))
+			turns = append(turns, ask(text(prior[i+1].Asked)))
 		}
 	}
-	return append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(asked)))
+	return append(turns, ask(text(asked)))
 }
 
 func caption(f Frame) string {

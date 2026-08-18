@@ -125,8 +125,9 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
 		// Photos are worth having, not worth refusing to serve plants over.
 		log.Warn("photo storage unavailable, photo routes disabled", "error", err)
 	} else if store != nil {
-		server = server.WithPhotos(store, judge.New(os.Getenv("ANTHROPIC_API_KEY")))
-		log.Info("photo storage ready")
+		seat := judge.New()
+		server = server.WithPhotos(store, seat)
+		log.Info("photo storage ready", "judge", backendName(seat))
 	}
 
 	srv := &http.Server{
@@ -179,10 +180,19 @@ func daily(db *store.Store, log *slog.Logger) job.Daily {
 	return job.Daily{
 		Store:    db,
 		HA:       homeAssistant(),
-		Judge:    judge.New(os.Getenv("ANTHROPIC_API_KEY")),
+		Judge:    judge.New(),
 		Log:      log,
 		Notifier: notifier(),
 	}
+}
+
+// backendName says which way judgments are being bought, which is the first
+// thing to check when a verdict is missing or a bill is a surprise.
+func backendName(j *judge.Judge) string {
+	if j == nil {
+		return "none"
+	}
+	return j.Backend()
 }
 
 func coldWatch(db *store.Store, log *slog.Logger) job.ColdWatch {
@@ -222,13 +232,15 @@ func autopsy(ctx context.Context, db *store.Store, log *slog.Logger) error {
 		return errors.New("usage: planty autopsy <slug>")
 	}
 	// Asked for by hand, so refusing outright beats a nil judge panicking.
-	if judge.New(os.Getenv("ANTHROPIC_API_KEY")) == nil {
-		return errors.New("an autopsy needs ANTHROPIC_API_KEY, which is unset")
+	seat := judge.New()
+	if seat == nil {
+		return errors.New("an autopsy needs a model: set ANTHROPIC_API_KEY, " +
+			"or install the claude CLI and sign it in")
 	}
 
 	record, err := job.Postmortem{
 		Store: db,
-		Judge: judge.New(os.Getenv("ANTHROPIC_API_KEY")),
+		Judge: seat,
 		Log:   log,
 	}.Run(ctx, os.Args[2])
 	if err != nil {

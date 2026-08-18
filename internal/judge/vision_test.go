@@ -5,19 +5,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
-
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
-func openingBlocks(question string) []anthropic.ContentBlockParamUnion {
-	return []anthropic.ContentBlockParamUnion{
-		anthropic.NewTextBlock("preamble about the plant"),
-		anthropic.NewTextBlock("Taken 3 days ago:"),
-		anthropic.NewImageBlockBase64("image/jpeg", "AAAA"),
-		anthropic.NewTextBlock("Taken 1 hour ago:"),
-		anthropic.NewImageBlockBase64("image/jpeg", "BBBB"),
-		anthropic.NewTextBlock(question),
+func openingBlocks(question string) []Part {
+	return []Part{
+		text("preamble about the plant"),
+		text("Taken 3 days ago:"),
+		picture("image/jpeg", []byte("AAAA")),
+		text("Taken 1 hour ago:"),
+		picture("image/jpeg", []byte("BBBB")),
+		text(question),
 	}
 }
 
@@ -32,21 +30,21 @@ func turns(n int) []PriorTurn {
 	return out
 }
 
-func textOf(m anthropic.MessageParam) string {
+func textOf(m Turn) string {
 	var b strings.Builder
-	for _, block := range m.Content {
-		if block.OfText != nil {
-			b.WriteString(block.OfText.Text)
+	for _, part := range m.Parts {
+		if part.Image == nil {
+			b.WriteString(part.Text)
 			b.WriteString(" ")
 		}
 	}
 	return b.String()
 }
 
-func images(m anthropic.MessageParam) int {
+func images(m Turn) int {
 	n := 0
-	for _, block := range m.Content {
-		if block.OfImage != nil {
+	for _, part := range m.Parts {
+		if part.Image != nil {
 			n++
 		}
 	}
@@ -59,11 +57,11 @@ func TestReplayAlwaysAlternates(t *testing.T) {
 	for _, count := range []int{1, 2, 3, 6} {
 		messages := replay(turns(count), openingBlocks("the newest question"), "the newest question")
 
-		if messages[0].Role != anthropic.MessageParamRoleUser {
+		if messages[0].Role != RoleUser {
 			t.Errorf("%d turns: a conversation has to open with the user", count)
 		}
 		last := messages[len(messages)-1]
-		if last.Role != anthropic.MessageParamRoleUser {
+		if last.Role != RoleUser {
 			t.Errorf("%d turns: the model has to be answering something", count)
 		}
 		for i := 1; i < len(messages); i++ {

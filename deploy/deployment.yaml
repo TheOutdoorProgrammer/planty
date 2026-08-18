@@ -35,6 +35,14 @@ spec:
                 name: planty-config
             - secretRef:
                 name: planty-secrets
+          # The judge shells out to the Claude Code CLI, which writes its own
+          # state and stages photographs on disk. Both are scratch: nothing here
+          # is worth surviving a restart, so they are emptyDir rather than a PVC.
+          volumeMounts:
+            - name: claude-home
+              mountPath: /home/planty
+            - name: scratch
+              mountPath: /tmp
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -63,7 +71,14 @@ spec:
               cpu: 10m
               memory: 32Mi
             limits:
-              memory: 256Mi
+              # The CLI is a separate process with its own heap, and it is the
+              # thing that decides this number rather than the Go service.
+              memory: 1Gi
+      volumes:
+        - name: claude-home
+          emptyDir: {}
+        - name: scratch
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service

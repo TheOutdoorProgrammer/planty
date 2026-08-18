@@ -7,8 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/anthropics/anthropic-sdk-go"
-
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
@@ -62,36 +60,23 @@ func (j *Judge) Postmortem(ctx context.Context, h History) (Autopsy, error) {
 		return Autopsy{}, err
 	}
 
-	message, err := j.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(j.model),
+	answer, err := j.backend.Judge(ctx, Request{
+		System:    postmortemSystem,
+		Turns:     []Turn{ask(text(narrate(h)))},
+		Schema:    schema,
 		MaxTokens: 3072,
-		System:    []anthropic.TextBlockParam{{Text: postmortemSystem}},
-		Messages: []anthropic.MessageParam{
-			anthropic.NewUserMessage(anthropic.NewTextBlock(narrate(h))),
-		},
-		OutputConfig: anthropic.OutputConfigParam{
-			// Runs once per death and the answer is the whole point of the record.
-			Effort: anthropic.OutputConfigEffortHigh,
-			Format: anthropic.JSONOutputFormatParam{Schema: schema},
-		},
+		// Runs once per death and the answer is the whole point of the record.
+		Effort: EffortHigh,
 	})
 	if err != nil {
 		return Autopsy{}, err
 	}
-	if message.StopReason == anthropic.StopReasonRefusal {
-		return Autopsy{}, ErrRefused
-	}
 
-	for _, block := range message.Content {
-		if text, ok := block.AsAny().(anthropic.TextBlock); ok {
-			var out Autopsy
-			if err := json.Unmarshal([]byte(text.Text), &out); err != nil {
-				return Autopsy{}, fmt.Errorf("decode autopsy: %w", err)
-			}
-			return out, nil
-		}
+	var out Autopsy
+	if err := json.Unmarshal([]byte(answer), &out); err != nil {
+		return Autopsy{}, fmt.Errorf("decode autopsy: %w", err)
 	}
-	return Autopsy{}, fmt.Errorf("no autopsy in response")
+	return out, nil
 }
 
 func narrate(h History) string {

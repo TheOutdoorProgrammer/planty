@@ -2,13 +2,10 @@ package judge
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/anthropics/anthropic-sdk-go"
 )
 
 // MaxCandidates caps what comes back. A ranked list is honest; a list of
@@ -76,50 +73,29 @@ func (j *Judge) Identify(ctx context.Context, image Frame, seen Sighting) ([]Can
 		return nil, err
 	}
 
-	media := image.Media
-	if media == "" {
-		media = "image/jpeg"
-	}
-
-	message, err := j.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(j.model),
+	reply, err := j.backend.Judge(ctx, Request{
+		System: identifySystem,
+		Turns: []Turn{ask(
+			picture(image.Media, image.Bytes),
+			text(identifyPrompt(seen)),
+		)},
+		Schema:    schema,
 		MaxTokens: 1024,
-		System:    []anthropic.TextBlockParam{{Text: identifySystem}},
-		Messages: []anthropic.MessageParam{{
-			Role: anthropic.MessageParamRoleUser,
-			Content: []anthropic.ContentBlockParamUnion{
-				anthropic.NewImageBlockBase64(media, base64.StdEncoding.EncodeToString(image.Bytes)),
-				anthropic.NewTextBlock(identifyPrompt(seen)),
-			},
-		}},
-		OutputConfig: anthropic.OutputConfigParam{
-			Format: anthropic.JSONOutputFormatParam{Schema: schema},
-		},
 	})
 	if err != nil {
 		return nil, err
 	}
-	if message.StopReason == anthropic.StopReasonRefusal {
-		return nil, ErrRefused
-	}
 
-	for _, block := range message.Content {
-		text, ok := block.AsAny().(anthropic.TextBlock)
-		if !ok {
-			continue
-		}
-		var answer struct {
-			Candidates []Candidate `json:"candidates"`
-		}
-		if err := json.Unmarshal([]byte(text.Text), &answer); err != nil {
-			return nil, fmt.Errorf("decode candidates: %w", err)
-		}
-		if len(answer.Candidates) > MaxCandidates {
-			answer.Candidates = answer.Candidates[:MaxCandidates]
-		}
-		return answer.Candidates, nil
+	var answer struct {
+		Candidates []Candidate `json:"candidates"`
 	}
-	return nil, fmt.Errorf("identify: no text in the reply")
+	if err := json.Unmarshal([]byte(reply), &answer); err != nil {
+		return nil, fmt.Errorf("decode candidates: %w", err)
+	}
+	if len(answer.Candidates) > MaxCandidates {
+		answer.Candidates = answer.Candidates[:MaxCandidates]
+	}
+	return answer.Candidates, nil
 }
 
 const identifySystem = `You identify houseplants and garden plants from a photograph.

@@ -68,11 +68,26 @@ spec:
                     name: planty-config
                 - secretRef:
                     name: planty-secrets
+              # This is the one scheduled job that asks the model anything, so
+              # it is the one that needs somewhere for the CLI to write.
+              volumeMounts:
+                - name: claude-home
+                  mountPath: /home/planty
+                - name: scratch
+                  mountPath: /tmp
               securityContext:
                 allowPrivilegeEscalation: false
                 readOnlyRootFilesystem: true
                 capabilities:
                   drop: ["ALL"]
+              resources:
+                limits:
+                  memory: 1Gi
+          volumes:
+            - name: claude-home
+              emptyDir: {}
+            - name: scratch
+              emptyDir: {}
 ---
 # Chase unacknowledged verdicts. Waking hours only; the ladder caps at three.
 apiVersion: batch/v1

@@ -53,6 +53,20 @@ Scheduled work, one command each, wired as CronJobs in `deploy/`:
 | `planty cold` | 15:00 | Tonight's forecast: what comes in, and what can go back out |
 | `planty autopsy <slug>` | on demand | Work out what killed a plant |
 
+## Who pays for the judgment
+
+Every model call goes through one interface with two implementations, chosen by `PLANTY_JUDGE`.
+
+| `PLANTY_JUDGE` | What answers | What it needs |
+| --- | --- | --- |
+| `cli` | The Claude Code binary, against a subscription | `claude` on `PATH` and `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` |
+| `api` | The Anthropic API, metered | `ANTHROPIC_API_KEY` |
+
+Unset, an API key wins if there is one and the CLI is used otherwise.
+Neither being available is a supported state: the judge is nil, the watering line and the cold watch carry on, and only the parts that need an opinion report unavailable.
+
+`adr/0001` records why the CLI is the default here and what it costs, which is mostly image size and the seconds a photograph takes to reach the model.
+
 ## What the photographs are for
 
 Sensors measure water.
@@ -98,6 +112,7 @@ internal/job/        Scheduled work
 internal/photos/     S3/MinIO object storage
 internal/seed/       The sabbatical plants, as shipped data
 docs/                The data model, the friend's care sheet, the HA side
+adr/                 Decisions worth not re-arguing
 deploy/              Kubernetes manifests, not yet applied
 design/              UI concept, screen specs, SwiftUI prototype, logo
 ios/                 The app
