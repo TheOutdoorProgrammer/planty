@@ -59,8 +59,8 @@ struct PlantyClient: PlantyAPI {
         return response.sensors
     }
 
-    func logHarvest(_ harvest: NewHarvest) async throws -> Harvest {
-        try await send("POST", "/v1/harvests", body: harvest)
+    func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest {
+        try await send("POST", "/v1/plants/\(escaped(slug))/harvests", body: harvest)
     }
 
     func health() async throws {

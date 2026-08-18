@@ -14,7 +14,7 @@ protocol PlantyAPI: Sendable {
     func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo
     func acknowledge(verdictID: UUID) async throws
     func sensors() async throws -> [SensorLink]
-    func logHarvest(_ harvest: NewHarvest) async throws -> Harvest
+    func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest
     func health() async throws
 }
 

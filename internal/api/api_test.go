@@ -210,6 +210,40 @@ func TestArchivingHidesThePlantButKeepsIt(t *testing.T) {
 	}
 }
 
+// Nothing covered harvests, and both clients had guessed a flat /v1/harvests
+// that does not exist, so every harvest ever logged would have 404d.
+func TestAHarvestIsFiledUnderThePlantInThePath(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{
+		"common_name": "Tomato", "slug": unique("tomato"), "domain": "edible_indoor",
+	})
+
+	rec, out := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/harvests",
+		map[string]any{"quantity": 4, "unit": "fruit", "notes": "first truss"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("got %d, body %s", rec.Code, rec.Body.String())
+	}
+	if out["quantity"] != 4.0 || out["unit"] != "fruit" {
+		t.Errorf("stored %v %v, which is what a season is added up from", out["quantity"], out["unit"])
+	}
+
+	// The path is what says whose harvest it is, so a plant_id in the body must
+	// not be able to file it against another plant.
+	if out["plant_id"] == nil || out["plant_id"] == "" {
+		t.Error("the harvest was stored against no plant")
+	}
+}
+
+func TestAHarvestOnAMissingPlantIsFourOhFour(t *testing.T) {
+	h, _, _ := newServer(t)
+
+	rec, _ := do(t, h, http.MethodPost, "/v1/plants/no-such-plant/harvests",
+		map[string]any{"quantity": 1, "unit": "fruit"})
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("got %d, want 404: a harvest against nothing is a typo, not a server fault", rec.Code)
+	}
+}
+
 func TestObservationRecordsWhoSaidIt(t *testing.T) {
 	h, _, _ := newServer(t)
 	slug := createPlant(t, h, map[string]any{

@@ -82,15 +82,15 @@ struct Harvest: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// The plant comes from the path Planty is posted to, so it is deliberately
+/// absent here: a second copy in the body could disagree with it.
 struct NewHarvest: Codable, Sendable, Hashable {
-    var plantID: UUID
     var occurredAt: Date
     var quantity: Double
     var unit: String
     var notes: String?
 
     enum CodingKeys: String, CodingKey {
-        case plantID = "plant_id"
         case occurredAt = "occurred_at"
         case quantity
         case unit

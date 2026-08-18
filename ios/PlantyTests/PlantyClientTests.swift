@@ -134,6 +134,32 @@ struct PlantyClientTests {
         #expect(saved.source == .app)
     }
 
+    /// The app and the Dusk plugin had both guessed a flat /v1/harvests that
+    /// Planty does not serve, so every harvest logged would have 404d.
+    @Test("A harvest is posted under the plant that grew it")
+    func logsHarvestUnderItsPlant() async throws {
+        let harvestJSON = """
+            {
+              "id": "\(UUID().uuidString)",
+              "plant_id": "\(UUID().uuidString)",
+              "occurred_at": "2026-08-18T09:00:00Z",
+              "quantity": 4,
+              "unit": "fruit",
+              "created_at": "2026-08-18T09:00:01Z"
+            }
+            """
+        StubTransport.respond(status: 201, json: harvestJSON)
+        let saved = try await StubTransport.client().logHarvest(
+            NewHarvest(occurredAt: Date(), quantity: 4, unit: "fruit"),
+            on: "mona"
+        )
+
+        let request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/plants/mona/harvests")
+        #expect(saved.unit == "fruit")
+    }
+
     @Test("Acknowledging a verdict hits the ack path")
     func acknowledges() async throws {
         StubTransport.respond(json: #"{"ok":true}"#)

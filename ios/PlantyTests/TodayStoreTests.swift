@@ -105,11 +105,11 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
         return []
     }
 
-    func logHarvest(_ harvest: NewHarvest) async throws -> Harvest {
+    func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest {
         try check()
         return Harvest(
             id: UUID(),
-            plantID: harvest.plantID,
+            plantID: UUID(),
             occurredAt: harvest.occurredAt,
             quantity: harvest.quantity,
             unit: harvest.unit,

@@ -84,17 +84,6 @@ func (s *Store) SensorLinks(ctx context.Context, plantID *uuid.UUID) ([]plant.Se
 	return out, rows.Err()
 }
 
-// SensorByEntity finds the link for a Home Assistant entity.
-func (s *Store) SensorByEntity(ctx context.Context, entityID string, role plant.SensorRole) (plant.SensorLink, error) {
-	row := s.pool.QueryRow(ctx, `SELECT `+sensorColumns+`
-		FROM sensor_links WHERE ha_entity_id = $1 AND role = $2`, entityID, role)
-	l, err := scanSensor(row)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return plant.SensorLink{}, ErrNotFound
-	}
-	return l, err
-}
-
 // RecordReading stores one sample.
 func (s *Store) RecordReading(ctx context.Context, r plant.Reading) error {
 	if r.TakenAt.IsZero() {

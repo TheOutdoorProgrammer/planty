@@ -117,6 +117,7 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] **A stale weather forecast is rejected.** Today's daily entry is past-dated by the afternoon yet carries tonight's low, so it has to survive; anything older than a day describes a night that has been and gone
 - [x] **The cold watch is tested end to end**, against a fake Home Assistant that records what was sent: who gets named, that the margin warns early, that a sheltered plant is not warned about twice, that the tenderest plant gates everyone going back out, and that the warning follows you to your backup while you are away
 - [x] **Each test package gets its own database.** `go test ./...` runs packages in parallel, so tests that read the whole garden were being decided by another package's rows
+- [x] **The cold warning can be answered from the app's own world, not just curl.** The Dusk plugin gained `shelter_plants` and `unshelter_plants`, so the answer to a notification on a phone is a sentence to an agent. An empty form is refused rather than treated as "all", because a half-filled one would otherwise move the whole garden
 
 ## 11. Bugs found while building
 
@@ -132,3 +133,5 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] The first autopsy note was rejected by the SDK's own conformance validator: notes require `Provenance`, because Dusk never infers where a claim came from
 - [x] **Half the cold feature was unreachable.** `Shelter` and `Unshelter` existed in the store and were tested, but nothing could call them: no route, no client, nothing. The warning to bring plants in could never be answered, so it would have repeated every afternoon forever and no plant would ever have become eligible to go back out. Now `POST /v1/shelter` and `POST /v1/unshelter`, and the warning itself says to reply
 - [x] **The test suite shared one database across packages running in parallel.** The cold watch reads every plant and away period, so the API package's fixtures were quietly deciding the job package's results. It only ever failed in the full suite, never when a package was run on its own
+- [x] **Every harvest ever logged would have 404d.** The iOS app and the Dusk plugin both posted to a flat `/v1/harvests`; the service has only ever served `POST /v1/plants/{slug}/harvests`, which is exactly what the data model documented. Two independent clients drifted the same way from a correct contract, because nothing on either side tested which URL it posted to. Both fixed, and the path is now pinned by a test on all three sides
+- [x] `SensorByEntity` was dead: no caller, no test. Ingest reads every link once and maps them in memory, which is one query rather than one per entity
