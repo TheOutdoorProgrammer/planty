@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
+	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -61,7 +62,7 @@ func (s *Server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 
 	takenAt := time.Now().UTC()
-	key := photoKey(p.Slug, takenAt, ext)
+	key := photos.Key(p.Slug, takenAt, ext)
 	if _, err := s.photos.Put(r.Context(), key, contentType,
 		bytes.NewReader(body), int64(len(body))); err != nil {
 		s.fail(w, http.StatusBadGateway, err)
@@ -107,12 +108,6 @@ func readUpload(r *http.Request) (body []byte, contentType, caption string, err 
 	}
 	body, err = io.ReadAll(io.LimitReader(file, MaxPhotoBytes+1))
 	return body, header.Header.Get("Content-Type"), caption, err
-}
-
-// photoKey lays photos out by plant and date so a prefix listing is a timeline.
-func photoKey(slug string, takenAt time.Time, ext string) string {
-	return path.Join(slug, takenAt.Format("2006/01/02"),
-		takenAt.Format("150405")+ext)
 }
 
 // timeline returns a plant's photos with short-lived links, so the app renders

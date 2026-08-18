@@ -14,19 +14,28 @@ import (
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
 
+// signingRegion is baked in so presigning never has to ask the bucket where it
+// lives. The signer may point at a hostname the service itself cannot reach.
+const signingRegion = "us-east-1"
+
 // Store is an S3-compatible bucket, in practice the MinIO already running here.
 type Store struct {
 	client *minio.Client
+	signer *minio.Client
 	bucket string
 }
 
-// Config is what it takes to reach the bucket.
+// Config is what it takes to reach the bucket. PublicEndpoint is separate
+// because a link signed against the pod's cluster DNS name is unusable to a
+// phone, and the signed host cannot be swapped afterwards.
 type Config struct {
-	Endpoint  string
-	AccessKey string
-	SecretKey string
-	Bucket    string
-	UseSSL    bool
+	Endpoint       string
+	PublicEndpoint string
+	AccessKey      string
+	SecretKey      string
+	Bucket         string
+	UseSSL         bool
+	PublicSSL      bool
 }
 
 // Open connects and ensures the bucket exists.
@@ -48,7 +57,30 @@ func Open(ctx context.Context, cfg Config) (*Store, error) {
 			return nil, fmt.Errorf("create bucket: %w", err)
 		}
 	}
-	return &Store{client: client, bucket: cfg.Bucket}, nil
+
+	signer, err := signingClient(cfg, client)
+	if err != nil {
+		return nil, err
+	}
+	return &Store{client: client, signer: signer, bucket: cfg.Bucket}, nil
+}
+
+// signingClient returns the client that presigns links, which is the reaching
+// client unless a separate public endpoint says otherwise. It is never dialled,
+// so its host only has to resolve for whoever follows the link.
+func signingClient(cfg Config, reaching *minio.Client) (*minio.Client, error) {
+	if cfg.PublicEndpoint == "" || cfg.PublicEndpoint == cfg.Endpoint {
+		return reaching, nil
+	}
+	signer, err := minio.New(cfg.PublicEndpoint, &minio.Options{
+		Creds:  credentials.NewStaticV4(cfg.AccessKey, cfg.SecretKey, ""),
+		Secure: cfg.PublicSSL,
+		Region: signingRegion,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("connect public endpoint: %w", err)
+	}
+	return signer, nil
 }
 
 // Key lays photos out by plant and date so a prefix listing is a timeline.
@@ -79,7 +111,7 @@ func (s *Store) Get(ctx context.Context, key string) (io.ReadCloser, error) {
 // URL returns a short-lived link, so the app can render an image without the
 // service proxying every byte.
 func (s *Store) URL(ctx context.Context, key string, ttl time.Duration) (string, error) {
-	u, err := s.client.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
+	u, err := s.signer.PresignedGetObject(ctx, s.bucket, key, ttl, nil)
 	if err != nil {
 		return "", fmt.Errorf("sign %s: %w", key, err)
 	}

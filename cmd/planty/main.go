@@ -161,11 +161,13 @@ func photoStore(ctx context.Context) (*photos.Store, error) {
 		bucket = "planty"
 	}
 	return photos.Open(ctx, photos.Config{
-		Endpoint:  endpoint,
-		AccessKey: os.Getenv("PLANTY_S3_ACCESS_KEY"),
-		SecretKey: os.Getenv("PLANTY_S3_SECRET_KEY"),
-		Bucket:    bucket,
-		UseSSL:    os.Getenv("PLANTY_S3_SSL") == "true",
+		Endpoint:       endpoint,
+		PublicEndpoint: os.Getenv("PLANTY_S3_PUBLIC_ENDPOINT"),
+		AccessKey:      os.Getenv("PLANTY_S3_ACCESS_KEY"),
+		SecretKey:      os.Getenv("PLANTY_S3_SECRET_KEY"),
+		Bucket:         bucket,
+		UseSSL:         os.Getenv("PLANTY_S3_SSL") == "true",
+		PublicSSL:      os.Getenv("PLANTY_S3_PUBLIC_SSL") != "false",
 	})
 }
 

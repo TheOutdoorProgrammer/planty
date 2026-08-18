@@ -17,6 +17,12 @@ data:
   PLANTY_S3_BUCKET: "planty"
   PLANTY_S3_SSL: "false"
 
+  # The same bucket under the name the phone can reach. Photo links are signed
+  # for this host, so unset hands the app a cluster URL it cannot resolve.
+  # Set per deployment; this repository is public.
+  PLANTY_S3_PUBLIC_ENDPOINT: ""
+  PLANTY_S3_PUBLIC_SSL: "true"
+
   # The LetPot pump, once the HSTEP component is installed. `planty water`
   # refuses to run without PLANTY_PUMP_SWITCH set.
   PLANTY_PUMP_SWITCH: ""
