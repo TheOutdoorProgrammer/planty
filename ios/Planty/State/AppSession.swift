@@ -52,6 +52,14 @@ final class AppSession {
         today = TodayStore(api: client, isConfigured: resolved.isConfigured)
         library = PlantsStore(api: client, isConfigured: resolved.isConfigured)
         capture = CaptureStore(api: client)
+
+        #if DEBUG
+        // Lets a screenshot run open straight onto a tab. Debug only.
+        if let name = ProcessInfo.processInfo.environment["PLANTY_START_TAB"],
+           let tab = AppTab(rawValue: name) {
+            selectedTab = tab
+        }
+        #endif
     }
 
     /// Rebuilds the client and re-asks, because a new base URL invalidates

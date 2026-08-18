@@ -59,7 +59,7 @@ struct PlantsLibraryScreen: View {
                 Section {
                     ForEach(group.plants) { plant in
                         NavigationLink(value: plant) {
-                            PlantLibraryRow(plant: plant)
+                            PlantLibraryRow(plant: plant, state: state(for: plant))
                         }
                         .listRowBackground(PlantyColor.surface)
                         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
@@ -82,6 +82,15 @@ struct PlantsLibraryScreen: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+    }
+
+    private func state(for plant: Plant) -> CareState {
+        LibraryStatus.state(
+            for: plant,
+            digest: session.today.digest,
+            now: Date(),
+            knownPlantCount: store.plants.count
+        )
     }
 
     private func scrollWrapped<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
@@ -143,16 +152,18 @@ struct PlantsLibraryScreen: View {
 /// Status words are more prominent than the species, and there is no gauge.
 struct PlantLibraryRow: View {
     let plant: Plant
+    let state: CareState
 
     var body: some View {
         HStack(spacing: 14) {
             PlantPhotoView(plant: plant, height: 64)
                 .frame(width: 64)
 
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(plant.commonName)
                     .font(.headline)
                     .foregroundStyle(PlantyColor.foreground)
+                StatusPill(state: state)
                 if let species = plant.displaySpecies {
                     Text(species)
                         .font(.caption)

@@ -74,6 +74,44 @@ spec:
                 capabilities:
                   drop: ["ALL"]
 ---
+# Away mode. Runs after the daily digest so a return briefing lands with the
+# morning's verdicts already computed rather than a day behind.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: planty-away
+  namespace: planty
+spec:
+  schedule: "30 8 * * *"
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+          containers:
+            - name: away
+              image: ghcr.io/theoutdoorprogrammer/planty:latest
+              args: ["away"]
+              envFrom:
+                - configMapRef:
+                    name: planty-config
+                - secretRef:
+                    name: planty-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+---
 # Cold snap watch. Mid-afternoon: late enough that tonight's forecast has
 # settled, early enough that there is daylight left to carry pots indoors.
 # Firing at the moment it turns cold would be a postmortem, not a warning.

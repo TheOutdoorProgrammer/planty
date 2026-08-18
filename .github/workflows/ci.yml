@@ -32,7 +32,9 @@ jobs:
 
       - run: go test -race ./...
 
-  migrations:
+  # Unit tests and the compiler both accepted a digest query that Postgres
+  # rejected outright, so the schema and every query run against a real server.
+  integration:
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -54,8 +56,17 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      # Proves the schema applies to a real Postgres, which unit tests cannot.
       - name: Apply migrations
         env:
           PLANTY_DATABASE_URL: postgres://postgres:planty@localhost:5432/planty?sslmode=disable
         run: go run ./cmd/planty migrate
+
+      - name: Seed, proving the shipped data still validates
+        env:
+          PLANTY_DATABASE_URL: postgres://postgres:planty@localhost:5432/planty?sslmode=disable
+        run: go run ./cmd/planty seed
+
+      - name: Store integration tests
+        env:
+          PLANTY_TEST_DATABASE_URL: postgres://postgres:planty@localhost:5432/planty?sslmode=disable
+        run: go test -race ./internal/store/...

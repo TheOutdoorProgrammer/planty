@@ -76,6 +76,37 @@ extension CareState {
     }
 }
 
+/// The digest only lists plants needing something, so a plant's absence from it
+/// is meaningful, but only while the digest itself is fresh.
+enum LibraryStatus {
+    static func state(
+        for plant: Plant,
+        digest: Digest?,
+        now: Date,
+        knownPlantCount: Int?,
+        policy: FreshnessPolicy = .standard
+    ) -> CareState {
+        guard let digest else { return .unknown }
+        let freshness = digest.freshness(
+            now: now,
+            knownPlantCount: knownPlantCount,
+            policy: policy
+        )
+        let entry = digest.entries.first { $0.plant.id == plant.id }
+        return CareState.resolve(verdict: entry?.verdict, freshness: freshness)
+            .fallingBackToAllGood(whenAbsent: entry == nil, freshness: freshness)
+    }
+}
+
+private extension CareState {
+    /// A plant the run checked and did not flag is All good, but only when the
+    /// run itself is fresh. Otherwise it stays Unknown.
+    func fallingBackToAllGood(whenAbsent absent: Bool, freshness: Freshness) -> CareState {
+        guard absent else { return self }
+        return freshness.isFresh ? .allGood : .unknown
+    }
+}
+
 extension VerdictAction {
     /// The one physical instruction a card leads with, before any explanation.
     var instruction: String {

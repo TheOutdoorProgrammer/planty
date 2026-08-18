@@ -59,6 +59,10 @@ struct PlantPhotoView: View {
         .accessibilityLabel(label)
     }
 
+    /// A thumbnail and a hero need different furniture: the caption pill and a
+    /// big glyph turn to mush at list-row size.
+    private var isThumbnail: Bool { height < 110 }
+
     private var placeholder: some View {
         ZStack {
             LinearGradient(
@@ -67,23 +71,24 @@ struct PlantPhotoView: View {
                 endPoint: .bottomTrailing
             )
             Image(systemName: "leaf.fill")
-                .font(.system(.largeTitle, design: .rounded).weight(.light))
-                .scaleEffect(2.4)
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(PlantyColor.green, PlantyColor.background.opacity(0.7))
+                .font(isThumbnail ? .title3 : .system(size: 64, weight: .light))
+                .foregroundStyle(PlantyColor.green.opacity(0.85))
                 .accessibilityHidden(true)
-            VStack {
-                Spacer()
-                HStack {
-                    Text(caption)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(PlantyColor.foreground)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 7)
-                        .background(PlantyColor.background.opacity(0.78), in: Capsule())
+
+            if !isThumbnail {
+                VStack {
                     Spacer()
+                    HStack {
+                        Text(caption)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(PlantyColor.foreground)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 7)
+                            .background(PlantyColor.background.opacity(0.78), in: Capsule())
+                        Spacer()
+                    }
+                    .padding(14)
                 }
-                .padding(14)
             }
         }
     }
