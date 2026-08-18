@@ -5,7 +5,7 @@ Nothing is done until it builds, is tested, and is committed.
 
 ## Current state
 
-**Go:** 32 unit tests plus 9 Postgres integration tests, green under `-race`. 22 routes, 10 commands, 4 migrations.
+**Go:** 32 unit tests plus 9 Postgres integration tests, green under `-race`. 22 routes, 10 commands, 5 migrations.
 **iOS:** 92 tests in 12 suites, `** TEST SUCCEEDED **`, verified independently. Release builds for simulator and arm64 device, zero warnings.
 **Dusk plugin:** 80 tests under `-race`, goreleaser green on four targets.
 
@@ -21,6 +21,7 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] Verdicts, the `/v1/today` digest, and the escalation ladder
 - [x] Home Assistant client: states, forecast, notify, announce
 - [x] Claude judgment: daily verdicts, vision diagnosis, autopsies
+- [x] **Diagnosis is a conversation**: turns persist, follow-ups replay the earlier answers, and the reply separates what is seen from what it means from what to do today
 - [x] Photo storage to MinIO, timeline with presigned links
 - [x] CLI: serve, ingest, daily, cold, away, chase, water, autopsy, seed, migrate
 - [x] Dockerfile, CI, release workflow, manifests, five CronJobs
@@ -70,7 +71,7 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] Release builds for simulator and arm64 device, zero warnings, Swift 6 strict concurrency
 - [x] Calm versus stale as a pure function with 20+ tests; staleness removes reassurance, never an alarm
 - [x] Three tabs, diagnosis from a photo, no health claims, purple badges that only change sort order
-- [ ] Diagnosis replies still stubbed; `RemoteDiagnosisService` written, swap is one line
+- [x] **Diagnosis is live**, talking to the real endpoint, 92 tests still green after the swap
 - [ ] Photo comparison scrubber, sensor calibration writes, notifications
 
 ## 7. Three additions
