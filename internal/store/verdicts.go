@@ -53,6 +53,21 @@ func scanVerdict(row pgx.Row) (plant.Verdict, error) {
 	return v, nil
 }
 
+// LatestVerdict returns a plant's most recent judgment.
+func (s *Store) LatestVerdict(ctx context.Context, plantID uuid.UUID) (plant.Verdict, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT id, plant_id, for_date, action, reasoning, confidence,
+		       evidence, created_at, acknowledged_at
+		FROM verdicts WHERE plant_id = $1
+		ORDER BY for_date DESC LIMIT 1`, plantID)
+
+	v, err := scanVerdict(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plant.Verdict{}, ErrNotFound
+	}
+	return v, err
+}
+
 // AckVerdict marks a verdict as handled, which stops its escalation.
 func (s *Store) AckVerdict(ctx context.Context, id uuid.UUID) error {
 	tag, err := s.pool.Exec(ctx,

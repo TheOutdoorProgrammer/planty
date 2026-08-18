@@ -40,17 +40,15 @@ func (s *Server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	contentType := r.Header.Get("Content-Type")
+	body, contentType, caption, err := readUpload(r)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
 	ext, ok := photoTypes[contentType]
 	if !ok {
 		s.fail(w, http.StatusUnsupportedMediaType,
 			errors.New("send image/jpeg, image/png or image/webp"))
-		return
-	}
-
-	body, err := io.ReadAll(io.LimitReader(r.Body, MaxPhotoBytes+1))
-	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
 	if len(body) > MaxPhotoBytes {
@@ -70,13 +68,41 @@ func (s *Server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		PlantID:    p.ID,
 		StorageKey: key,
 		TakenAt:    takenAt,
-		Caption:    r.URL.Query().Get("caption"),
+		Caption:    caption,
 	})
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, saved)
+}
+
+// readUpload accepts either shape, because the two clients have different
+// natural idioms: URLSession builds multipart, and curl or an agent posts raw
+// bytes with a Content-Type. Rejecting one of them would be arbitrary.
+func readUpload(r *http.Request) (body []byte, contentType, caption string, err error) {
+	caption = r.URL.Query().Get("caption")
+	contentType = r.Header.Get("Content-Type")
+
+	if !strings.HasPrefix(contentType, "multipart/form-data") {
+		body, err = io.ReadAll(io.LimitReader(r.Body, MaxPhotoBytes+1))
+		return body, contentType, caption, err
+	}
+
+	if err := r.ParseMultipartForm(MaxPhotoBytes); err != nil {
+		return nil, "", "", err
+	}
+	file, header, err := r.FormFile("photo")
+	if err != nil {
+		return nil, "", "", errors.New("multipart upload needs a 'photo' part")
+	}
+	defer func() { _ = file.Close() }()
+
+	if given := r.FormValue("caption"); given != "" {
+		caption = given
+	}
+	body, err = io.ReadAll(io.LimitReader(file, MaxPhotoBytes+1))
+	return body, header.Header.Get("Content-Type"), caption, err
 }
 
 // photoKey lays photos out by plant and date so a prefix listing is a timeline.
