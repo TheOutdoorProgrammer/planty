@@ -7,5 +7,6 @@ DerivedData/
 design/logo/_*.png
 design/logo/_ql*/
 
-planty
+# Anchored, or it also swallows the cmd/planty source directory
+/planty
 *.test
