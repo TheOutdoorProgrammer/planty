@@ -12,15 +12,16 @@ import (
 )
 
 // Server routes HTTP onto the store.
+//
+// There is no authentication by deliberate choice; keep it on the LAN.
 type Server struct {
 	store *store.Store
 	log   *slog.Logger
-	token string
 }
 
-// New builds a server; an empty token disables auth (loopback only).
-func New(s *store.Store, log *slog.Logger, token string) *Server {
-	return &Server{store: s, log: log, token: token}
+// New builds a server.
+func New(s *store.Store, log *slog.Logger) *Server {
+	return &Server{store: s, log: log}
 }
 
 // Handler returns the routed, authenticated mux.
@@ -39,23 +40,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /v1/cold-watch", s.coldWatch)
 
-	return s.authenticate(mux)
-}
-
-// authenticate rejects anything without the shared token. Health is exempt so a
-// probe never needs a credential.
-func (s *Server) authenticate(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if s.token == "" || r.URL.Path == "/healthz" {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if r.Header.Get("Authorization") != "Bearer "+s.token {
-			s.fail(w, http.StatusUnauthorized, errors.New("unauthorized"))
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
+	return mux
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {

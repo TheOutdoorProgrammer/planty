@@ -49,7 +49,7 @@ func run(log *slog.Logger) error {
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           api.New(db, log, os.Getenv("PLANTY_TOKEN")).Handler(),
+		Handler:           api.New(db, log).Handler(),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
