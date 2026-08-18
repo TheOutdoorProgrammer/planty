@@ -107,7 +107,7 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] Mascot: the seal. Hero and icon, open and closed eyes, measured scale tests
 - [x] Wordmarks for dark and light backgrounds
 - [x] `design/MASCOT.md` resolves the drift across three older design docs
-- [ ] Joey picks open versus closed
+- [x] **Closed eyes.** Joey picked closed over the recommended open: "open looks like a maniac". The app already shipped the closed artwork, so nothing needed redrawing
 
 ## 10. Hardening added after the checklist was done
 

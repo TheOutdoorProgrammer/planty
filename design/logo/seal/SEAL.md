@@ -1,6 +1,19 @@
 # Planty seal
 
-## Recommendation
+## Decision: closed eyes
+
+**Joey picked closed on 2026-08-18, over the recommendation below.** His reason: "open looks like a maniac".
+
+That is the recommendation's own argument landing badly.
+The case for open was that pinprick pupils and oversized whites read as *vacant confidence*, which is the overwatering joke.
+On a real screen they read as unhinged instead, which is a different feeling and not a warmer one.
+The gap between "delighted cluelessness" and "maniac" turns out to be smaller than the analysis assumed, and it is not a gap you can measure in pixel counts, which is what the analysis had to work with.
+
+Closed ships. The app already carried the closed-eyed artwork, so nothing needed redrawing.
+
+The original recommendation is kept below unchanged, because the reasoning is still worth reading and the pixel measurements still describe the two files.
+
+## Recommendation, not taken
 
 Ship the open-eyed version.
 The closed eyes are warm and charming, but they make the seal look happily competent or celebratory.

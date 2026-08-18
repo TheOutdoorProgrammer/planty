@@ -17,15 +17,15 @@ Then the question changed from "how do we draw it" to "what animal is it".
 Five were generated with an identical scene so the animal was the only variable: axolotl, pug, manatee, toad, pigeon.
 Joey picked the manatee, which everyone including him calls the seal, so it is a seal.
 
-## Open
+## Closed
 
-**Open eyes versus closed eyes.**
+**Open eyes versus closed eyes: settled, closed.**
 Both variants exist for the hero and the icon, with measured scale tests at 512, 64 and 32 pixels in `design/logo/seal/COMPARISON.png`.
 
-The recommendation is **open eyes**, on two grounds:
-
-- The vacant, slightly-too-far-apart stare is the joke. Closed eyes read as contented rather than empty, and contentment is not the brief.
-- At 32px the eye whites give the icon two high-contrast anchor points. The closed version collapses into a single purple mass.
+Joey chose **closed** on 2026-08-18, against the recommendation, because open "looks like a maniac".
+The case for open was that the vacant, slightly-too-far-apart stare *is* the joke, and that at 32px the eye whites give the icon two high-contrast anchor points where closed collapses into one purple mass.
+The second point is measurably true and the first turned out not to be: the intended vacancy reads as unhinged on a real screen, and an app that is supposed to be reassuring about your plants cannot open with an unhinged face.
+`design/logo/seal/SEAL.md` keeps the full original argument.
 
 ## What the older design docs say
 

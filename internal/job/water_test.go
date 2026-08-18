@@ -36,6 +36,18 @@ func TestSettleWindowOutlastsASensorReportingInterval(t *testing.T) {
 	}
 }
 
+// Planty with no API key still has to run: the cold watch and the watering
+// line are what keep plants alive and neither needs a model. Failing here
+// would fail the digest at eight every morning, forever.
+func TestNoJudgeIsAQuietDayNotAFailure(t *testing.T) {
+	s, ctx := testStore(t)
+	tender(t, s, ctx, "Keyless", plant.StewardSelf, 55)
+
+	if err := (Daily{Store: s, Log: quietLog()}).Run(ctx); err != nil {
+		t.Fatalf("a Planty with no key must still run: %v", err)
+	}
+}
+
 // onTheLine creates a plant the LetPot pump is responsible for.
 func onTheLine(t *testing.T, s *store.Store, ctx context.Context, name string) plant.Plant {
 	t.Helper()

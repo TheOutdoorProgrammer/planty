@@ -30,6 +30,15 @@ func (d Daily) Run(ctx context.Context) error {
 		return fmt.Errorf("list plants: %w", err)
 	}
 
+	// No key is a Planty running without its opinion, not a broken one. Said
+	// once a day rather than per plant, and never as an error, because the
+	// cold watch and the watering line are unaffected.
+	if d.Judge == nil {
+		d.Log.Warn("no judgment: ANTHROPIC_API_KEY is unset",
+			"plants", len(plants), "still_running", "cold watch, watering, escalation")
+		return nil
+	}
+
 	var failed int
 	for _, p := range plants {
 		if err := d.judgeOne(ctx, p); err != nil {

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -25,13 +26,20 @@ type Judge struct {
 	model  string
 }
 
-// New builds a judge. An empty key falls back to ANTHROPIC_API_KEY.
+// New builds a judge, or nil when there is no key to call the API with. The
+// cold watch and the watering line keep plants alive without a model, so a
+// Planty with no key has to run rather than fail every morning at eight.
 func New(apiKey string) *Judge {
-	var opts []option.RequestOption
-	if apiKey != "" {
-		opts = append(opts, option.WithAPIKey(apiKey))
+	if apiKey == "" {
+		apiKey = os.Getenv("ANTHROPIC_API_KEY")
 	}
-	return &Judge{client: anthropic.NewClient(opts...), model: Model}
+	if apiKey == "" {
+		return nil
+	}
+	return &Judge{
+		client: anthropic.NewClient(option.WithAPIKey(apiKey)),
+		model:  Model,
+	}
 }
 
 // Evidence is everything known about one plant at judgment time.

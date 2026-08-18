@@ -201,6 +201,10 @@ func autopsy(ctx context.Context, db *store.Store, log *slog.Logger) error {
 	if len(os.Args) < 3 {
 		return errors.New("usage: planty autopsy <slug>")
 	}
+	// Asked for by hand, so refusing outright beats a nil judge panicking.
+	if judge.New(os.Getenv("ANTHROPIC_API_KEY")) == nil {
+		return errors.New("an autopsy needs ANTHROPIC_API_KEY, which is unset")
+	}
 
 	record, err := job.Postmortem{
 		Store: db,
