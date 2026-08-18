@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -199,6 +200,35 @@ func visionPreamble(p plant.Plant, frames []Frame) string {
 		"%s (%s), kept in %s with %s light, watered by %s. %d photographs spanning %s.",
 		p.CommonName, orUnknown(p.BotanicalName), orUnknown(p.Location),
 		orUnknown(string(p.LightExposure)), p.WateringMethod, len(frames), span)
+}
+
+// describePot reports the drainage hole independently of the other pot
+// details, because a pot with no hole is the most common way a plant drowns
+// and it used to be dropped whenever nobody recorded the material.
+func describePot(p plant.Plant) string {
+	var parts []string
+	if p.PotSizeIn != nil {
+		parts = append(parts, fmt.Sprintf("%.0f inch", *p.PotSizeIn))
+	}
+	if p.PotMaterial != "" {
+		parts = append(parts, p.PotMaterial)
+	}
+
+	described := ""
+	if len(parts) > 0 {
+		described = "Pot: " + strings.Join(parts, " ")
+	}
+
+	if p.HasDrainage != nil && !*p.HasDrainage {
+		if described == "" {
+			return "Pot has NO drainage hole, so water cannot leave it."
+		}
+		return described + ", with NO drainage hole, so water cannot leave it."
+	}
+	if described == "" {
+		return ""
+	}
+	return described + "."
 }
 
 func orUnknown(s string) string {

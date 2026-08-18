@@ -111,12 +111,8 @@ func narrate(h History) string {
 		orUnknown(p.Location), orUnknown(string(p.LightExposure)),
 		p.WateringMethod, p.Accessibility)
 
-	if p.PotMaterial != "" {
-		fmt.Fprintf(&b, "Pot was %s", p.PotMaterial)
-		if p.HasDrainage != nil && !*p.HasDrainage {
-			b.WriteString(" with NO drainage hole")
-		}
-		b.WriteString(".\n")
+	if pot := describePot(p); pot != "" {
+		fmt.Fprintf(&b, "%s\n", pot)
 	}
 	if p.CareProfile.OwnerSays != "" {
 		fmt.Fprintf(&b, "The owner had said: %q\n", p.CareProfile.OwnerSays)

@@ -181,16 +181,8 @@ func describe(e Evidence) string {
 		fmt.Fprintf(&b, "Watered by hand, so nothing happens unless a person does it.\n")
 	}
 
-	if p.PotMaterial != "" || p.PotSizeIn != nil {
-		fmt.Fprintf(&b, "Pot: ")
-		if p.PotSizeIn != nil {
-			fmt.Fprintf(&b, "%.0f inch ", *p.PotSizeIn)
-		}
-		fmt.Fprintf(&b, "%s", p.PotMaterial)
-		if p.HasDrainage != nil && !*p.HasDrainage {
-			fmt.Fprintf(&b, ", with NO drainage hole")
-		}
-		b.WriteString(".\n")
+	if pot := describePot(p); pot != "" {
+		fmt.Fprintf(&b, "%s\n", pot)
 	}
 	if p.LightExposure != "" {
 		fmt.Fprintf(&b, "Light it gets: %s.\n", p.LightExposure)
