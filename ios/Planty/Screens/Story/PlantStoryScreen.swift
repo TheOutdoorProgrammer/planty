@@ -63,7 +63,18 @@ struct PlantStoryScreen: View {
                 photo: store.chapters.first?.photo,
                 height: 240
             )
+            if comparison.isPossible {
+                NavigationLink("Compare with the first photo") {
+                    PhotoComparisonScreen(plant: store.plant, comparison: comparison)
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(PlantyColor.green)
+            }
         }
+    }
+
+    private var comparison: PhotoComparison {
+        PhotoComparison(store.timeline.photos)
     }
 
     /// Says what Planty concluded and how fresh that is, and never claims the

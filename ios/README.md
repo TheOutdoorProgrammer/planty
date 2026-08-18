@@ -112,7 +112,7 @@ The networking layer has been driven end to end against a mock service shaped li
 | --- | --- | --- |
 | **Away mode, post-mortem, ask-the-owner** | absent from the app | The endpoints exist (`POST /v1/away`, `GET /v1/postmortems`, `GET\|POST /v1/questions`); no screen has been built on them yet. |
 | **Notifications** | absent | Deep links need a push payload contract that does not exist. The cold watch and escalation already notify through Home Assistant, which is where a phone actually gets told. |
-| **Full-screen photo comparison scrubber** | absent | No longer blocked: the timeline mints a presigned link per photo and `PlantPhotoView` loads it. |
+| **Full-screen photo comparison scrubber** | built | Reachable from a plant's story once it has two photos. |
 
 ## Assumptions that turned out to be wrong
 

@@ -77,7 +77,7 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] **Sensor calibration writes.** An uncalibrated probe reports and is then ignored, which looks identical to a working one, so the state is on every row and tapping it fixes it. The sheet spends its room on when to take each reading rather than asking for two numbers, and refuses backwards baselines with the reason: the other way round, a soaked pot reads as bone dry and gets watered again
 - [x] **Photos render.** `PlantPhotoView` loads the timeline's presigned link, keeping bytes just captured ahead of the network so a new photo appears instantly, and falling back to the stand-in when a link has expired
 - [x] **Every write asserts its own method and path**, which is the check that would have caught the harvest route on either side
-- [ ] Photo comparison scrubber, now unblocked by the two above
+- [x] **Photo comparison scrubber.** The first photo stays put and the scrubber moves the second through time, because the question is whether it is better than when it arrived, not better than last Tuesday. Side by side rather than a wipe: handheld shots weeks apart never line up, so a sliding divider would be comparing backgrounds. The gap is said in words, and the same day says so outright rather than reading "0 days apart"
 - [ ] Notifications, which need a push payload contract that does not exist yet
 
 ## 7. Three additions
