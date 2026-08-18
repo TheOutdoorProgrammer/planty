@@ -149,16 +149,16 @@ spec:
                 capabilities:
                   drop: ["ALL"]
 ---
-# The LetPot line. Hourly clears the 45 minute settle window, so a run never
-# judges soil that has not finished drinking and water it twice. Waking hours
-# only: a mixed line asks somebody to move a dripper, and a 3am ask is ignored.
+# What the probes say, and nothing else. Named `thirst` rather than `water`
+# because it moves no water: Planty reports and Joey decides.
+# Twice a day, morning and evening, which is when somebody would go and look.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: planty-water
+  name: planty-thirst
   namespace: planty
 spec:
-  schedule: "0 7-21 * * *"
+  schedule: "0 9,18 * * *"
   timeZone: America/New_York
   concurrencyPolicy: Forbid
   successfulJobsHistoryLimit: 1
@@ -174,9 +174,9 @@ spec:
             runAsUser: 65532
             runAsGroup: 65532
           containers:
-            - name: water
+            - name: thirst
               image: ghcr.io/theoutdoorprogrammer/planty:latest
-              args: ["water"]
+              args: ["thirst"]
               envFrom:
                 - configMapRef:
                     name: planty-config

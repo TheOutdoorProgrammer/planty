@@ -76,38 +76,46 @@ func (w Water) Run(ctx context.Context) error {
 	return w.runLine(ctx, thirsty)
 }
 
-func (w Water) survey(ctx context.Context, onLine []plant.Plant) (thirsty, soaked, blind []string) {
-	for _, p := range onLine {
-		links, err := w.Store.SensorLinks(ctx, &p.ID)
-		if err != nil {
-			blind = append(blind, p.CommonName)
+// moisture reports the driest thing a plant's own calibrated probes say, and
+// whether any of them could speak. The driest reading wins because two probes
+// in one pot disagreeing means part of the rootball is dry.
+func moisture(ctx context.Context, s *store.Store, p plant.Plant) (float64, bool) {
+	links, err := s.SensorLinks(ctx, &p.ID)
+	if err != nil {
+		return 0, false
+	}
+
+	driest, heard := 1.0, false
+	for _, link := range links {
+		if link.Role != plant.RoleSoilMoisture || !link.Calibrated() {
 			continue
 		}
-
-		var seen bool
-		for _, link := range links {
-			if link.Role != plant.RoleSoilMoisture || !link.Calibrated() {
-				continue
-			}
-			latest, err := w.Store.LatestReading(ctx, link.ID)
-			if err != nil {
-				continue
-			}
-			fraction, err := link.Fraction(latest.Value)
-			if err != nil {
-				continue
-			}
-
-			seen = true
-			switch {
-			case fraction <= Thirsty:
-				thirsty = append(thirsty, p.CommonName)
-			case fraction >= Soaked:
-				soaked = append(soaked, p.CommonName)
-			}
+		latest, err := s.LatestReading(ctx, link.ID)
+		if err != nil {
+			continue
 		}
-		if !seen {
+		fraction, err := link.Fraction(latest.Value)
+		if err != nil {
+			continue
+		}
+		if !heard || fraction < driest {
+			driest = fraction
+		}
+		heard = true
+	}
+	return driest, heard
+}
+
+func (w Water) survey(ctx context.Context, onLine []plant.Plant) (thirsty, soaked, blind []string) {
+	for _, p := range onLine {
+		fraction, heard := moisture(ctx, w.Store, p)
+		switch {
+		case !heard:
 			blind = append(blind, p.CommonName)
+		case fraction <= Thirsty:
+			thirsty = append(thirsty, p.CommonName)
+		case fraction >= Soaked:
+			soaked = append(soaked, p.CommonName)
 		}
 	}
 	return thirsty, soaked, blind

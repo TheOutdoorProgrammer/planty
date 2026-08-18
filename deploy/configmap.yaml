@@ -5,7 +5,8 @@ metadata:
   namespace: planty
 data:
   PLANTY_ADDR: ":8080"
-  PLANTY_HA_URL: "https://home.stout.zone"
+  # Your Home Assistant base URL. Set per deployment; this repository is public.
+  PLANTY_HA_URL: ""
   PLANTY_WEATHER_ENTITY: "weather.nws_home"
   PLANTY_NOTIFY_SERVICE: "notify"
   PLANTY_FRIEND_NAME: "friend"

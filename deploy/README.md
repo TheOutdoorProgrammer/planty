@@ -7,13 +7,14 @@ They live here until you have read them.
 ## Moving them into Flux
 
 ```sh
-FLUX=~/projects/src/github.com/TheOutdoorProgrammer/flux/clusters/mini-2/planty
+FLUX=<your-flux-repo>/clusters/<cluster>/planty
 mkdir -p "$FLUX"
 cp deploy/*.yaml "$FLUX"/
 rm "$FLUX"/secret.yaml.example      # the example never belongs in the cluster
 ```
 
 Then create the real secret from the example, SOPS-encrypt it, and commit.
+`PLANTY_HA_URL` is deliberately empty in `configmap.yaml`, because this repository is public. Set it in the copy that lands in the Flux repo.
 
 ## What gets created
 
@@ -22,7 +23,7 @@ Then create the real secret from the example, SOPS-encrypt it, and commit.
 | `namespace.yaml` | The `planty` namespace |
 | `postgres-cluster.yaml` | A single-instance CloudNativePG cluster, matching how `coop` does it |
 | `deployment.yaml` | The API, plus its ClusterIP service |
-| `cronjobs.yaml` | Sensor ingest, the daily digest, and the cold snap watch |
+| `cronjobs.yaml` | Sensor ingest, the thirst report, the daily digest, the chase, the away pass, and the cold snap watch. No watering |
 | `configmap.yaml` | Non-secret configuration |
 | `secret.yaml.example` | Template for the database DSN, the Home Assistant token, and the Anthropic key |
 
@@ -48,11 +49,16 @@ If that ever needs to change, put real authentication in front of it first.
 
 5. Link sensors and record calibration baselines before trusting any automated watering decision. An uncalibrated probe is not evidence.
 
-## `planty water` has no CronJob, on purpose
+## Nothing waters a plant on a timer
 
-Every other job reads and notifies. This one moves water, so it does not get scheduled until you have decided it should be.
+This is a standing rule, not a phase to graduate out of: **Planty reports, Joey decides.**
+`planty water` is the only command that moves water and it has no CronJob, will not be given one, and is listed in `cmd/planty/main_test.go` as deliberately manual so the coverage test does not ask for one.
 
-Before enabling it:
+What is scheduled instead is `planty thirst`, twice a day, which reads every calibrated probe and says which plants are dry.
+It covers hand-watered plants as well as the LetPot line, because most of them are watered by hand and those are the ones that get forgotten.
+It needs no pump and no API key, so it works before any of the rest is set up.
+
+If you ever do run the pump by hand, this is what it needs first:
 
 1. Install `HSTEP/letpot2.0-home-assistant`, so the pump is a Home Assistant switch.
 2. Turn off the LetPot app's own schedules. Two things driving one pump is how a plant gets watered twice.

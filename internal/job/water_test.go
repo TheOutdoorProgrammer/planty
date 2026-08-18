@@ -48,6 +48,25 @@ func TestNoJudgeIsAQuietDayNotAFailure(t *testing.T) {
 	}
 }
 
+// Nothing waters a plant on a timer, so the reporting half has to work on its
+// own: no pump configured, no API key, nothing but probes.
+func TestThirstReportsWithoutAPumpOrAKey(t *testing.T) {
+	s, ctx := testStore(t)
+	onTheLine(t, s, ctx, "Tomato")
+
+	f := newFakeHA(t, weatherEntity)
+	report := Thirst{Store: s, HA: f.client(), Log: quietLog(), Notifier: "notify"}
+	if err := report.Run(ctx); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// No calibrated probe means nothing can be said, which is silence rather
+	// than a guess that the plant is fine.
+	if len(f.notified) != 0 {
+		t.Errorf("said %v about a plant with no calibrated probe", f.notified)
+	}
+}
+
 // onTheLine creates a plant the LetPot pump is responsible for.
 func onTheLine(t *testing.T, s *store.Store, ctx context.Context, name string) plant.Plant {
 	t.Helper()

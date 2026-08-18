@@ -14,6 +14,10 @@ var manual = map[string]string{
 	"migrate": "every command migrates on start, so it is only ever run by hand",
 	"autopsy": "takes a slug, and is asked for when a plant dies",
 	"seed":    "one-off, against a new database",
+
+	// Joey's rule, and the reason `thirst` exists: nothing waters a plant on a
+	// timer. He is told it needs doing and turns the pump on himself.
+	"water": "moves water, so it is never scheduled",
 }
 
 var scheduledArgs = regexp.MustCompile(`args:\s*\["(\w+)"\]`)
