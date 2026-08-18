@@ -69,7 +69,7 @@ func (s *Store) Questions(ctx context.Context, askedOf string, status plant.Ques
 	}
 	defer rows.Close()
 
-	var out []plant.Question
+	out := []plant.Question{}
 	for rows.Next() {
 		q, err := scanQuestion(rows)
 		if err != nil {

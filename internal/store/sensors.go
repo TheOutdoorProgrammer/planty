@@ -73,7 +73,7 @@ func (s *Store) SensorLinks(ctx context.Context, plantID *uuid.UUID) ([]plant.Se
 	}
 	defer rows.Close()
 
-	var out []plant.SensorLink
+	out := []plant.SensorLink{}
 	for rows.Next() {
 		l, err := scanSensor(rows)
 		if err != nil {
@@ -122,7 +122,7 @@ func (s *Store) ReadingsSince(ctx context.Context, linkID uuid.UUID, since time.
 	}
 	defer rows.Close()
 
-	var out []plant.Reading
+	out := []plant.Reading{}
 	for rows.Next() {
 		var r plant.Reading
 		if err := rows.Scan(&r.ID, &r.SensorLinkID, &r.Value, &r.Unit, &r.TakenAt); err != nil {

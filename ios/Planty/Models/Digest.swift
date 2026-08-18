@@ -10,15 +10,48 @@ struct Digest: Codable, Sendable, Hashable {
     let checked: Int
     var staleSince: Date?
 
+    /// Nothing has ever been judged. Distinct from "judged, nothing to do",
+    /// and the difference is the whole point: a garden nobody has looked at
+    /// must never render as calm.
+    var neverRun = false
+
     enum CodingKeys: String, CodingKey {
         case date
         case entries
         case checked
         case staleSince = "stale_since"
+        case neverRun = "never_run"
     }
 
-    /// Nothing to do AND the data behind that claim is actually fresh.
-    var isAllClear: Bool { entries.isEmpty && staleSince == nil }
+    /// Nothing to do, the data behind that claim is fresh, and something has
+    /// actually been checked.
+    var isAllClear: Bool { entries.isEmpty && staleSince == nil && !neverRun }
+
+    init(
+        date: Date,
+        entries: [DigestEntry],
+        checked: Int,
+        staleSince: Date? = nil,
+        neverRun: Bool = false
+    ) {
+        self.date = date
+        self.entries = entries
+        self.checked = checked
+        self.staleSince = staleSince
+        self.neverRun = neverRun
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        date = try container.decode(Date.self, forKey: .date)
+        checked = try container.decode(Int.self, forKey: .checked)
+        staleSince = try container.decodeIfPresent(Date.self, forKey: .staleSince)
+        neverRun = try container.decodeIfPresent(Bool.self, forKey: .neverRun) ?? false
+
+        // An empty list is null on some encoders, and refusing to decode the
+        // whole digest over that took the Today tab down entirely.
+        entries = try container.decodeIfPresent([DigestEntry].self, forKey: .entries) ?? []
+    }
 
     /// Drops entries the user already settled, without touching `checked`:
     /// the freshness count has to keep describing what the service did.

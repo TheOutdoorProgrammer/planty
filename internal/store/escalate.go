@@ -31,7 +31,7 @@ func (s *Store) Chaseable(ctx context.Context, olderThan time.Duration, maxEscal
 	}
 	defer rows.Close()
 
-	var out []plant.DigestEntry
+	out := []plant.DigestEntry{}
 	for rows.Next() {
 		entry, err := scanDigestEntry(rows)
 		if err != nil {

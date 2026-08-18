@@ -88,6 +88,49 @@ struct TimelineMergeTests {
         #expect(merged.photos.first?.url != nil)
     }
 
+    /// This shipped. The service sent `"entries": null` on a garden nothing had
+    /// judged, the app required an array, and the Today tab could not load at
+    /// all: the first thing the app does on launch was the thing that broke.
+    @Test("A null entries list decodes as empty rather than failing the digest")
+    func decodesNullEntries() throws {
+        let json = """
+            {
+              "date": "2026-08-18T20:23:49Z",
+              "entries": null,
+              "checked": 5,
+              "stale_since": null,
+              "never_run": true
+            }
+            """
+        let digest = try PlantyCoders.decoder().decode(Digest.self, from: Data(json.utf8))
+
+        #expect(digest.entries.isEmpty)
+        #expect(digest.checked == 5)
+    }
+
+    /// A garden nobody has looked at is not a calm one, and rendering it as
+    /// calm is the exact reassurance this app must never give.
+    @Test("Never having run is not all clear")
+    func neverRunIsNotCalm() throws {
+        let json = """
+            {"date": "2026-08-18T20:23:49Z", "entries": [], "checked": 5, "never_run": true}
+            """
+        let digest = try PlantyCoders.decoder().decode(Digest.self, from: Data(json.utf8))
+
+        #expect(digest.neverRun)
+        #expect(!digest.isAllClear)
+    }
+
+    @Test("Having run and found nothing is all clear")
+    func ranAndFoundNothingIsCalm() throws {
+        let json = """
+            {"date": "2026-08-18T20:23:49Z", "entries": [], "checked": 5, "never_run": false}
+            """
+        let digest = try PlantyCoders.decoder().decode(Digest.self, from: Data(json.utf8))
+
+        #expect(digest.isAllClear)
+    }
+
     @Test("A photo decodes the link the timeline minted for it")
     func decodesPresignedURL() throws {
         let json = """

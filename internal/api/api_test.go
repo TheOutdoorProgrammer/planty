@@ -210,6 +210,40 @@ func TestArchivingHidesThePlantButKeepsIt(t *testing.T) {
 	}
 }
 
+// A nil slice marshals as `null`, and a client declaring the field non-optional
+// then fails to decode the whole response. This shipped: the app could not read
+// /v1/today at all, because `entries` is null until something has been judged.
+func TestEmptyListsAreArraysNotNull(t *testing.T) {
+	h, _, _ := newServer(t)
+
+	paths := []string{
+		"/v1/today",
+		"/v1/plants",
+		"/v1/sensors",
+		"/v1/questions",
+		"/v1/postmortems",
+	}
+
+	for _, path := range paths {
+		t.Run(path, func(t *testing.T) {
+			rec, _ := do(t, h, http.MethodGet, path, nil)
+			if rec.Code != http.StatusOK {
+				t.Fatalf("got %d, body %s", rec.Code, rec.Body.String())
+			}
+
+			var body map[string]json.RawMessage
+			if err := json.Unmarshal(rec.Body.Bytes(), &body); err != nil {
+				t.Fatalf("decode: %v", err)
+			}
+			for field, raw := range body {
+				if string(raw) == "null" && strings.HasSuffix(field, "s") {
+					t.Errorf("%s is null; an empty list has to be [] or a client cannot decode it", field)
+				}
+			}
+		})
+	}
+}
+
 // The iOS app posts here. Without a judge configured it must say so plainly,
 // because the app degrades to coarse Vision labels on exactly this answer.
 func TestIdentifyIsUnavailableWithoutAJudge(t *testing.T) {

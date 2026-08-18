@@ -69,7 +69,7 @@ func (s *Store) Sheltered(ctx context.Context) ([]plant.Plant, time.Time, error)
 	}
 	defer rows.Close()
 
-	var out []plant.Plant
+	out := []plant.Plant{}
 	for rows.Next() {
 		p, err := scanPlant(rows)
 		if err != nil {

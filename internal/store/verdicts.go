@@ -83,7 +83,7 @@ func (s *Store) AckVerdict(ctx context.Context, id uuid.UUID) error {
 
 // Digest is what needs doing; StaleSince separates calm from no-fresh-data.
 func (s *Store) Digest(ctx context.Context, staleAfter time.Duration) (plant.Digest, error) {
-	digest := plant.Digest{Date: time.Now().UTC()}
+	digest := plant.Digest{Date: time.Now().UTC(), Entries: []plant.DigestEntry{}}
 
 	if err := s.pool.QueryRow(ctx, `
 		SELECT count(*) FROM plants WHERE archived_at IS NULL AND status <> 'dead'`,
@@ -164,7 +164,7 @@ func (s *Store) DeadWithoutPostmortem(ctx context.Context) ([]plant.Plant, error
 	}
 	defer rows.Close()
 
-	var out []plant.Plant
+	out := []plant.Plant{}
 	for rows.Next() {
 		p, err := scanPlant(rows)
 		if err != nil {
@@ -197,7 +197,7 @@ func (s *Store) Postmortems(ctx context.Context) ([]PostmortemRecord, error) {
 	}
 	defer rows.Close()
 
-	var out []PostmortemRecord
+	out := []PostmortemRecord{}
 	for rows.Next() {
 		var r PostmortemRecord
 		var evidence []byte

@@ -53,7 +53,7 @@ func (s *Store) DiagnosisConversation(ctx context.Context, conversationID uuid.U
 	}
 	defer rows.Close()
 
-	var out []DiagnosisTurn
+	out := []DiagnosisTurn{}
 	for rows.Next() {
 		turn, err := scanDiagnosisTurn(rows)
 		if err != nil {

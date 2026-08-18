@@ -48,7 +48,7 @@ func (s *Store) Observations(ctx context.Context, plantID uuid.UUID, limit int) 
 	}
 	defer rows.Close()
 
-	var out []plant.Observation
+	out := []plant.Observation{}
 	for rows.Next() {
 		var o plant.Observation
 		if err := rows.Scan(&o.ID, &o.PlantID, &o.Kind, &o.Body,

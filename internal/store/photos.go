@@ -46,7 +46,7 @@ func (s *Store) Photos(ctx context.Context, plantID uuid.UUID, limit int) ([]pla
 	}
 	defer rows.Close()
 
-	var out []plant.Photo
+	out := []plant.Photo{}
 	for rows.Next() {
 		var p plant.Photo
 		if err := rows.Scan(&p.ID, &p.PlantID, &p.StorageKey, &p.TakenAt,

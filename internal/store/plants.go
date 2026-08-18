@@ -163,7 +163,7 @@ func (s *Store) ListPlants(ctx context.Context, f PlantFilter) ([]plant.Plant, e
 	}
 	defer rows.Close()
 
-	var out []plant.Plant
+	out := []plant.Plant{}
 	for rows.Next() {
 		p, err := scanPlant(rows)
 		if err != nil {
@@ -190,7 +190,7 @@ func (s *Store) ColdWatch(ctx context.Context, forecastLowF float64) ([]plant.Pl
 	}
 	defer rows.Close()
 
-	var out []plant.Plant
+	out := []plant.Plant{}
 	for rows.Next() {
 		p, err := scanPlant(rows)
 		if err != nil {
