@@ -20,5 +20,8 @@ struct RootTabView: View {
             }
         }
         .tint(PlantyColor.pink)
+        .sheet(isPresented: $session.isShowingSettings) {
+            SettingsScreen()
+        }
     }
 }
