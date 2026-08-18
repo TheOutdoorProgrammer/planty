@@ -102,7 +102,7 @@ struct SettingsScreen: View {
     private var aboutSection: some View {
         Section("About") {
             LabeledContent("Mascot", value: "A lavender seal, overwatering")
-            LabeledContent("Diagnosis", value: "Sample answers, not connected")
+            LabeledContent("Diagnosis", value: "Connected")
         }
     }
 

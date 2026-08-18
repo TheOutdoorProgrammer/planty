@@ -1,13 +1,12 @@
 import Foundation
 
-/// Diagnosis has no documented endpoint yet, so it sits behind its own seam:
-/// the screens are finished and only this implementation has to change.
+/// Behind a seam so tests can drive the screens without a server.
 protocol DiagnosisService: Sendable {
     func open(slug: String, photoID: UUID?, prompt: String) async throws -> DiagnosisTurn
     func follow(slug: String, conversationID: UUID, message: String) async throws -> DiagnosisTurn
 }
 
-/// The proposed shape, matching the rest of the contract's style.
+/// Calls POST /v1/plants/{slug}/diagnosis, which the service now implements.
 struct RemoteDiagnosisService: DiagnosisService {
     let configuration: PlantyConfiguration
     let session: URLSession

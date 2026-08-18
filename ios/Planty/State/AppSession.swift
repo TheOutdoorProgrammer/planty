@@ -47,7 +47,7 @@ final class AppSession {
         configuration = resolved
         let client = api ?? PlantyClient(configuration: resolved)
         self.api = client
-        self.diagnosis = diagnosis ?? StubDiagnosisService()
+        self.diagnosis = diagnosis ?? RemoteDiagnosisService(configuration: resolved)
 
         today = TodayStore(api: client, isConfigured: resolved.isConfigured)
         library = PlantsStore(api: client, isConfigured: resolved.isConfigured)
@@ -78,7 +78,7 @@ final class AppSession {
         let client = PlantyClient(configuration: configuration)
         api = client
 
-        diagnosis = StubDiagnosisService()
+        diagnosis = RemoteDiagnosisService(configuration: configuration)
         today.replace(api: client, isConfigured: configuration.isConfigured)
         library.replace(api: client, isConfigured: configuration.isConfigured)
         capture.replace(api: client)
