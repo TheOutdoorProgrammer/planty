@@ -108,6 +108,22 @@ struct TimelineMergeTests {
         #expect(digest.checked == 5)
     }
 
+    /// Captured verbatim from the running service, nanosecond timestamp and
+    /// all. A hand-written fixture is a fixture of what I believe it sends.
+    @Test("The exact payload the live service returns decodes")
+    func decodesTheRealPayload() throws {
+        let json = #"""
+            {"all_clear":false,"checked":5,"date":"2026-08-18T21:01:13.991329194Z",
+             "entries":[],"never_run":true,"stale_since":null}
+            """#
+        let digest = try PlantyCoders.decoder().decode(Digest.self, from: Data(json.utf8))
+
+        #expect(digest.checked == 5)
+        #expect(digest.entries.isEmpty)
+        #expect(digest.neverRun)
+        #expect(!digest.isAllClear)
+    }
+
     /// A garden nobody has looked at is not a calm one, and rendering it as
     /// calm is the exact reassurance this app must never give.
     @Test("Never having run is not all clear")

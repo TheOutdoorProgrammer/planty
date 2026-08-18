@@ -101,9 +101,19 @@ struct SettingsScreen: View {
 
     private var aboutSection: some View {
         Section("About") {
+            // Without this there is no way to tell which build is on the phone,
+            // which turned a stale install into an hour of chasing a fixed bug.
+            LabeledContent("Version", value: Self.buildVersion)
             LabeledContent("Mascot", value: "A lavender seal, overwatering")
             LabeledContent("Diagnosis", value: "Connected")
         }
+    }
+
+    private static var buildVersion: String {
+        let info = Bundle.main.infoDictionary
+        let short = info?["CFBundleShortVersionString"] as? String ?? "?"
+        let build = info?["CFBundleVersion"] as? String ?? "?"
+        return "\(short) (\(build))"
     }
 
     private func load() {
