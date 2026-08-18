@@ -105,7 +105,15 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] `design/MASCOT.md` resolves the drift across three older design docs
 - [ ] Joey picks open versus closed
 
-## 10. Bugs found while building
+## 10. Hardening added after the checklist was done
+
+- [x] **19 API handler tests**, run against a real Postgres. The package had 23 routes and no tests at all
+- [x] **Errors say whose fault they are.** Every write handler used to pass 400 as its default, so a database outage during a PATCH reported "Bad Request" and sent whoever was debugging it to look at the request. `plant.ErrInvalid` now marks caller mistakes, Postgres constraint violations are classified into it, and `fail` does the mapping so no call site has to guess
+- [x] **Constraint names are translated.** `dripper_needs_letpot` tells a person nothing; the reply now says a dripper number only means something on the LetPot line
+- [x] **Migrations are serialised.** Every command migrates on start, so a deployment and a CronJob landing together raced on a fresh database. Fixed with a Postgres advisory lock across processes and a mutex within one, because goose keeps its dialect and filesystem in package globals and the race detector caught it racing inside the library
+- [x] Server faults are logged before being returned, so a 500 leaves a trace
+
+## 11. Bugs found while building
 
 - [x] `.gitignore`: unanchored `planty` also matched the `cmd/planty` source directory, so `main.go` was never committed
 - [x] `nerdswhofish/go.work` did not list the new plugin
