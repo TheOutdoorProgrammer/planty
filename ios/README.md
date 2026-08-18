@@ -96,11 +96,11 @@ Change it in one place.
 
 92 tests, Swift Testing, no network.
 
-- `DateDecodingTests` — Go writes RFC3339 with up to nine fractional digits and none at all when zero, which no single `ISO8601DateFormatter` reads. `PlantyDateFormat` clips the fraction to three digits and tries both.
-- `ModelDecodingTests` — real Go-shaped JSON, snake_case keys, unknown enum fallback, calibration maths, and `Plant.risk` matching the Go `Plant.Risk()` it mirrors.
-- `PlantyClientTests` — a stubbed `URLProtocol`: auth header, query building, status-to-error mapping, malformed bodies.
-- `FreshnessTests`, `TodayPresentationTests`, `LibraryStatusTests` — the calm/stale rule from every angle.
-- `TodayStoreTests`, `CaptureStoreTests` — postponing never acknowledges, completing records before acknowledging, a failed upload never drops the photo.
+- `DateDecodingTests`: Go writes RFC3339 with up to nine fractional digits and none at all when zero, which no single `ISO8601DateFormatter` reads. `PlantyDateFormat` clips the fraction to three digits and tries both.
+- `ModelDecodingTests`: real Go-shaped JSON, snake_case keys, unknown enum fallback, calibration maths, and `Plant.risk` matching the Go `Plant.Risk()` it mirrors.
+- `PlantyClientTests`: a stubbed `URLProtocol` covering the auth header, query building, status-to-error mapping and malformed bodies.
+- `FreshnessTests`, `TodayPresentationTests`, `LibraryStatusTests`: the calm/stale rule from every angle.
+- `TodayStoreTests`, `CaptureStoreTests`: postponing never acknowledges, completing records before acknowledging, a failed upload never drops the photo.
 
 ## Verified against a live service
 

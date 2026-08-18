@@ -9,3 +9,15 @@ data:
   PLANTY_WEATHER_ENTITY: "weather.nws_home"
   PLANTY_NOTIFY_SERVICE: "notify"
   PLANTY_FRIEND_NAME: "friend"
+
+  # Object storage for photos. Leave the endpoint empty to disable the photo
+  # routes rather than failing the whole service.
+  PLANTY_S3_ENDPOINT: ""
+  PLANTY_S3_BUCKET: "planty"
+  PLANTY_S3_SSL: "false"
+
+  # The LetPot pump, once the HSTEP component is installed. `planty water`
+  # refuses to run without PLANTY_PUMP_SWITCH set.
+  PLANTY_PUMP_SWITCH: ""
+  PLANTY_PUMP_SENSOR: ""
+  PLANTY_PUMP_SECONDS: "120"

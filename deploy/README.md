@@ -48,6 +48,23 @@ If that ever needs to change, put real authentication in front of it first.
 
 5. Link sensors and record calibration baselines before trusting any automated watering decision. An uncalibrated probe is not evidence.
 
+## `planty water` has no CronJob, on purpose
+
+Every other job reads and notifies. This one moves water, so it does not get scheduled until you have decided it should be.
+
+Before enabling it:
+
+1. Install `HSTEP/letpot2.0-home-assistant`, so the pump is a Home Assistant switch.
+2. Turn off the LetPot app's own schedules. Two things driving one pump is how a plant gets watered twice.
+3. Calibrate every probe on the line. The job refuses to run while any plant on the line lacks a calibrated sensor, which is the correct behaviour, not a bug to work around.
+4. Run it by hand and watch: `kubectl -n planty exec deploy/planty -- /planty water`
+
+It needs `PLANTY_PUMP_SWITCH`, and optionally `PLANTY_PUMP_SECONDS` (default 120).
+
+The safety model is that the run duration is held by the process rather than by a Home Assistant `for:` trigger, and the pump-off call is deferred so a cancelled context or a crash still closes it. A `for:` trigger re-stamps `last_changed` on every restart, which is how a valve here once ran 14h33m past a 45 minute cap.
+
+**A single wet plant vetoes the whole run.** One pump waters everything on the line, so if one plant is dry and another is already soaked, watering would drown the second. The job notifies instead of choosing a victim.
+
 ## Before the cold snap job is useful
 
 `planty cold` queries plants by `min_temp_f`, which the seed sets to 55F for every one of the friend's plants.
