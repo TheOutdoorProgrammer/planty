@@ -130,6 +130,12 @@ func TestAllClearDistinguishesCalmFromStale(t *testing.T) {
 	if stale.AllClear() {
 		t.Fatal("stale data must never render as all clear")
 	}
+
+	// A fresh install has no verdicts at all, which is not the same as calm.
+	never := Digest{Checked: 12, NeverRun: true}
+	if never.AllClear() {
+		t.Fatal("a judgment that has never run must not render as all clear")
+	}
 }
 
 func TestVerifiableOnlyCoversWatering(t *testing.T) {

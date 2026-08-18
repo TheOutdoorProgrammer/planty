@@ -80,16 +80,15 @@ func (s *Store) Digest(ctx context.Context, staleAfter time.Duration) (plant.Dig
 		`SELECT max(created_at) FROM verdicts`).Scan(&newest); err != nil {
 		return digest, err
 	}
-	if newest == nil || time.Since(*newest) > staleAfter {
+	switch {
+	case newest == nil:
+		digest.NeverRun = true
+	case time.Since(*newest) > staleAfter:
 		digest.StaleSince = newest
-		if newest == nil {
-			zero := time.Time{}
-			digest.StaleSince = &zero
-		}
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT `+prefixed(plantColumns, "p")+`,
+		SELECT `+plantColumnsFor("p")+`,
 		       v.id, v.plant_id, v.for_date, v.action, v.reasoning,
 		       v.confidence, v.evidence, v.created_at, v.acknowledged_at
 		FROM verdicts v

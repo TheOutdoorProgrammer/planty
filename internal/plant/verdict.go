@@ -76,14 +76,17 @@ type Digest struct {
 	Date    time.Time     `json:"date"`
 	Entries []DigestEntry `json:"entries"`
 
-	// Checked and StaleSince let a client tell "nothing needs doing" apart from
-	// "no fresh data", which must never look the same.
+	// Three states a client must be able to tell apart: nothing needs doing,
+	// the data is stale, and the judgment has never run at all.
 	Checked    int        `json:"checked"`
 	StaleSince *time.Time `json:"stale_since,omitempty"`
+	NeverRun   bool       `json:"never_run"`
 }
 
 // AllClear reports whether nothing needs doing, given data is actually fresh.
-func (d Digest) AllClear() bool { return len(d.Entries) == 0 && d.StaleSince == nil }
+func (d Digest) AllClear() bool {
+	return len(d.Entries) == 0 && d.StaleSince == nil && !d.NeverRun
+}
 
 // StaleAfter is how old the newest verdict may be before a digest says so.
 // Sized past a missed daily run, so one hiccup does not cry stale.

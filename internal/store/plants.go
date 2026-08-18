@@ -16,14 +16,28 @@ import (
 // ErrNotFound is returned when a slug or id matches nothing live.
 var ErrNotFound = errors.New("not found")
 
-const plantColumns = `
-	id, slug, common_name, coalesce(botanical_name, ''), coalesce(variety, ''),
-	domain, steward, status,
-	location, coalesce(ha_area, ''),
-	accessibility, watering_method, letpot_dripper,
-	pot_size_in, coalesce(pot_material, ''), has_drainage, coalesce(soil_mix, ''),
-	light_exposure, min_temp_f, care_profile,
-	acquired_at, archived_at, sheltered_at, created_at, updated_at`
+// plantColumns is the unaliased list; joins use plantColumnsFor instead.
+var plantColumns = plantColumnsFor("")
+
+// plantColumnsFor builds the select list, optionally qualified by an alias.
+// Generated, not string-substituted: splitting on commas shreds coalesce calls.
+func plantColumnsFor(alias string) string {
+	q := ""
+	if alias != "" {
+		q = alias + "."
+	}
+	return fmt.Sprintf(`
+	%[1]sid, %[1]sslug, %[1]scommon_name,
+	coalesce(%[1]sbotanical_name, ''), coalesce(%[1]svariety, ''),
+	%[1]sdomain, %[1]ssteward, %[1]sstatus,
+	%[1]slocation, coalesce(%[1]sha_area, ''),
+	%[1]saccessibility, %[1]swatering_method, %[1]sletpot_dripper,
+	%[1]spot_size_in, coalesce(%[1]spot_material, ''), %[1]shas_drainage,
+	coalesce(%[1]ssoil_mix, ''),
+	%[1]slight_exposure, %[1]smin_temp_f, %[1]scare_profile,
+	%[1]sacquired_at, %[1]sarchived_at, %[1]ssheltered_at,
+	%[1]screated_at, %[1]supdated_at`, q)
+}
 
 func scanPlant(row pgx.Row) (plant.Plant, error) {
 	var p plant.Plant

@@ -23,6 +23,7 @@ func (s *Server) today(w http.ResponseWriter, r *http.Request) {
 		"entries":     digest.Entries,
 		"checked":     digest.Checked,
 		"stale_since": digest.StaleSince,
+		"never_run":   digest.NeverRun,
 		"all_clear":   digest.AllClear(),
 	})
 }

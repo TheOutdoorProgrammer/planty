@@ -98,7 +98,8 @@ extension TodayInputs {
         digest: Digest? = .fixture(),
         error: PlantyError? = nil,
         knownPlantCount: Int? = 8,
-        now: Date = .reference
+        now: Date = .reference,
+        didJustFinish: Bool = false
     ) -> TodayInputs {
         TodayInputs(
             isConfigured: isConfigured,
@@ -106,7 +107,8 @@ extension TodayInputs {
             digest: digest,
             error: error,
             knownPlantCount: knownPlantCount,
-            now: now
+            now: now,
+            didJustFinish: didJustFinish
         )
     }
 }

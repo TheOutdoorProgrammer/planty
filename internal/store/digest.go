@@ -3,27 +3,12 @@ package store
 import (
 	"encoding/json"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
-
-// prefixed qualifies a bare column list with a table alias for joins.
-func prefixed(columns, alias string) string {
-	parts := strings.Split(columns, ",")
-	for i, part := range parts {
-		trimmed := strings.TrimSpace(part)
-		if strings.Contains(trimmed, "(") {
-			parts[i] = strings.ReplaceAll(trimmed, "(", "("+alias+".")
-			continue
-		}
-		parts[i] = alias + "." + trimmed
-	}
-	return strings.Join(parts, ", ")
-}
 
 func scanDigestEntry(row pgx.Row) (plant.DigestEntry, error) {
 	var p plant.Plant
