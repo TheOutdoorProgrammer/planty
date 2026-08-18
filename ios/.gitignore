@@ -1,0 +1,8 @@
+# Per-developer Xcode state, never shared. The scheme in xcshareddata is.
+xcuserdata/
+*.xcuserdatad
+
+# Local build output
+DerivedData/
+build/
+*.xcresult

@@ -33,6 +33,10 @@ type Verdict struct {
 
 	CreatedAt      time.Time  `json:"created_at"`
 	AcknowledgedAt *time.Time `json:"acknowledged_at,omitempty"`
+
+	// How many times this has been chased. Bounded, because a notification
+	// that repeats forever teaches you to ignore the channel.
+	Escalations int `json:"escalations"`
 }
 
 // Evidence records what the verdict was built from.

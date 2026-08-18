@@ -220,6 +220,98 @@ func TestShelterRoundTrip(t *testing.T) {
 	}
 }
 
+func TestChaseableRespectsTheCapAndTheCooldown(t *testing.T) {
+	s, ctx := testStore(t)
+
+	p := newPlant(t, s, ctx, "Chase subject")
+	v, err := s.SaveVerdict(ctx, plant.Verdict{
+		PlantID: p.ID, ForDate: time.Now().UTC(),
+		Action: plant.ActionWater, Reasoning: "dry",
+	})
+	if err != nil {
+		t.Fatalf("save verdict: %v", err)
+	}
+
+	// Just written, so the cooldown has not elapsed.
+	fresh, err := s.Chaseable(ctx, time.Hour, 3)
+	if err != nil {
+		t.Fatalf("chaseable: %v", err)
+	}
+	for _, entry := range fresh {
+		if entry.Plant.ID == p.ID {
+			t.Fatal("a verdict written seconds ago must not be chased yet")
+		}
+	}
+
+	// A zero cooldown makes it due immediately.
+	due, err := s.Chaseable(ctx, 0, 3)
+	if err != nil {
+		t.Fatalf("chaseable: %v", err)
+	}
+	var found bool
+	for _, entry := range due {
+		if entry.Plant.ID == p.ID {
+			found = true
+			if entry.Verdict.Escalations != 0 {
+				t.Errorf("escalations should start at zero, got %d", entry.Verdict.Escalations)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("an overdue unacknowledged verdict should be chaseable")
+	}
+
+	for range 3 {
+		if err := s.RecordEscalation(ctx, v.ID); err != nil {
+			t.Fatalf("record escalation: %v", err)
+		}
+	}
+
+	capped, err := s.Chaseable(ctx, 0, 3)
+	if err != nil {
+		t.Fatalf("chaseable: %v", err)
+	}
+	for _, entry := range capped {
+		if entry.Plant.ID == p.ID {
+			t.Fatal("the ladder must stop at the cap rather than nagging forever")
+		}
+	}
+}
+
+// Re-judging a plant is a new ask, so the ladder starts over.
+func TestResavingAVerdictResetsTheLadder(t *testing.T) {
+	s, ctx := testStore(t)
+
+	p := newPlant(t, s, ctx, "Reset subject")
+	today := time.Now().UTC()
+	v, err := s.SaveVerdict(ctx, plant.Verdict{
+		PlantID: p.ID, ForDate: today, Action: plant.ActionWater, Reasoning: "dry",
+	})
+	if err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	if err := s.RecordEscalation(ctx, v.ID); err != nil {
+		t.Fatalf("escalate: %v", err)
+	}
+
+	if _, err := s.SaveVerdict(ctx, plant.Verdict{
+		PlantID: p.ID, ForDate: today, Action: plant.ActionUrgent, Reasoning: "worse",
+	}); err != nil {
+		t.Fatalf("resave: %v", err)
+	}
+
+	due, err := s.Chaseable(ctx, 0, 3)
+	if err != nil {
+		t.Fatalf("chaseable: %v", err)
+	}
+	for _, entry := range due {
+		if entry.Plant.ID == p.ID && entry.Verdict.Escalations != 0 {
+			t.Errorf("a re-judged plant should start the ladder over, got %d",
+				entry.Verdict.Escalations)
+		}
+	}
+}
+
 func TestMoistureRoseAfterDetectsWaterThatNeverArrived(t *testing.T) {
 	s, ctx := testStore(t)
 

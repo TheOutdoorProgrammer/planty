@@ -27,6 +27,7 @@ func scanDigestEntry(row pgx.Row) (plant.DigestEntry, error) {
 		&acquired, &p.ArchivedAt, &p.ShelteredAt, &p.CreatedAt, &p.UpdatedAt,
 		&v.ID, &v.PlantID, &v.ForDate, &v.Action, &v.Reasoning,
 		&v.Confidence, &evidence, &v.CreatedAt, &v.AcknowledgedAt,
+		&v.Escalations,
 	)
 	if err != nil {
 		return plant.DigestEntry{}, err

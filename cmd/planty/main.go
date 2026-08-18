@@ -30,6 +30,7 @@ const usage = `planty <command>
   daily    judge every plant and send the digest
   cold     check tonight's forecast, both bringing in and putting back out
   away     pre-departure watering pass, or the briefing on return
+  chase    chase verdicts nobody acknowledged, one rung up the ladder
   water    decide whether to run the LetPot line, then verify it worked
   autopsy  work out what killed a plant: planty autopsy <slug>
   seed     load the sabbatical plants and their open questions
@@ -81,6 +82,8 @@ func run(log *slog.Logger) error {
 		return coldWatch(db, log).Run(ctx)
 	case "away":
 		return job.Away{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
+	case "chase":
+		return job.Escalate{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
 	case "water":
 		return water(db, log).Run(ctx)
 	case "autopsy":

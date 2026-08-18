@@ -70,8 +70,9 @@ struct PlantPhotoView: View {
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
+            // Decorative, so it scales with its frame rather than Dynamic Type.
             Image(systemName: "leaf.fill")
-                .font(isThumbnail ? .title3 : .system(size: 64, weight: .light))
+                .font(.system(size: height * (isThumbnail ? 0.34 : 0.28), weight: .light))
                 .foregroundStyle(PlantyColor.green.opacity(0.85))
                 .accessibilityHidden(true)
 

@@ -28,7 +28,8 @@ func (s *Store) SaveVerdict(ctx context.Context, v plant.Verdict) (plant.Verdict
 		ON CONFLICT (plant_id, for_date) DO UPDATE
 			SET action = excluded.action, reasoning = excluded.reasoning,
 			    confidence = excluded.confidence, evidence = excluded.evidence,
-			    created_at = now(), acknowledged_at = NULL
+			    created_at = now(), acknowledged_at = NULL,
+			    escalations = 0, escalated_at = NULL
 		RETURNING id, plant_id, for_date, action, reasoning, confidence,
 		          evidence, created_at, acknowledged_at`,
 		v.PlantID, v.ForDate, v.Action, v.Reasoning, v.Confidence, evidence)
@@ -90,7 +91,8 @@ func (s *Store) Digest(ctx context.Context, staleAfter time.Duration) (plant.Dig
 	rows, err := s.pool.Query(ctx, `
 		SELECT `+plantColumnsFor("p")+`,
 		       v.id, v.plant_id, v.for_date, v.action, v.reasoning,
-		       v.confidence, v.evidence, v.created_at, v.acknowledged_at
+		       v.confidence, v.evidence, v.created_at, v.acknowledged_at,
+		       v.escalations
 		FROM verdicts v
 		JOIN plants p ON p.id = v.plant_id
 		WHERE v.acknowledged_at IS NULL
