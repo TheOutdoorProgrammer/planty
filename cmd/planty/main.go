@@ -17,6 +17,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/job"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
+	"github.com/TheOutdoorProgrammer/planty/internal/seed"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
@@ -26,6 +27,7 @@ const usage = `planty <command>
   ingest   pull current sensor values from Home Assistant
   daily    judge every plant and send the digest
   cold     check tonight's forecast and warn about plants to bring in
+  seed     load the sabbatical plants and their open questions
   migrate  apply database migrations and exit`
 
 func main() {
@@ -72,6 +74,8 @@ func run(log *slog.Logger) error {
 		return daily(db, log).Run(ctx)
 	case "cold":
 		return coldWatch(db, log).Run(ctx)
+	case "seed":
+		return seed.Friends(ctx, db, log, os.Getenv("PLANTY_FRIEND_NAME"))
 	default:
 		fmt.Fprintln(os.Stderr, usage)
 		return fmt.Errorf("unknown command %q", os.Args[1])

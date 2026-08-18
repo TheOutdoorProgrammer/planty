@@ -1,0 +1,137 @@
+import Foundation
+import Observation
+
+/// Loads the daily digest and turns it into exactly one presentation. It keeps
+/// the last good digest so a failed refresh never blanks the screen.
+@Observable
+@MainActor
+final class TodayStore {
+    private(set) var digest: Digest?
+    private(set) var knownPlantCount: Int?
+    private(set) var error: PlantyError?
+    private(set) var isLoading = false
+    private(set) var lastLoadedAt: Date?
+
+    /// Cards the user postponed, and when they may come back.
+    private(set) var postponedUntil: [UUID: Date] = [:]
+
+    var isConfigured: Bool
+    private var api: any PlantyAPI
+    private let policy: FreshnessPolicy
+    private let clock: @Sendable () -> Date
+
+    init(
+        api: any PlantyAPI,
+        isConfigured: Bool,
+        policy: FreshnessPolicy = .standard,
+        clock: @escaping @Sendable () -> Date = { Date() }
+    ) {
+        self.api = api
+        self.isConfigured = isConfigured
+        self.policy = policy
+        self.clock = clock
+    }
+
+    func replace(api: any PlantyAPI, isConfigured: Bool) {
+        self.api = api
+        self.isConfigured = isConfigured
+        digest = nil
+        knownPlantCount = nil
+        error = nil
+        lastLoadedAt = nil
+    }
+
+    var presentation: TodayPresentation {
+        TodayPresentation.make(
+            TodayInputs(
+                isConfigured: isConfigured,
+                isLoading: isLoading,
+                digest: visibleDigest,
+                error: error,
+                knownPlantCount: knownPlantCount,
+                now: clock()
+            ),
+            policy: policy
+        )
+    }
+
+    /// Postponed cards drop out until their interval passes. They are never
+    /// marked done: "Not now" and "I handled it" are different claims.
+    private var visibleDigest: Digest? {
+        guard var digest else { return nil }
+        let now = clock()
+        let hidden = postponedUntil.filter { $0.value > now }.keys
+        guard !hidden.isEmpty else { return digest }
+        digest.entries.removeAll { hidden.contains($0.verdict.id) }
+        return digest
+    }
+
+    func load() async {
+        guard isConfigured else { return }
+        isLoading = true
+        error = nil
+        defer { isLoading = false }
+
+        do {
+            async let digestTask = api.today()
+            async let plantsTask = api.plants(filter: .live)
+            let (loaded, plants) = try await (digestTask, plantsTask)
+            digest = loaded
+            knownPlantCount = plants.count
+            lastLoadedAt = clock()
+        } catch {
+            self.error = PlantyError.from(error)
+        }
+    }
+
+    func acknowledge(_ entry: DigestEntry) async {
+        do {
+            try await api.acknowledge(verdictID: entry.verdict.id)
+            digest?.entries.removeAll { $0.verdict.id == entry.verdict.id }
+        } catch {
+            self.error = PlantyError.from(error)
+        }
+    }
+
+    /// Records what actually happened and drops the card, which is the only
+    /// route by which an action is allowed to disappear as complete.
+    func complete(_ entry: DigestEntry, kind: ObservationKind) async {
+        do {
+            _ = try await api.addObservation(
+                slug: entry.plant.slug,
+                observation: NewObservation(kind: kind)
+            )
+            try? await api.acknowledge(verdictID: entry.verdict.id)
+            digest?.entries.removeAll { $0.verdict.id == entry.verdict.id }
+        } catch {
+            self.error = PlantyError.from(error)
+        }
+    }
+
+    func postpone(_ entry: DigestEntry, by interval: PostponeInterval) {
+        postponedUntil[entry.verdict.id] = clock().addingTimeInterval(interval.seconds)
+    }
+
+    func clearError() { error = nil }
+}
+
+enum PostponeInterval: String, CaseIterable, Sendable, Identifiable {
+    case anHour
+    case laterToday
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .anHour: "Remind me in 1 hour"
+        case .laterToday: "Later today"
+        }
+    }
+
+    var seconds: TimeInterval {
+        switch self {
+        case .anHour: 60 * 60
+        case .laterToday: 5 * 60 * 60
+        }
+    }
+}

@@ -1,0 +1,98 @@
+{
+  "steward": "friend",
+  "plants": [
+    {
+      "slug": "peace-lilies",
+      "common_name": "Peace lilies",
+      "botanical_name": "Spathiphyllum",
+      "domain": "houseplant",
+      "status": "alive",
+      "location": "front porch",
+      "accessibility": "easy",
+      "watering_method": "hand",
+      "light_exposure": "bright_indirect",
+      "min_temp_f": 55,
+      "care_profile": {
+        "owner_says": "Very delicate. Will bleach and crisp up if they get too much sun. They need very little water.",
+        "wants_light": "bright_indirect",
+        "quirks": "Wilts dramatically when thirsty and recovers within hours of watering, so the droop is a free early warning. Far more often killed by overwatering than by drought, so do not water on a schedule.",
+        "notes": "Count unknown; the owner said 'the leafy plants with white flowers and some green flowers'."
+      }
+    },
+    {
+      "slug": "bonsai",
+      "common_name": "Bonsai",
+      "domain": "houseplant",
+      "status": "alive",
+      "location": "front porch",
+      "accessibility": "easy",
+      "watering_method": "hand",
+      "light_exposure": "bright_indirect",
+      "min_temp_f": 55,
+      "care_profile": {
+        "owner_says": "Wild and seems to be okay in any situation. Definitely the heartiest of the group. If it gets too crispy or starts dying, move it away from the sun.",
+        "wants_light": "bright_indirect",
+        "notes": "Species unknown, which matters: it decides whether this one needs a winter dormancy period."
+      }
+    },
+    {
+      "slug": "vines",
+      "common_name": "Vines",
+      "domain": "houseplant",
+      "status": "alive",
+      "location": "front porch",
+      "accessibility": "easy",
+      "watering_method": "hand",
+      "light_exposure": "bright_indirect",
+      "min_temp_f": 55,
+      "care_profile": {
+        "owner_says": "Water once every three days or less.",
+        "wants_light": "bright_indirect",
+        "notes": "Species and count unknown."
+      }
+    },
+    {
+      "slug": "fern",
+      "common_name": "Fern",
+      "domain": "houseplant",
+      "status": "alive",
+      "location": "front porch",
+      "accessibility": "awkward",
+      "watering_method": "hand",
+      "light_exposure": "bright_indirect",
+      "min_temp_f": 55,
+      "care_profile": {
+        "owner_says": "Hard to water normally. Lift the arms of the plant up and pour water directly under the plant, because it is so thick. Once every three days or less.",
+        "wants_light": "bright_indirect",
+        "quirks": "Foliage is dense enough that water poured on top runs off instead of reaching the soil. Lift the fronds and pour underneath."
+      }
+    },
+    {
+      "slug": "sequoia-sprout",
+      "common_name": "Sequoia sprout",
+      "botanical_name": "Sequoiadendron giganteum",
+      "domain": "houseplant",
+      "status": "alive",
+      "location": "front porch",
+      "accessibility": "easy",
+      "watering_method": "hand",
+      "light_exposure": "bright_indirect",
+      "min_temp_f": 55,
+      "care_profile": {
+        "owner_says": "Needs regular water but not a ton at a time.",
+        "wants_light": "bright_indirect",
+        "quirks": "The only plant in this group asked for CONSISTENT moisture. Its needs are the opposite of the peace lilies, so the two must never share a LetPot dripper line.",
+        "notes": "Giant sequoia is a mountain tree and is likely far more cold hardy than the tropicals here. The 55F threshold is kept until the owner confirms, because guessing wrong costs a plant and guessing right only costs a carried pot."
+      }
+    }
+  ],
+  "questions": [
+    "How many peace lilies are there, and how many vines?",
+    "What species are the vines?",
+    "What kind of bonsai is it? It decides whether it needs a winter dormancy period.",
+    "Does the sequoia sprout actually need to come in at 55F, or is it hardier than the others?",
+    "How old is the sequoia sprout, and has it been through a winter yet?",
+    "Is the front porch covered? A covered porch runs a few degrees warmer than open air.",
+    "When are you back? It decides whether this is a summer problem or a winter one."
+  ]
+}
