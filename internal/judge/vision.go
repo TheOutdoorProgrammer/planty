@@ -24,14 +24,28 @@ type Frame struct {
 	Caption string
 }
 
-// Diagnosis is what the model saw across a plant's photo timeline.
+// Severity gates how strongly a reply may be dressed in the app. Only urgent
+// unlocks red, and it also removes the mascot.
+type Severity string
+
+const (
+	SeverityFinding      Severity = "finding"
+	SeverityNoConcern    Severity = "no_concern"
+	SeverityInsufficient Severity = "insufficient"
+	SeverityUrgent       Severity = "urgent"
+)
+
+// Diagnosis is one reply. The first three fields are kept apart on purpose:
+// what can be seen, what it probably means, and what to do today are three
+// different claims, and a beginner needs them separated.
 type Diagnosis struct {
-	Finding    string   `json:"finding"`
-	Cause      string   `json:"likely_cause"`
-	Action     string   `json:"suggested_action"`
-	Changed    bool     `json:"changed_over_time"`
-	Confidence float64  `json:"confidence"`
-	Watch      []string `json:"watch_for"`
+	Severity           Severity `json:"severity"`
+	Observed           string   `json:"observed"`
+	Interpretation     string   `json:"interpretation,omitempty"`
+	ActionToday        string   `json:"action_today,omitempty"`
+	FollowUpPlan       string   `json:"follow_up_plan,omitempty"`
+	Citation           string   `json:"citation,omitempty"`
+	SuggestedFollowUps []string `json:"suggested_follow_ups,omitempty"`
 }
 
 const visionSystem = `You are looking at dated photographs of one houseplant, oldest first.
@@ -39,23 +53,42 @@ const visionSystem = `You are looking at dated photographs of one houseplant, ol
 Your job is the thing sensors cannot do: say what has visibly CHANGED between
 the earliest and latest frame, and what that change means.
 
+Keep three claims strictly apart, because a beginner cannot separate them and
+acting on the wrong one causes harm:
+
+- observed: only what is visible in the images. No inference.
+- interpretation: what it probably means, hedged honestly.
+- action_today: the single thing to do now, or explicitly nothing.
+
+Rules:
+
 - Compare frames. A single sad-looking photo is far less informative than the
   same plant getting worse over three weeks, and the comparison is why these
   images were sent together.
 - Yellowing lower leaves that spread upward over time reads differently from
   yellowing that appeared all at once.
 - Say plainly when the photos show nothing wrong. Most plants are fine, and
-  inventing a problem is worse than missing a subtle one.
-- Say plainly when the photos are too few, too dark, or too similar to judge.
-  Low confidence is a real answer.
+  inventing a problem is worse than missing a subtle one. That is no_concern.
+- When the photos are too few, too dark or too similar to judge, say so and use
+  insufficient. "I cannot tell from these" is a real answer.
 - Distinguish overwatering from underwatering explicitly when you can. They look
   similar to a beginner and the corrective actions are opposite, so guessing
   wrong actively causes harm.
+- Reserve urgent for visible evidence of active harm, not for a worry.
+- citation names what you actually looked at, so the reader can weigh it.
+- suggested_follow_ups are questions the reader might sensibly ask next.
 
-One clear finding a beginner can act on. No lists of possibilities.`
+One clear finding. No lists of possibilities.`
 
-// Diagnose reads a plant's photo timeline and reports what changed.
-func (j *Judge) Diagnose(ctx context.Context, p plant.Plant, frames []Frame) (Diagnosis, error) {
+// PriorTurn is one earlier exchange in the same diagnosis conversation.
+type PriorTurn struct {
+	Asked string
+	Reply Diagnosis
+}
+
+// Diagnose reads a plant's photo timeline and answers one question about it.
+// Prior turns are replayed so a follow-up can refer to the first answer.
+func (j *Judge) Diagnose(ctx context.Context, p plant.Plant, frames []Frame, asked string, prior []PriorTurn) (Diagnosis, error) {
 	if len(frames) == 0 {
 		return Diagnosis{}, fmt.Errorf("no photographs to look at")
 	}
@@ -78,12 +111,24 @@ func (j *Judge) Diagnose(ctx context.Context, p plant.Plant, frames []Frame) (Di
 			anthropic.NewImageBlockBase64(f.Media, base64.StdEncoding.EncodeToString(f.Bytes)),
 		)
 	}
+	if asked == "" {
+		asked = "What do these photographs show, and what should I do about it?"
+	}
+	blocks = append(blocks, anthropic.NewTextBlock(asked))
+
+	// The images ride on the first turn only; later turns refer back to them.
+	messages := []anthropic.MessageParam{
+		{Role: anthropic.MessageParamRoleUser, Content: blocks},
+	}
+	if len(prior) > 0 {
+		messages = replay(prior, blocks, asked)
+	}
 
 	message, err := j.client.Messages.New(ctx, anthropic.MessageNewParams{
 		Model:     anthropic.Model(j.model),
 		MaxTokens: 2048,
 		System:    []anthropic.TextBlockParam{{Text: visionSystem}},
-		Messages:  []anthropic.MessageParam{{Role: anthropic.MessageParamRoleUser, Content: blocks}},
+		Messages:  messages,
 		OutputConfig: anthropic.OutputConfigParam{
 			// Comparing frames over time is the hard part; worth the depth.
 			Effort: anthropic.OutputConfigEffortHigh,
@@ -107,6 +152,35 @@ func (j *Judge) Diagnose(ctx context.Context, p plant.Plant, frames []Frame) (Di
 		}
 	}
 	return Diagnosis{}, fmt.Errorf("no diagnosis in response")
+}
+
+// replay rebuilds the conversation: the photographs and the original question
+// first, then each earlier answer, then what is being asked now.
+func replay(prior []PriorTurn, opening []anthropic.ContentBlockParamUnion, asked string) []anthropic.MessageParam {
+	first := prior[0]
+
+	// The opening user turn already carries the images; swap its trailing
+	// question for the one that was actually asked first.
+	openingBlocks := append([]anthropic.ContentBlockParamUnion{}, opening[:len(opening)-1]...)
+	openingBlocks = append(openingBlocks, anthropic.NewTextBlock(first.Asked))
+
+	messages := []anthropic.MessageParam{
+		{Role: anthropic.MessageParamRoleUser, Content: openingBlocks},
+	}
+	for i, turn := range prior {
+		reply, err := json.Marshal(turn.Reply)
+		if err != nil {
+			continue
+		}
+		messages = append(messages, anthropic.NewAssistantMessage(
+			anthropic.NewTextBlock(string(reply))))
+
+		if i+1 < len(prior) {
+			messages = append(messages, anthropic.NewUserMessage(
+				anthropic.NewTextBlock(prior[i+1].Asked)))
+		}
+	}
+	return append(messages, anthropic.NewUserMessage(anthropic.NewTextBlock(asked)))
 }
 
 func caption(f Frame) string {
@@ -138,17 +212,22 @@ func diagnosisSchema() (map[string]any, error) {
 	raw := `{
 		"type": "object",
 		"additionalProperties": false,
-		"required": ["finding", "likely_cause", "suggested_action", "changed_over_time", "confidence", "watch_for"],
+		"required": ["severity", "observed", "interpretation", "action_today", "follow_up_plan", "citation", "suggested_follow_ups"],
 		"properties": {
-			"finding": {"type": "string", "description": "What you can see, in plain words"},
-			"likely_cause": {"type": "string", "description": "Most likely cause, or say it is unclear"},
-			"suggested_action": {"type": "string", "description": "One thing to do, or that nothing is needed"},
-			"changed_over_time": {"type": "boolean", "description": "Whether the photographs show a change"},
-			"confidence": {"type": "number", "description": "0 to 1; be honest when the images are poor"},
-			"watch_for": {
+			"severity": {
+				"type": "string",
+				"enum": ["finding", "no_concern", "insufficient", "urgent"],
+				"description": "urgent only for visible active harm; insufficient when the images cannot support a judgment"
+			},
+			"observed": {"type": "string", "description": "Only what is visible. No inference"},
+			"interpretation": {"type": "string", "description": "What it probably means, hedged honestly"},
+			"action_today": {"type": "string", "description": "The one thing to do now, or explicitly nothing"},
+			"follow_up_plan": {"type": "string", "description": "What to check next and when"},
+			"citation": {"type": "string", "description": "What you actually looked at"},
+			"suggested_follow_ups": {
 				"type": "array",
 				"items": {"type": "string"},
-				"description": "Signs that would confirm or rule this out"
+				"description": "Questions the reader might sensibly ask next"
 			}
 		}
 	}`

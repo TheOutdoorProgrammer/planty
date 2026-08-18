@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -9,8 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
 // MaxPhotoBytes bounds one upload. Phone photos are a few MB; anything much
@@ -143,7 +147,15 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 	s.ok(w, http.StatusOK, map[string]any{"photos": out, "count": len(out)})
 }
 
-// diagnose reads the photo timeline and reports what changed.
+// diagnosisRequest is what the app sends: an opening question, or a follow-up
+// carrying the conversation it belongs to.
+type diagnosisRequest struct {
+	PhotoID        *uuid.UUID `json:"photo_id,omitempty"`
+	Message        string     `json:"message"`
+	ConversationID *uuid.UUID `json:"conversation_id,omitempty"`
+}
+
+// diagnose answers one question about a plant's photo timeline.
 func (s *Server) diagnose(w http.ResponseWriter, r *http.Request) {
 	if s.photos == nil || s.judge == nil {
 		s.fail(w, http.StatusServiceUnavailable,
@@ -155,6 +167,27 @@ func (s *Server) diagnose(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
+	}
+
+	var ask diagnosisRequest
+	if r.Body != nil {
+		// An empty body is a valid opening question, so a decode failure on no
+		// content is not an error.
+		_ = json.NewDecoder(r.Body).Decode(&ask)
+	}
+
+	var prior []judge.PriorTurn
+	conversation := uuid.New()
+	if ask.ConversationID != nil {
+		conversation = *ask.ConversationID
+		turns, err := s.store.DiagnosisConversation(r.Context(), conversation)
+		if err != nil {
+			s.fail(w, http.StatusInternalServerError, err)
+			return
+		}
+		for _, turn := range turns {
+			prior = append(prior, judge.PriorTurn{Asked: turn.Asked, Reply: turn.Reply})
+		}
 	}
 
 	shots, err := s.store.Photos(r.Context(), p.ID, judge.MaxTimelineImages)
@@ -191,18 +224,41 @@ func (s *Server) diagnose(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	diagnosis, err := s.judge.Diagnose(r.Context(), p, frames)
+	diagnosis, err := s.judge.Diagnose(r.Context(), p, frames, ask.Message, prior)
 	if err != nil {
 		s.fail(w, http.StatusBadGateway, err)
 		return
 	}
 
+	saved, err := s.store.SaveDiagnosisTurn(r.Context(), store.DiagnosisTurn{
+		PlantID:        p.ID,
+		ConversationID: conversation,
+		Asked:          ask.Message,
+		Reply:          diagnosis,
+		PhotoID:        ask.PhotoID,
+	})
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	// Attach the reading to the newest frame, which is the one being asked about.
 	newest := shots[len(shots)-1]
-	if err := s.store.RecordVision(r.Context(), newest.ID, diagnosis.Finding); err != nil {
+	if err := s.store.RecordVision(r.Context(), newest.ID, diagnosis.Observed); err != nil {
 		s.log.Warn("could not record vision finding", "photo", newest.ID, "error", err)
 	}
-	s.ok(w, http.StatusOK, diagnosis)
+
+	s.ok(w, http.StatusOK, map[string]any{
+		"id":                   saved.ID,
+		"conversation_id":      saved.ConversationID,
+		"severity":             diagnosis.Severity,
+		"observed":             diagnosis.Observed,
+		"interpretation":       diagnosis.Interpretation,
+		"action_today":         diagnosis.ActionToday,
+		"follow_up_plan":       diagnosis.FollowUpPlan,
+		"citation":             diagnosis.Citation,
+		"suggested_follow_ups": diagnosis.SuggestedFollowUps,
+	})
 }
 
 func mediaFor(key string) string {
