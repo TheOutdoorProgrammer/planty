@@ -17,6 +17,7 @@ protocol PlantyAPI: Sendable {
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink
     func shelter(slugs: [String], indoors: Bool) async throws -> Int
+    func identify(jpeg: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate]
     func health() async throws
 }
 

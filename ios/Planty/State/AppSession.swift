@@ -30,6 +30,7 @@ final class AppSession {
     let today: TodayStore
     let library: PlantsStore
     let capture: CaptureStore
+    private(set) var identification: IdentificationStore
 
     private let defaults: UserDefaults
     private let tokens: any TokenStoring
@@ -52,6 +53,9 @@ final class AppSession {
         today = TodayStore(api: client, isConfigured: resolved.isConfigured)
         library = PlantsStore(api: client, isConfigured: resolved.isConfigured)
         capture = CaptureStore(api: client)
+        identification = IdentificationStore(
+            pipeline: Self.pipeline(client: client, configured: resolved.isConfigured)
+        )
 
         #if DEBUG
         // Lets a screenshot run open straight onto a tab. Debug only.
@@ -82,6 +86,22 @@ final class AppSession {
         today.replace(api: client, isConfigured: configuration.isConfigured)
         library.replace(api: client, isConfigured: configuration.isConfigured)
         capture.replace(api: client)
+        identification = IdentificationStore(
+            pipeline: Self.pipeline(client: client, configured: configuration.isConfigured)
+        )
+    }
+
+    /// The species half needs a service; the Vision half never does, so an
+    /// unconfigured app still gates and still says what it can see.
+    private static func pipeline(client: any PlantyAPI, configured: Bool) -> IdentificationPipeline {
+        IdentificationPipeline(
+            intake: PhotoLibraryIntake(),
+            analyzer: VisionImageAnalyzer(),
+            identifier: configured
+                ? RemotePlantIdentifier(api: client)
+                : UnavailableIdentifier(),
+            cache: FileIdentificationCache()
+        )
     }
 
     func storyStore(for plant: Plant) -> PlantStoryStore {

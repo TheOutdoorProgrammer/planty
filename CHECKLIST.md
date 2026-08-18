@@ -78,6 +78,7 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] **Photos render.** `PlantPhotoView` loads the timeline's presigned link, keeping bytes just captured ahead of the network so a new photo appears instantly, and falling back to the stand-in when a link has expired
 - [x] **Every write asserts its own method and path**, which is the check that would have caught the harvest route on either side
 - [x] **Photo comparison scrubber.** The first photo stays put and the scrubber moves the second through time, because the question is whether it is better than when it arrived, not better than last Tuesday. Side by side rather than a wipe: handheld shots weeks apart never line up, so a sliding divider would be comparing backgrounds. The gap is said in words, and the same day says so outright rather than reading "0 days apart"
+- [x] **On-device plant identification.** Six steps, each degrading on its own: resolve the picker selection to its `PHAsset` where the library allows and fall back to the sanitised copy where it does not, read EXIF, GPS and the Apple maker note off the original, cut the plant out with `GenerateForegroundInstanceMaskRequest`, gate on `ClassifyImageRequest` so a photo of a dog never costs a species call, then ask the service, then cache against the asset's `localIdentifier` so nothing is ever identified twice. Offline still cuts out and gates; a dead species backend still shows the on-device labels
 - [ ] Notifications, which need a push payload contract that does not exist yet
 
 ## 7. Three additions

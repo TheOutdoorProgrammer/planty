@@ -11,12 +11,23 @@ struct CapturedSheet: View {
     let lookOff: () -> Void
     let retake: () -> Void
 
+    /// Identification sits with the unknown-plant prompt because that is the
+    /// moment somebody is deciding what this actually is.
+    var identification: IdentificationStore?
+    var useCandidate: ((IdentificationCandidate) -> Void)?
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             preview
 
             if plant == nil {
                 UnknownPlantCard()
+            }
+
+            if let identification {
+                IdentificationView(store: identification) { candidate in
+                    useCandidate?(candidate)
+                }
             }
 
             Text("What happened here?")

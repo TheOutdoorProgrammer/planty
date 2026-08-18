@@ -170,6 +170,8 @@ POST   /v1/plants/{slug}/photos         upload; raw bytes or multipart, both acc
 GET    /v1/plants/{slug}/timeline       photos oldest first, with short-lived links
 POST   /v1/plants/{slug}/diagnosis      read the photo timeline and report what changed
 
+POST   /v1/identify              name a plant from one photo; ?taken_at=&lat=&lon= narrow it
+
 GET    /v1/today                  the digest; carries all_clear and stale_since separately
 POST   /v1/verdicts/{id}/ack      acknowledge, which stops escalation
 
@@ -187,6 +189,10 @@ GET    /v1/cold-watch             which plants need bringing in for a given fore
 POST   /v1/shelter                record that plants came indoors; {"slugs":[...]} or {"all":true}
 POST   /v1/unshelter              record that they went back out
 ```
+
+**`POST /v1/identify` belongs to no plant, deliberately.** Nobody knows which plant it is yet, and it may not be one on record. It takes a `photo` multipart part or raw bytes, and answers `{candidates: [{common_name, scientific_name, confidence}], count}` with at most three, most likely first. An empty list is a valid answer and a better one than a guessed name.
+
+The app sends a Vision cutout rather than the raw frame, and only after its own on-device classifier agrees the subject is a plant, so this is never spent on a photo of a dog. With no `ANTHROPIC_API_KEY` it answers 503 and the app falls back to showing those on-device labels.
 
 **The cold warning has to be answerable.** Without `/v1/shelter` the afternoon warning repeats forever and no plant ever becomes eligible to go back out, so the notification itself asks you to reply. `{"all":true}` is the honest default: the real interaction happens at dusk with an armful of pots, not with a list of slugs.
 

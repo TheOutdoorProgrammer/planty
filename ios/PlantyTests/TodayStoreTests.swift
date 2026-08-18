@@ -110,6 +110,11 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
         return slugs.count
     }
 
+    func identify(jpeg: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate] {
+        try check()
+        return [IdentificationCandidate(commonName: "Stub", scientificName: nil, confidence: 0.5)]
+    }
+
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink {
         try check()
         return SensorLink(

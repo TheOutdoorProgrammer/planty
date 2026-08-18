@@ -100,7 +100,9 @@ struct SnapScreen: View {
                 isBusy: store.stage.isBusy,
                 record: { kind in Task { await store.save(recording: kind) } },
                 lookOff: { startDiagnosis(photo: photo) },
-                retake: { store.retake() }
+                retake: { store.retake() },
+                identification: session.identification,
+                useCandidate: { candidate in matchPlant(named: candidate) }
             )
         }
     }
@@ -141,6 +143,9 @@ struct SnapScreen: View {
     private func shoot() async {
         guard let jpeg = try? await camera.capture() else { return }
         store.accept(jpeg: jpeg)
+
+        // A fresh capture has no asset, so it identifies but never caches.
+        await session.identification.identify(jpeg: jpeg, assetID: nil)
     }
 
     private func load(_ item: PhotosPickerItem?) async {
@@ -149,6 +154,24 @@ struct SnapScreen: View {
         else { return }
         store.accept(jpeg: data)
         photoItem = nil
+
+        // itemIdentifier is the PHAsset localIdentifier, and the only thread
+        // back to the original file's EXIF and GPS.
+        await session.identification.identify(jpeg: data, assetID: item.itemIdentifier)
+    }
+
+    /// A candidate names a species, not one of your pots, so this only offers a
+    /// match and never silently reassigns the photo.
+    private func matchPlant(named candidate: IdentificationCandidate) {
+        let wanted = candidate.commonName.lowercased()
+        if let match = session.library.plants.first(where: {
+            $0.commonName.lowercased() == wanted
+                || $0.botanicalName?.lowercased() == candidate.scientificName?.lowercased()
+        }) {
+            store.selectedPlant = match
+        } else {
+            isPickingPlant = true
+        }
     }
 
     /// Diagnosis is pushed, so the camera stays behind it in the stack.

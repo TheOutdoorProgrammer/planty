@@ -210,6 +210,20 @@ func TestArchivingHidesThePlantButKeepsIt(t *testing.T) {
 	}
 }
 
+// The iOS app posts here. Without a judge configured it must say so plainly,
+// because the app degrades to coarse Vision labels on exactly this answer.
+func TestIdentifyIsUnavailableWithoutAJudge(t *testing.T) {
+	h, _, _ := newServer(t)
+
+	rec, out := do(t, h, http.MethodPost, "/v1/identify", map[string]any{})
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("got %d, want 503: the route has to exist even when it cannot answer", rec.Code)
+	}
+	if out["error"] == nil {
+		t.Error("a refusal has to say why, or the app cannot tell it apart from a 404")
+	}
+}
+
 // Nothing covered harvests, and both clients had guessed a flat /v1/harvests
 // that does not exist, so every harvest ever logged would have 404d.
 func TestAHarvestIsFiledUnderThePlantInThePath(t *testing.T) {

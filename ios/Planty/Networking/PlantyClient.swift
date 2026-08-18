@@ -80,6 +80,31 @@ struct PlantyClient: PlantyAPI {
         _ = try await perform(try makeRequest("GET", "/healthz"))
     }
 
+    /// Species identification. The capture date and coordinate ride along as
+    /// query items because region and season narrow the candidate set.
+    func identify(jpeg: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate] {
+        var query: [URLQueryItem] = []
+        if let capturedAt = metadata.capturedAt {
+            query.append(URLQueryItem(name: "taken_at", value: PlantyDateFormat.string(from: capturedAt)))
+        }
+        if let latitude = metadata.latitude, let longitude = metadata.longitude {
+            query.append(URLQueryItem(name: "lat", value: String(latitude)))
+            query.append(URLQueryItem(name: "lon", value: String(longitude)))
+        }
+
+        var body = MultipartBody()
+        body.appendFile(name: "photo", filename: "subject.jpg", contentType: "image/jpeg", data: jpeg)
+
+        var request = try makeRequest("POST", "/v1/identify", query: query)
+        request.setValue(body.contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = body.finished()
+
+        let response: IdentifyResponse = try decode(
+            IdentifyResponse.self, from: try await perform(request)
+        )
+        return response.candidates
+    }
+
     /// The multipart field names are an assumption: DATA-MODEL.md documents the
     /// endpoint but not its body. See ios/README.md.
     func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo {
