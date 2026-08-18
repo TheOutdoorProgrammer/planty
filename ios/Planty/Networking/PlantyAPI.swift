@@ -15,6 +15,7 @@ protocol PlantyAPI: Sendable {
     func acknowledge(verdictID: UUID) async throws
     func sensors() async throws -> [SensorLink]
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest
+    func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink
     func health() async throws
 }
 

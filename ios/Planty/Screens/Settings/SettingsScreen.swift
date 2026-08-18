@@ -134,13 +134,14 @@ enum ProbeResult: Equatable {
     case failed(String)
 }
 
-/// Read-only for now: linking and calibration are backend endpoints the
-/// service has not shipped yet.
+/// An uncalibrated probe reports and is ignored, which looks identical to a
+/// working one from here, so the state is on every row and tapping fixes it.
 struct SensorListScreen: View {
     let api: any PlantyAPI
 
     @State private var links: [SensorLink] = []
     @State private var error: PlantyError?
+    @State private var calibrating: SensorLink?
 
     var body: some View {
         List {
@@ -149,19 +150,12 @@ struct SensorListScreen: View {
                     .foregroundStyle(PlantyColor.orange)
             }
             ForEach(links) { link in
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(link.haEntityID)
-                        .font(.headline)
-                    Text(link.role.label)
-                        .font(.caption)
-                        .foregroundStyle(PlantyColor.secondaryText)
-                    Label(
-                        link.isCalibrated ? "Calibrated" : "Not calibrated",
-                        systemImage: link.isCalibrated ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
-                    )
-                    .font(.caption)
-                    .foregroundStyle(link.isCalibrated ? PlantyColor.green : PlantyColor.yellow)
+                Button {
+                    calibrating = link
+                } label: {
+                    row(for: link)
                 }
+                .buttonStyle(.plain)
                 .listRowBackground(PlantyColor.surface)
             }
         }
@@ -169,12 +163,51 @@ struct SensorListScreen: View {
         .plantyPage()
         .navigationTitle("Sensors")
         .navigationBarTitleDisplayMode(.inline)
-        .task {
-            do {
-                links = try await api.sensors()
-            } catch {
-                self.error = PlantyError.from(error)
+        .sheet(item: $calibrating) { link in
+            CalibrateSensorSheet(link: link) { calibration in
+                calibrating = nil
+                Task { await apply(calibration, to: link) }
             }
+        }
+        .task { await load() }
+    }
+
+    private func row(for link: SensorLink) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(link.haEntityID)
+                .font(.headline)
+            Text(link.role.label)
+                .font(.caption)
+                .foregroundStyle(PlantyColor.secondaryText)
+            Label(
+                link.isCalibrated ? "Calibrated" : "Not calibrated, so it cannot drive watering",
+                systemImage: link.isCalibrated ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
+            )
+            .font(.caption)
+            .foregroundStyle(link.isCalibrated ? PlantyColor.green : PlantyColor.yellow)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
+    }
+
+    private func load() async {
+        do {
+            links = try await api.sensors()
+            error = nil
+        } catch {
+            self.error = PlantyError.from(error)
+        }
+    }
+
+    private func apply(_ calibration: SensorCalibration, to link: SensorLink) async {
+        do {
+            let saved = try await api.calibrate(sensorID: link.id, to: calibration)
+            if let index = links.firstIndex(where: { $0.id == saved.id }) {
+                links[index] = saved
+            }
+            error = nil
+        } catch {
+            self.error = PlantyError.from(error)
         }
     }
 }

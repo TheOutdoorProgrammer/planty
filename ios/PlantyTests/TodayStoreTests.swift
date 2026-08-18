@@ -105,6 +105,19 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
         return []
     }
 
+    func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink {
+        try check()
+        return SensorLink(
+            id: sensorID,
+            haEntityID: "sensor.stub",
+            role: .soilMoisture,
+            dryBaseline: calibration.dryBaseline,
+            wetBaseline: calibration.wetBaseline,
+            calibratedAt: Date(),
+            createdAt: Date()
+        )
+    }
+
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest {
         try check()
         return Harvest(

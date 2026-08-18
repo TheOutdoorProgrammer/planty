@@ -43,6 +43,36 @@ struct SensorLink: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// What calibration sends. A probe's numbers are its own scale, so these two
+/// readings are the only thing that makes any of them mean something.
+struct SensorCalibration: Codable, Sendable, Hashable {
+    var dryBaseline: Double
+    var wetBaseline: Double
+
+    enum CodingKeys: String, CodingKey {
+        case dryBaseline = "dry_baseline"
+        case wetBaseline = "wet_baseline"
+    }
+
+    /// The rule the service enforces too. Backwards baselines would read a
+    /// soaked pot as bone dry and water it again.
+    var readsTheRightWayRound: Bool { wetBaseline > dryBaseline }
+
+    /// Builds one from what was typed. Nil when either box is not a number,
+    /// which is what keeps Save disabled rather than sending nonsense.
+    init?(dry: String, wet: String) {
+        guard let dryValue = Double(dry.trimmingCharacters(in: .whitespaces)),
+              let wetValue = Double(wet.trimmingCharacters(in: .whitespaces))
+        else { return nil }
+        self.init(dryBaseline: dryValue, wetBaseline: wetValue)
+    }
+
+    init(dryBaseline: Double, wetBaseline: Double) {
+        self.dryBaseline = dryBaseline
+        self.wetBaseline = wetBaseline
+    }
+}
+
 /// One sample, keyed on the link because the plant a probe serves can change.
 struct Reading: Codable, Sendable, Hashable, Identifiable {
     let id: UUID

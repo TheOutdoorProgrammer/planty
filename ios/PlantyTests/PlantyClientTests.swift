@@ -160,6 +160,32 @@ struct PlantyClientTests {
         #expect(saved.unit == "fruit")
     }
 
+    @Test("Calibration is a PATCH against the link, carrying both baselines")
+    func calibratesASensor() async throws {
+        let id = UUID()
+        let sensorJSON = """
+            {
+              "id": "\(id.uuidString)",
+              "ha_entity_id": "sensor.mona_moisture",
+              "role": "soil_moisture",
+              "dry_baseline": 320,
+              "wet_baseline": 720,
+              "calibrated_at": "2026-08-18T09:00:00Z",
+              "created_at": "2026-08-01T09:00:00Z"
+            }
+            """
+        StubTransport.respond(json: sensorJSON)
+        let saved = try await StubTransport.client().calibrate(
+            sensorID: id,
+            to: SensorCalibration(dryBaseline: 320, wetBaseline: 720)
+        )
+
+        let request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "PATCH")
+        #expect(request.url?.path == "/v1/sensors/\(id.uuidString)")
+        #expect(saved.isCalibrated)
+    }
+
     @Test("Acknowledging a verdict hits the ack path")
     func acknowledges() async throws {
         StubTransport.respond(json: #"{"ok":true}"#)

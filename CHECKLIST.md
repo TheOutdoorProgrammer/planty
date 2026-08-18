@@ -74,7 +74,9 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] Calm versus stale as a pure function with 20+ tests; staleness removes reassurance, never an alarm
 - [x] Three tabs, diagnosis from a photo, no health claims, purple badges that only change sort order
 - [x] **Diagnosis is live**, talking to the real endpoint, 92 tests still green after the swap
-- [ ] Photo comparison scrubber, sensor calibration writes, notifications
+- [x] **Sensor calibration writes.** An uncalibrated probe reports and is then ignored, which looks identical to a working one, so the state is on every row and tapping it fixes it. The sheet spends its room on when to take each reading rather than asking for two numbers, and refuses backwards baselines with the reason: the other way round, a soaked pot reads as bone dry and gets watered again
+- [ ] Photo comparison scrubber
+- [ ] Notifications
 
 ## 7. Three additions
 

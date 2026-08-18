@@ -59,6 +59,10 @@ struct PlantyClient: PlantyAPI {
         return response.sensors
     }
 
+    func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink {
+        try await send("PATCH", "/v1/sensors/\(sensorID.uuidString)", body: calibration)
+    }
+
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest {
         try await send("POST", "/v1/plants/\(escaped(slug))/harvests", body: harvest)
     }
