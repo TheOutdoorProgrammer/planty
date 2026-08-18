@@ -35,7 +35,8 @@ const usage = `planty <command>
   water    run the LetPot line and verify it, only when asked by hand
   autopsy  work out what killed a plant: planty autopsy <slug>
   seed     load the sabbatical plants and their open questions
-  migrate  apply database migrations and exit`
+  migrate  apply database migrations and exit
+  version  print the version and exit`
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -45,10 +46,24 @@ func main() {
 	}
 }
 
+// Set by the linker at release. A binary somebody installed from a tap has to
+// be able to say what it is without a database in front of it.
+var (
+	version = "dev"
+	commit  = "none"
+)
+
 func run(log *slog.Logger) error {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, usage)
 		return errors.New("no command given")
+	}
+
+	// Answered before the database is demanded, so `planty version` works on a
+	// laptop that has never seen the cluster.
+	if os.Args[1] == "version" {
+		fmt.Printf("planty %s (%s)\n", version, commit)
+		return nil
 	}
 
 	dsn := os.Getenv("PLANTY_DATABASE_URL")

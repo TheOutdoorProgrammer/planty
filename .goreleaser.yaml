@@ -1,0 +1,94 @@
+version: 2
+
+project_name: planty
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - id: planty
+    main: ./cmd/planty
+    binary: planty
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux]
+    goarch: [amd64, arm64]
+    flags:
+      # Strips the build machine's paths out, so the same commit produces the
+      # same bytes here and on someone else's machine.
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{ .Version }} -X main.commit={{ .ShortCommit }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+
+archives:
+  - id: default
+    name_template: >-
+      {{ .ProjectName }}_{{ .Os }}_{{ .Arch }}
+    files: [README.md, docs/DATA-MODEL.md]
+
+checksum:
+  name_template: checksums.txt
+
+# Casks, not formulas: `brews` is hard-deprecated as of GoReleaser v2.16.
+homebrew_casks:
+  - name: planty
+    binaries: [planty]
+    # `auto` skips the upload for a prerelease, so a candidate never becomes
+    # what `brew install planty` gives you.
+    skip_upload: auto
+    repository:
+      owner: TheOutdoorProgrammer
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/TheOutdoorProgrammer/planty
+    description: Keeps houseplants alive. Reports and reminds, and waters nothing on a timer
+    # Unsigned and unnotarised, so Gatekeeper quarantines it and the first run
+    # fails with "developer cannot be verified".
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr",
+              args: ["-dr", "com.apple.quarantine", "#{staged_path}/planty"]
+          end
+    caveats: |
+      Every command but `version` talks to Planty's database directly, so it
+      needs PLANTY_DATABASE_URL pointing somewhere it can reach. In the cluster
+      that is a ClusterIP, so from a laptop it means a port-forward:
+
+        kubectl -n planty port-forward svc/planty-postgres-rw 5432:5432
+        export PLANTY_DATABASE_URL='postgres://planty:PASSWORD@localhost:5432/planty?sslmode=disable'
+
+      `planty water` is the only command that moves water. It is never
+      scheduled, and running it is a decision you make yourself.
+
+changelog:
+  use: github
+  sort: asc
+  groups:
+    - title: Features
+      regexp: '^feat'
+      order: 0
+    - title: Fixes
+      regexp: '^fix'
+      order: 1
+    - title: Tests and docs
+      regexp: '^(test|docs)'
+      order: 2
+  filters:
+    exclude:
+      - '^chore'
+      - '^ci'
+
+release:
+  prerelease: auto
+  footer: |
+    **Install**
+
+    macOS: `brew install TheOutdoorProgrammer/tap/planty`
+
+    The service itself runs from the container image, not this binary:
+    `ghcr.io/theoutdoorprogrammer/planty`.

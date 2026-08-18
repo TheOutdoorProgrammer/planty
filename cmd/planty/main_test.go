@@ -18,6 +18,8 @@ var manual = map[string]string{
 	// Joey's rule, and the reason `thirst` exists: nothing waters a plant on a
 	// timer. He is told it needs doing and turns the pump on himself.
 	"water": "moves water, so it is never scheduled",
+
+	"version": "answers and exits, for a binary installed from the tap",
 }
 
 var scheduledArgs = regexp.MustCompile(`args:\s*\["(\w+)"\]`)

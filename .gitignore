@@ -10,3 +10,4 @@ design/logo/_ql*/
 # Anchored, or it also swallows the cmd/planty source directory
 /planty
 *.test
+dist/
