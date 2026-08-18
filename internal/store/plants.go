@@ -55,7 +55,7 @@ func scanPlant(row pgx.Row) (plant.Plant, error) {
 		&acquired, &p.ArchivedAt, &p.ShelteredAt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
-		return plant.Plant{}, err
+		return plant.Plant{}, classify(err)
 	}
 	if light != nil {
 		p.LightExposure = plant.LightExposure(*light)

@@ -1,7 +1,6 @@
 package plant
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -56,18 +55,18 @@ func (o Observation) Valid() error {
 	case ObservedWatered, ObservedRepotted, ObservedFertilized, ObservedPruned,
 		ObservedHarvested, ObservedMoved, ObservedSymptom, ObservedNote, ObservedDied:
 	default:
-		return fmt.Errorf("unknown observation kind %q", o.Kind)
+		return invalid("unknown observation kind %q", o.Kind)
 	}
 	switch o.Source {
 	case SourceApp, SourceAgent, SourceAutomation:
 	default:
-		return fmt.Errorf("unknown source %q", o.Source)
+		return invalid("unknown source %q", o.Source)
 	}
 	if o.PlantID == uuid.Nil {
-		return fmt.Errorf("plant_id is required")
+		return invalid("plant_id is required")
 	}
 	if o.OccurredAt.IsZero() {
-		return fmt.Errorf("occurred_at is required")
+		return invalid("occurred_at is required")
 	}
 	return nil
 }

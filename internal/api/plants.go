@@ -41,7 +41,7 @@ func (s *Server) createPlant(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.store.CreatePlant(r.Context(), p)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, created)
@@ -160,7 +160,7 @@ func (s *Server) updatePlant(w http.ResponseWriter, r *http.Request) {
 
 	updated, err := s.store.UpdatePlant(r.Context(), r.PathValue("slug"), patch)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, updated)
@@ -215,7 +215,7 @@ func (s *Server) addObservation(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.store.AddObservation(r.Context(), o)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, created)

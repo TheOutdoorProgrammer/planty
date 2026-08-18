@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -26,7 +27,7 @@ func scanQuestion(row pgx.Row) (plant.Question, error) {
 // AskOwner queues a question only the plant's owner can settle.
 func (s *Store) AskOwner(ctx context.Context, q plant.Question) (plant.Question, error) {
 	if q.Question == "" {
-		return plant.Question{}, errors.New("question is required")
+		return plant.Question{}, fmt.Errorf("%w: question is required", plant.ErrInvalid)
 	}
 	// Default to the plant's steward: an agent asking about a plant should not
 	// have to know who owns it.
@@ -37,7 +38,8 @@ func (s *Store) AskOwner(ctx context.Context, q plant.Question) (plant.Question,
 		}
 	}
 	if q.AskedOf == "" {
-		return plant.Question{}, errors.New("asked_of is required when no plant is named")
+		return plant.Question{}, fmt.Errorf(
+			"%w: asked_of is required when no plant is named", plant.ErrInvalid)
 	}
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO questions (plant_id, asked_of, question, why)
@@ -95,7 +97,8 @@ func (s *Store) AnswerQuestion(ctx context.Context, id uuid.UUID, answer string)
 // GoAway records a window where nobody is home to act on a notification.
 func (s *Store) GoAway(ctx context.Context, a plant.AwayPeriod) (plant.AwayPeriod, error) {
 	if !a.EndsAt.After(a.StartsAt) {
-		return plant.AwayPeriod{}, errors.New("ends_at must be after starts_at")
+		return plant.AwayPeriod{}, fmt.Errorf(
+			"%w: ends_at must be after starts_at", plant.ErrInvalid)
 	}
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO away_periods (starts_at, ends_at, backup_contact, backup_notify, note)

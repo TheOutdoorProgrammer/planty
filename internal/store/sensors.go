@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -19,7 +20,7 @@ func scanSensor(row pgx.Row) (plant.SensorLink, error) {
 	var s plant.SensorLink
 	err := row.Scan(&s.ID, &s.PlantID, &s.Zone, &s.HAEntityID, &s.Role,
 		&s.DryBaseline, &s.WetBaseline, &s.CalibratedAt, &s.CreatedAt)
-	return s, err
+	return s, classify(err)
 }
 
 // LinkSensor attaches a Home Assistant entity to a plant or a zone.
@@ -40,7 +41,9 @@ func (s *Store) LinkSensor(ctx context.Context, l plant.SensorLink) (plant.Senso
 // Calibrate records this probe's own dry and wet baselines.
 func (s *Store) Calibrate(ctx context.Context, id uuid.UUID, dry, wet float64) (plant.SensorLink, error) {
 	if wet <= dry {
-		return plant.SensorLink{}, errors.New("wet baseline must exceed dry baseline")
+		return plant.SensorLink{}, fmt.Errorf(
+			"%w: wet baseline must exceed dry baseline, or every reading maps backwards",
+			plant.ErrInvalid)
 	}
 	row := s.pool.QueryRow(ctx, `
 		UPDATE sensor_links

@@ -29,7 +29,7 @@ func (s *Store) AddObservation(ctx context.Context, o plant.Observation) (plant.
 	var out plant.Observation
 	err := row.Scan(&out.ID, &out.PlantID, &out.Kind, &out.Body,
 		&out.OccurredAt, &out.Source, &out.Actor, &out.CreatedAt)
-	return out, err
+	return out, classify(err)
 }
 
 // Observations returns a plant's history, newest first.
@@ -87,5 +87,5 @@ func (s *Store) AddHarvest(ctx context.Context, h plant.Harvest) (plant.Harvest,
 	var out plant.Harvest
 	err := row.Scan(&out.ID, &out.PlantID, &out.OccurredAt, &out.Quantity,
 		&out.Unit, &out.Notes, &out.CreatedAt)
-	return out, err
+	return out, classify(err)
 }

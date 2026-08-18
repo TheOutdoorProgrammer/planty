@@ -4,6 +4,7 @@
 package plant
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -61,6 +62,15 @@ const (
 
 // StewardSelf marks a plant as the operator's own; anything else is a name.
 const StewardSelf = "self"
+
+// ErrInvalid marks a failure the caller caused, so a handler can answer 400
+// without every call site guessing. A server fault must never report as one.
+var ErrInvalid = errors.New("invalid")
+
+// invalid wraps a rejection so it carries whose fault it is.
+func invalid(format string, args ...any) error {
+	return fmt.Errorf("%w: %s", ErrInvalid, fmt.Sprintf(format, args...))
+}
 
 // Plant is one growing thing in one place. Fields automations query are typed;
 // descriptive care knowledge goes in CareProfile.
@@ -169,28 +179,28 @@ func (p Plant) Valid() error {
 	switch p.Domain {
 	case DomainHouseplant, DomainEdibleIndoor, DomainEdibleOutdoor:
 	default:
-		return fmt.Errorf("unknown domain %q", p.Domain)
+		return invalid("unknown domain %q", p.Domain)
 	}
 	switch p.Status {
 	case StatusAlive, StatusStruggling, StatusDormant, StatusDead, StatusGone:
 	default:
-		return fmt.Errorf("unknown status %q", p.Status)
+		return invalid("unknown status %q", p.Status)
 	}
 	switch p.WateringMethod {
 	case WateringLetPot, WateringHand:
 	default:
-		return fmt.Errorf("unknown watering method %q", p.WateringMethod)
+		return invalid("unknown watering method %q", p.WateringMethod)
 	}
 	switch p.Accessibility {
 	case AccessEasy, AccessAwkward, AccessHard:
 	default:
-		return fmt.Errorf("unknown accessibility %q", p.Accessibility)
+		return invalid("unknown accessibility %q", p.Accessibility)
 	}
 	if p.WateringMethod == WateringHand && p.LetPotDripper != nil {
-		return fmt.Errorf("hand-watered plant cannot hold a LetPot dripper number")
+		return invalid("hand-watered plant cannot hold a LetPot dripper number")
 	}
 	if p.CommonName == "" {
-		return fmt.Errorf("common_name is required")
+		return invalid("common_name is required")
 	}
 	return nil
 }

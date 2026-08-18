@@ -73,7 +73,7 @@ func (s *Server) linkSensor(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := s.store.LinkSensor(r.Context(), link)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, created)
@@ -99,7 +99,7 @@ func (s *Server) calibrateSensor(w http.ResponseWriter, r *http.Request) {
 
 	link, err := s.store.Calibrate(r.Context(), id, body.Dry, body.Wet)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, link)
@@ -144,7 +144,7 @@ func (s *Server) askOwner(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := s.store.AskOwner(r.Context(), q)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, created)
@@ -179,7 +179,7 @@ func (s *Server) goAway(w http.ResponseWriter, r *http.Request) {
 	}
 	created, err := s.store.GoAway(r.Context(), a)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, created)
@@ -200,7 +200,7 @@ func (s *Server) addHarvest(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.store.AddHarvest(r.Context(), h)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, created)

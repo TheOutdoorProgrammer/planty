@@ -10,6 +10,7 @@ import (
 
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
+	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
@@ -91,12 +92,20 @@ func (s *Server) ok(w http.ResponseWriter, code int, body any) {
 	}
 }
 
-// fail maps a store error onto a status, so a missing plant reads the same to
-// the app and to an agent.
+// fail maps the error onto a status, so the error decides whose fault it was
+// rather than every call site guessing. A database outage reporting 400 would
+// send whoever is debugging it looking at the request.
 func (s *Server) fail(w http.ResponseWriter, code int, err error) {
-	if errors.Is(err, store.ErrNotFound) {
+	switch {
+	case errors.Is(err, store.ErrNotFound):
 		code = http.StatusNotFound
+	case errors.Is(err, plant.ErrInvalid):
+		code = http.StatusBadRequest
 	}
+	if code >= http.StatusInternalServerError {
+		s.log.Error("request failed", "status", code, "error", err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})

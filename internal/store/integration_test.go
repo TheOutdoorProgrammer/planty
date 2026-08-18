@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -217,6 +218,44 @@ func TestShelterRoundTrip(t *testing.T) {
 
 	if _, err := s.Unshelter(ctx, []string{p.Slug}); err != nil {
 		t.Fatalf("unshelter: %v", err)
+	}
+}
+
+// Every command migrates on start, so a deployment and a CronJob landing
+// together race on a fresh database. This reproduces that and expects the
+// advisory lock to serialise them instead of one failing.
+func TestConcurrentMigrationsDoNotRace(t *testing.T) {
+	dsn := os.Getenv("PLANTY_TEST_DATABASE_URL")
+	if dsn == "" {
+		t.Skip("set PLANTY_TEST_DATABASE_URL to run store integration tests")
+	}
+	ctx := context.Background()
+
+	const racers = 6
+	errs := make(chan error, racers)
+
+	var start sync.WaitGroup
+	start.Add(1)
+
+	for range racers {
+		go func() {
+			s, err := Open(ctx, dsn)
+			if err != nil {
+				errs <- err
+				return
+			}
+			defer s.Close()
+
+			start.Wait()
+			errs <- s.Migrate(ctx)
+		}()
+	}
+
+	start.Done()
+	for range racers {
+		if err := <-errs; err != nil {
+			t.Errorf("a concurrent migration failed: %v", err)
+		}
 	}
 }
 

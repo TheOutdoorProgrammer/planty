@@ -6,6 +6,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"sync"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/jackc/pgx/v5/stdlib"
@@ -36,15 +37,44 @@ func Open(ctx context.Context, dsn string) (*Store, error) {
 // Close releases the pool.
 func (s *Store) Close() { s.pool.Close() }
 
-// Migrate applies every pending migration.
+// migrationLock is an arbitrary but fixed key for the advisory lock. Any
+// process migrating this database must use the same number to serialise.
+const migrationLock = 8_150_413
+
+// goose keeps its dialect and filesystem in package globals, so two goroutines
+// migrating at once race inside the library. The advisory lock only serialises
+// across processes; this serialises within one.
+var migrating sync.Mutex
+
+// Migrate applies pending migrations, serialised: every command migrates on
+// start, so a deployment and a CronJob landing together would otherwise race.
 func (s *Store) Migrate(ctx context.Context) error {
+	migrating.Lock()
+	defer migrating.Unlock()
+
 	goose.SetBaseFS(migrations)
 	if err := goose.SetDialect("postgres"); err != nil {
 		return fmt.Errorf("dialect: %w", err)
 	}
 
+	held, err := s.pool.Acquire(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire migration connection: %w", err)
+	}
+	defer held.Release()
+
+	if _, err := held.Exec(ctx, "SELECT pg_advisory_lock($1)", migrationLock); err != nil {
+		return fmt.Errorf("take migration lock: %w", err)
+	}
+	defer func() {
+		if _, err := held.Exec(ctx, "SELECT pg_advisory_unlock($1)", migrationLock); err != nil {
+			// Not fatal: the lock dies with the connection either way.
+			_ = err
+		}
+	}()
+
 	db := stdlib.OpenDBFromPool(s.pool)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	return goose.UpContext(ctx, db, "migrations")
 }

@@ -55,16 +55,16 @@ func (s SensorLink) Valid() error {
 	switch s.Role {
 	case RoleSoilMoisture, RoleAmbientTemp, RoleAmbientHumidity, RoleIlluminance:
 	default:
-		return fmt.Errorf("unknown sensor role %q", s.Role)
+		return invalid("unknown sensor role %q", s.Role)
 	}
 	if s.HAEntityID == "" {
-		return fmt.Errorf("ha_entity_id is required")
+		return invalid("ha_entity_id is required")
 	}
 	if s.PlantID == nil && s.Zone == "" {
-		return fmt.Errorf("a sensor link needs either a plant or a zone")
+		return invalid("a sensor link needs either a plant or a zone")
 	}
 	if s.Role == RoleSoilMoisture && s.PlantID == nil {
-		return fmt.Errorf("a soil moisture sensor must belong to a plant")
+		return invalid("a soil moisture sensor must belong to a plant")
 	}
 	return nil
 }
