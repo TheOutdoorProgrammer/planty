@@ -1,0 +1,110 @@
+name: iOS release
+
+on:
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: What to cut
+        type: choice
+        default: Release
+        options: [Release, Release Candidate]
+      bump:
+        description: Which part of the version to bump
+        type: choice
+        default: patch
+        options: [patch, minor, major]
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: macos-15
+    permissions:
+      contents: write
+      # Publishing to Fledge with a workload identity token, so there is no
+      # upload token stored in this repository at all.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          # Not optional: quill reads the tag list to work out the next version
+          # and refuses a shallow checkout rather than restarting the line at 0.
+          fetch-depth: 0
+
+      - name: Xcode
+        run: sudo xcode-select -s /Applications/Xcode_26.app
+
+      # Automatic signing needs an account. On a runner that means an App Store
+      # Connect key, because there is no Xcode session to borrow one from.
+      - name: App Store Connect key
+        env:
+          KEY: ${{ secrets.ASC_KEY_P8 }}
+          KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p ~/private_keys
+          printf '%s' "$KEY" > ~/private_keys/AuthKey_${KEY_ID}.p8
+
+      - name: Test
+        run: |
+          xcodebuild test \
+            -scheme Planty \
+            -destination 'platform=iOS Simulator,name=iPhone 17' \
+            -skipPackagePluginValidation
+        working-directory: ios
+
+      - name: Archive and export
+        env:
+          ASC_ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          PLANTY_BASE_URL: ${{ secrets.PLANTY_BASE_URL }}
+          FLEDGE_BASE_URL: ${{ secrets.FLEDGE_URL }}
+        run: |
+          set -euo pipefail
+          xcodebuild archive \
+            -scheme Planty \
+            -archivePath "$RUNNER_TEMP/Planty.xcarchive" \
+            -destination 'generic/platform=iOS' \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER" \
+            DEVELOPMENT_TEAM="$TEAM" \
+            PLANTY_BASE_URL="$PLANTY_BASE_URL" \
+            FLEDGE_BASE_URL="$FLEDGE_BASE_URL"
+
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>release-testing</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>destination</key><string>export</string>
+          </dict></plist>
+          PLIST
+
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Planty.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER"
+        working-directory: ios
+
+      - uses: TheOutdoorProgrammer/quill@v1
+        id: release
+        with:
+          bump: ${{ inputs.bump }}
+          scope: ${{ inputs.scope }}
+          publish: fledge
+          fledge-server: ${{ secrets.FLEDGE_URL }}
+          # Passed so the archive is checked before a tag is cut: a missing one
+          # otherwise burns the version number.
+          fledge-ipa: ${{ runner.temp }}/export/*.ipa
+
+      - name: Where it landed
+        run: echo "${{ steps.release.outputs.page-url }}" >> "$GITHUB_STEP_SUMMARY"

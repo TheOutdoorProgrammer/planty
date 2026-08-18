@@ -1,0 +1,10 @@
+# `server:` is absent on purpose: this repository is public and the address of a
+# private distribution server is not. It comes from FLEDGE_URL instead.
+
+build:
+  scheme: Planty
+  method: release-testing
+
+# A development-signed archive uploads happily and then fails on the phone,
+# which is the worst place to find out.
+fail_on_development_signing: true

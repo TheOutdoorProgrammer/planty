@@ -13,6 +13,9 @@ struct TodayScreen: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
+                    if let release = session.updates.available {
+                        UpdateBanner(release: release) { session.updates.dismiss() }
+                    }
                     content
                 }
                 .padding(.horizontal, 20)
@@ -24,6 +27,7 @@ struct TodayScreen: View {
             .toolbar { profileButton }
             .refreshable { await store.load() }
             .task { await store.load() }
+            .task { await session.updates.check() }
             .sheet(item: $postponing) { entry in
                 PostponeSheet(entry: entry) { interval in
                     store.postpone(entry, by: interval)

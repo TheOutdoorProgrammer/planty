@@ -31,6 +31,7 @@ final class AppSession {
     let library: PlantsStore
     let capture: CaptureStore
     private(set) var identification: IdentificationStore
+    let updates: UpdateStore
 
     private let defaults: UserDefaults
     private let tokens: any TokenStoring
@@ -56,6 +57,9 @@ final class AppSession {
         identification = IdentificationStore(
             pipeline: Self.pipeline(client: client, configured: resolved.isConfigured)
         )
+        // Distribution is not the service's business, so this reads its own
+        // server out of the build rather than the Planty configuration.
+        updates = UpdateStore(service: FledgeUpdateService.fromBundle())
 
         #if DEBUG
         // Lets a screenshot run open straight onto a tab. Debug only.
