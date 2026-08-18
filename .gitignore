@@ -1,0 +1,11 @@
+# Xcode build output from the SwiftUI prototype
+design/Prototype/.build/
+design/Prototype/**/xcuserdata/
+DerivedData/
+
+# Scratch renders produced while checking the logo at small sizes
+design/logo/_*.png
+design/logo/_ql*/
+
+planty
+*.test

@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256" role="img" aria-labelledby="title desc">
+  <title id="title">Planty single-colour project mark</title>
+  <desc id="desc">A delighted starfish proudly holds a potted plant with two lively leaves and one drooping leaf, rendered in one ink with transparent detail knockouts.</desc>
+
+  <defs>
+    <mask id="artwork" maskUnits="userSpaceOnUse" x="0" y="0" width="256" height="256">
+      <rect width="256" height="256" fill="black"/>
+
+      <path
+        d="M128 15 C146 15 148 54 151 73 C166 59 190 40 203 51 C216 62 190 91 179 103 C198 107 228 115 228 132 C228 149 194 153 175 152 C184 174 201 208 186 219 C170 231 145 195 128 177 C111 197 89 229 73 218 C57 207 72 174 81 153 C60 156 26 154 23 138 C20 121 53 111 78 104 C66 91 44 66 55 52 C67 38 93 58 106 72 C110 52 112 15 128 15 Z"
+        fill="white"/>
+
+      <!-- Eye whites and the grin are holes; the pupils and tooth remain ink islands. -->
+      <ellipse cx="114" cy="76" rx="13" ry="16" fill="black"/>
+      <ellipse cx="143" cy="80" rx="10" ry="13" fill="black"/>
+      <circle cx="118" cy="82" r="5" fill="white"/>
+      <circle cx="141" cy="84" r="4" fill="white"/>
+      <path d="M102 101 C114 121 144 124 158 102 C155 132 112 137 102 101 Z" fill="black"/>
+      <path d="M123 111 L138 112 L135 124 Q129 128 123 111 Z" fill="white"/>
+
+      <!-- Black under-strokes cut the plant free from the body; white cores restore it as ink. -->
+      <path d="M149 136 C146 116 151 96 166 79 M156 102 C147 94 139 89 132 86 M164 91 C176 91 187 95 196 105 M170 99 C189 105 202 119 204 137" fill="none" stroke="black" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M149 136 C146 116 151 96 166 79 M156 102 C147 94 139 89 132 86 M164 91 C176 91 187 95 196 105 M170 99 C189 105 202 119 204 137" fill="none" stroke="white" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M165 80 C174 61 195 59 207 68 C197 87 178 94 165 80 Z M155 101 C143 103 130 96 125 84 C140 75 155 83 155 101 Z M203 135 C216 133 227 143 224 156 C209 163 197 151 203 135 Z" fill="white" stroke="black" stroke-width="7" stroke-linejoin="round"/>
+
+      <!-- Each pot piece is solid ink surrounded by a knockout gap. -->
+      <g transform="rotate(8 160 162)" stroke="black" stroke-width="8" stroke-linejoin="round">
+        <path d="M123 145 H199 L191 194 Q189 203 180 203 H143 Q134 203 132 194 Z" fill="white"/>
+        <path d="M118 138 Q118 132 125 132 H198 Q205 132 205 138 V151 H118 Z" fill="white"/>
+        <path d="M128 144 H195" fill="none"/>
+      </g>
+    </mask>
+  </defs>
+
+  <rect width="256" height="256" fill="#282a36" mask="url(#artwork)"/>
+</svg>

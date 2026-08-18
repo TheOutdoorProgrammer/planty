@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-labelledby="title desc">
+  <title id="title">Planty small-size project mark</title>
+  <desc id="desc">A simplified delighted pink starfish proudly holds a crooked pot with a leafy plant and one drooping leaf.</desc>
+
+  <path d="M32 4 C37 4 37 15 38 19 C43 15 49 10 52 13 C55 16 49 23 45 26 C51 27 58 30 58 34 C58 38 50 39 44 39 C47 45 50 53 46 56 C42 59 36 50 32 45 C28 50 22 58 18 55 C14 52 18 44 20 39 C15 40 6 39 6 35 C5 31 14 28 20 26 C17 23 11 17 14 13 C17 9 24 15 27 19 C28 14 28 4 32 4 Z" fill="#ff79c6" stroke="#f8f8f2" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M32 4 C37 4 37 15 38 19 C43 15 49 10 52 13 C55 16 49 23 45 26 C51 27 58 30 58 34 C58 38 50 39 44 39 C47 45 50 53 46 56 C42 59 36 50 32 45 C28 50 22 58 18 55 C14 52 18 44 20 39 C15 40 6 39 6 35 C5 31 14 28 20 26 C17 23 11 17 14 13 C17 9 24 15 27 19 C28 14 28 4 32 4 Z" fill="#ff79c6" stroke="#282a36" stroke-width="2" stroke-linejoin="round"/>
+
+  <ellipse cx="29" cy="19" rx="4" ry="5" fill="#f8f8f2" stroke="#282a36" stroke-width="1.5"/>
+  <ellipse cx="37" cy="20" rx="3.5" ry="4.5" fill="#f8f8f2" stroke="#282a36" stroke-width="1.5"/>
+  <circle cx="30.5" cy="21" r="1.5" fill="#282a36"/>
+  <circle cx="36" cy="21.5" r="1.4" fill="#282a36"/>
+  <path d="M26 25 C29 30 37 31 41 25 C40 33 28 34 26 25 Z" fill="#282a36"/>
+  <path d="M32 28 L36 28.5 L35 31 Q33 32 32 28 Z" fill="#f8f8f2"/>
+
+  <path d="M39 36 C38 30 40 23 44 19 M41 27 L36 23 M43 24 L49 21 M43 26 C49 28 52 32 52 37" fill="none" stroke="#282a36" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M44 19 C47 14 52 14 55 17 C52 22 47 23 44 19 Z M41 27 C38 27 35 25 34 22 C38 20 42 23 41 27 Z" fill="#50fa7b" stroke="#282a36" stroke-width="1.5" stroke-linejoin="round"/>
+  <path d="M52 36 C55 35 58 38 57 41 C53 43 50 40 52 36 Z" fill="#f1fa8c" stroke="#282a36" stroke-width="1.5" stroke-linejoin="round"/>
+
+  <g transform="rotate(8 44 43)" stroke="#282a36" stroke-width="2" stroke-linejoin="round">
+    <path d="M36 38 H54 L52 51 Q52 53 50 53 H41 Q39 53 39 51 Z" fill="#ffb86c"/>
+    <path d="M35 36 Q35 35 37 35 H54 Q56 35 56 37 V40 H35 Z" fill="#f1fa8c"/>
+    <path d="M38 38 H53" fill="none"/>
+  </g>
+</svg>
