@@ -112,6 +112,9 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] **Constraint names are translated.** `dripper_needs_letpot` tells a person nothing; the reply now says a dripper number only means something on the LetPot line
 - [x] **Migrations are serialised.** Every command migrates on start, so a deployment and a CronJob landing together raced on a fresh database. Fixed with a Postgres advisory lock across processes and a mutex within one, because goose keeps its dialect and filesystem in package globals and the race detector caught it racing inside the library
 - [x] Server faults are logged before being returned, so a 500 leaves a trace
+- [x] **Judge and Home Assistant packages tested.** `replay` rebuilds a diagnosis conversation with index arithmetic nobody had checked; the API rejects two messages in a row from the same role, so a slip there would make every follow-up fail outright. Now proven to alternate for 1, 2, 3 and 6 prior turns, to send the photographs only once, and to pair each answer with the question it answered
+- [x] **A pot with no drainage hole was only reported if somebody had also recorded the material.** It is the most common way a plant drowns, and it was being dropped from both the daily judgment and the autopsy. Now reported on its own, covered by a table over every combination
+- [x] **A stale weather forecast is rejected.** Today's daily entry is past-dated by the afternoon yet carries tonight's low, so it has to survive; anything older than a day describes a night that has been and gone
 
 ## 11. Bugs found while building
 
