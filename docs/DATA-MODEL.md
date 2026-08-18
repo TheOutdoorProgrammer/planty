@@ -49,6 +49,7 @@ The split matters, so it is stated once.
 | `soil_mix` | text null | |
 | `light_exposure` | enum null | `direct`, `bright_indirect`, `medium`, `low` |
 | `min_temp_f` | numeric null | Below this it needs protecting. Typed because the cold automation queries it |
+| `sheltered_at` | timestamptz null | Set while it is indoors for cold, so the warning stops and it becomes eligible to go back out. A client that does not read it cannot say which plants are inside |
 | `care_profile` | jsonb | Domain specific, below |
 | `acquired_at` | date null | |
 | `archived_at` | timestamptz null | Set instead of deleting. See ADR-0001 |

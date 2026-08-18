@@ -63,6 +63,15 @@ struct PlantyClient: PlantyAPI {
         try await send("PATCH", "/v1/sensors/\(sensorID.uuidString)", body: calibration)
     }
 
+    func shelter(slugs: [String], indoors: Bool) async throws -> Int {
+        let moved: ShelterResponse = try await send(
+            "POST",
+            indoors ? "/v1/shelter" : "/v1/unshelter",
+            body: ShelterRequest(slugs: slugs)
+        )
+        return moved.moved
+    }
+
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest {
         try await send("POST", "/v1/plants/\(escaped(slug))/harvests", body: harvest)
     }

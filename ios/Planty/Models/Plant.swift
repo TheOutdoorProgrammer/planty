@@ -31,6 +31,10 @@ struct Plant: Codable, Sendable, Hashable, Identifiable {
 
     var acquiredAt: Date?
     var archivedAt: Date?
+
+    /// Set while it is indoors for the cold. Where it is right now beats
+    /// `location`, which is the place it goes back to.
+    var shelteredAt: Date?
     var createdAt: Date
     var updatedAt: Date
 
@@ -57,6 +61,7 @@ struct Plant: Codable, Sendable, Hashable, Identifiable {
         case careProfile = "care_profile"
         case acquiredAt = "acquired_at"
         case archivedAt = "archived_at"
+        case shelteredAt = "sheltered_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
@@ -70,6 +75,14 @@ extension Plant {
     var isFriends: Bool { !steward.isEmpty && steward != Self.stewardSelf }
 
     var ownerName: String? { isFriends ? steward : nil }
+
+    /// Indoors for the cold right now, which is worth saying because the cold
+    /// warning repeats until somebody records that it was answered.
+    var isSheltered: Bool { shelteredAt != nil }
+
+    /// Only a plant with a cold threshold was ever asked to come in, so only
+    /// one of those can sensibly be marked as having gone back out.
+    var canShelter: Bool { minTempF != nil && archivedAt == nil }
 
     /// Friend plants read as "Maya's plant"; mine only says so when ambiguous.
     var ownershipLabel: String {

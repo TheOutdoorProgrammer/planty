@@ -105,6 +105,11 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
         return []
     }
 
+    func shelter(slugs: [String], indoors: Bool) async throws -> Int {
+        try check()
+        return slugs.count
+    }
+
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink {
         try check()
         return SensorLink(

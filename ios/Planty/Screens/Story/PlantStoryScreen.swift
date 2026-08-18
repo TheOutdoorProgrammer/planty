@@ -70,6 +70,32 @@ struct PlantStoryScreen: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(PlantyColor.green)
             }
+            shelterControl
+        }
+    }
+
+    /// Only a plant with a cold threshold was ever asked to come in. The row
+    /// states where it is now and offers the other side, because the warning
+    /// repeats until somebody says it was answered.
+    @ViewBuilder
+    private var shelterControl: some View {
+        if store.plant.canShelter {
+            HStack(spacing: 12) {
+                Label(
+                    store.plant.isSheltered ? "Indoors for the cold" : "Outside",
+                    systemImage: store.plant.isSheltered ? "house.fill" : "sun.max.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(PlantyColor.secondaryText)
+
+                Spacer()
+
+                Button(store.plant.isSheltered ? "Back outside" : "Brought indoors") {
+                    Task { await store.setSheltered(!store.plant.isSheltered) }
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(PlantyColor.green)
+            }
         }
     }
 

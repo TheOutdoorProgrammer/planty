@@ -56,6 +56,19 @@ final class PlantStoryStore {
     var hasPhotos: Bool { !timeline.photos.isEmpty }
     var hasStory: Bool { !timeline.isEmpty }
 
+    /// Answers the cold warning from the phone it arrived on. The local state
+    /// moves straight away, so the button does not keep offering what was just
+    /// done while the next load is still in flight.
+    func setSheltered(_ indoors: Bool) async {
+        do {
+            _ = try await api.shelter(slugs: [plant.slug], indoors: indoors)
+            plant.shelteredAt = indoors ? clock() : nil
+            error = nil
+        } catch {
+            self.error = PlantyError.from(error)
+        }
+    }
+
     func load() async {
         isLoading = true
         error = nil

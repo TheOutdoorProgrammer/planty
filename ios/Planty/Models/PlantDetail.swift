@@ -106,6 +106,16 @@ struct SensorListResponse: Decodable, Sendable {
     let sensors: [SensorLink]
 }
 
+/// Naming plants rather than sending `all`: the app knows exactly which ones
+/// were shown, and `all` from a phone is a lot of pots to be wrong about.
+struct ShelterRequest: Encodable, Sendable {
+    let slugs: [String]
+}
+
+struct ShelterResponse: Decodable, Sendable {
+    let moved: Int
+}
+
 struct ObservationListResponse: Decodable, Sendable {
     let observations: [PlantObservation]
 }

@@ -226,6 +226,17 @@ struct PlantyClientTests {
         #expect(request.httpMethod == "PATCH")
         #expect(request.url?.path == "/v1/plants/mona")
 
+        StubTransport.respond(json: #"{"moved":1,"where":"indoors"}"#)
+        _ = try await StubTransport.client().shelter(slugs: ["mona"], indoors: true)
+        request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/shelter")
+
+        StubTransport.respond(json: #"{"moved":1,"where":"outside"}"#)
+        _ = try await StubTransport.client().shelter(slugs: ["mona"], indoors: false)
+        request = try #require(StubResponder.shared.requests.first)
+        #expect(request.url?.path == "/v1/unshelter")
+
         StubTransport.respond(status: 201, json: try encoded(photoFixture()))
         _ = try await StubTransport.client().uploadPhoto(
             slug: "mona",
