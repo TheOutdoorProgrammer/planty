@@ -1,0 +1,168 @@
+package api
+
+import (
+	"encoding/json"
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/TheOutdoorProgrammer/planty/internal/store"
+)
+
+func (s *Server) listPlants(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	filter := store.PlantFilter{
+		Domain:          plant.Domain(q.Get("domain")),
+		Steward:         q.Get("steward"),
+		Status:          plant.Status(q.Get("status")),
+		WateringMethod:  plant.WateringMethod(q.Get("watering_method")),
+		IncludeArchived: q.Get("include_archived") == "true",
+	}
+
+	plants, err := s.store.ListPlants(r.Context(), filter)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{"plants": plants, "count": len(plants)})
+}
+
+func (s *Server) createPlant(w http.ResponseWriter, r *http.Request) {
+	var p plant.Plant
+	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+
+	applyPlantDefaults(&p)
+
+	created, err := s.store.CreatePlant(r.Context(), p)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	s.ok(w, http.StatusCreated, created)
+}
+
+// applyPlantDefaults fills the fields an agent describing a plant in
+// conversation will rarely supply, so a sparse create still validates.
+func applyPlantDefaults(p *plant.Plant) {
+	if p.Domain == "" {
+		p.Domain = plant.DomainHouseplant
+	}
+	if p.Status == "" {
+		p.Status = plant.StatusAlive
+	}
+	if p.Steward == "" {
+		p.Steward = plant.StewardSelf
+	}
+	if p.Accessibility == "" {
+		p.Accessibility = plant.AccessEasy
+	}
+	if p.WateringMethod == "" {
+		p.WateringMethod = plant.WateringHand
+	}
+}
+
+func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
+	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	history, err := s.store.Observations(r.Context(), p.ID, 20)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	body := map[string]any{
+		"plant":        p,
+		"risk":         p.Risk(),
+		"observations": history,
+	}
+	if at, err := s.store.LastWatered(r.Context(), p.ID); err == nil {
+		body["last_watered"] = at
+	} else if !errors.Is(err, store.ErrNotFound) {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, body)
+}
+
+// archivePlant retires a plant. It is never a hard delete: what was done to a
+// plant that died is the record most worth keeping.
+func (s *Server) archivePlant(w http.ResponseWriter, r *http.Request) {
+	status := plant.Status(r.URL.Query().Get("status"))
+	if status == "" {
+		status = plant.StatusGone
+	}
+	if err := s.store.ArchivePlant(r.Context(), r.PathValue("slug"), status); err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]string{"archived": r.PathValue("slug")})
+}
+
+func (s *Server) listObservations(w http.ResponseWriter, r *http.Request) {
+	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+
+	history, err := s.store.Observations(r.Context(), p.ID, limit)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{"observations": history})
+}
+
+func (s *Server) addObservation(w http.ResponseWriter, r *http.Request) {
+	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	var o plant.Observation
+	if err := json.NewDecoder(r.Body).Decode(&o); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	o.PlantID = p.ID
+	if o.Source == "" {
+		o.Source = plant.SourceApp
+	}
+
+	created, err := s.store.AddObservation(r.Context(), o)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	s.ok(w, http.StatusCreated, created)
+}
+
+// coldWatch answers which plants need bringing in for a given forecast low.
+func (s *Server) coldWatch(w http.ResponseWriter, r *http.Request) {
+	low, err := strconv.ParseFloat(r.URL.Query().Get("forecast_low_f"), 64)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, errors.New("forecast_low_f is required"))
+		return
+	}
+
+	plants, err := s.store.ColdWatch(r.Context(), low)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{
+		"forecast_low_f": low,
+		"plants":         plants,
+		"count":          len(plants),
+	})
+}
