@@ -38,6 +38,7 @@ final class PlantsStore {
             plants = try await api.plants(filter: .live)
             hasLoaded = true
         } catch {
+            guard !PlantyError.isCancellation(error) else { return }
             self.error = PlantyError.from(error)
         }
     }

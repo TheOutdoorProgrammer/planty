@@ -44,6 +44,14 @@ extension PlantyError: LocalizedError {
         }
     }
 
+    /// Work thrown away, not work that failed. SwiftUI cancels a `.refreshable`
+    /// task when the gesture ends, so a good refresh arrives here as an error.
+    static func isCancellation(_ error: any Error) -> Bool {
+        if error is CancellationError { return true }
+        if let urlError = error as? URLError { return urlError.code == .cancelled }
+        return false
+    }
+
     static func from(_ error: any Error) -> PlantyError {
         if let planty = error as? PlantyError { return planty }
         if let decoding = error as? DecodingError {

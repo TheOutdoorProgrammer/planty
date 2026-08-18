@@ -87,6 +87,9 @@ final class TodayStore {
             knownPlantCount = plants.count
             lastLoadedAt = clock()
         } catch {
+            // A pull to refresh whose gesture ended is not a failed check, and
+            // showing it as one is worse than showing nothing.
+            guard !PlantyError.isCancellation(error) else { return }
             self.error = PlantyError.from(error)
         }
     }

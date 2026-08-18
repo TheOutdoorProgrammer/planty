@@ -83,6 +83,7 @@ final class PlantStoryStore {
             timeline = loadedTimeline.merging(loadedDetail)
             hasLoaded = true
         } catch {
+            guard !PlantyError.isCancellation(error) else { return }
             self.error = PlantyError.from(error)
         }
     }

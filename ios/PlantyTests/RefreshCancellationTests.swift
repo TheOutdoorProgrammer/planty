@@ -1,0 +1,104 @@
+import Foundation
+import Testing
+
+@testable import Planty
+
+/// Suspends until cancelled, which is what a request in flight when the
+/// pull-to-refresh gesture ends actually does.
+private final class HangingAPI: PlantyAPI, @unchecked Sendable {
+    func today() async throws -> Digest {
+        try await Task.sleep(for: .seconds(60))
+        return .fixture()
+    }
+
+    func plants(filter: PlantFilter) async throws -> [Plant] {
+        try await Task.sleep(for: .seconds(60))
+        return []
+    }
+
+    func plant(slug: String) async throws -> PlantDetail {
+        try await Task.sleep(for: .seconds(60))
+        return PlantDetail(plant: .fixture())
+    }
+
+    func timeline(slug: String) async throws -> PlantTimeline {
+        try await Task.sleep(for: .seconds(60))
+        return PlantTimeline()
+    }
+
+    func createPlant(_ draft: NewPlant) async throws -> Plant { throw PlantyError.notFound }
+    func updatePlant(slug: String, patch: PlantPatch) async throws -> Plant { throw PlantyError.notFound }
+    func archivePlant(slug: String, status: PlantStatus) async throws {}
+    func addObservation(slug: String, observation: NewObservation) async throws -> PlantObservation {
+        throw PlantyError.notFound
+    }
+    func acknowledge(verdictID: UUID) async throws {}
+    func sensors() async throws -> [SensorLink] { [] }
+    func shelter(slugs: [String], indoors: Bool) async throws -> Int { 0 }
+    func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink {
+        throw PlantyError.notFound
+    }
+    func identify(jpeg: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate] { [] }
+    func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest {
+        throw PlantyError.notFound
+    }
+    func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo {
+        throw PlantyError.notFound
+    }
+    func health() async throws {}
+}
+
+/// Opening the app uses `.task`, which lives as long as the view. Pulling to
+/// refresh uses `.refreshable`, whose task is cancelled when the gesture ends.
+/// Same `load()`, and only one of them was showing an error.
+@Suite("Refresh cancellation")
+struct RefreshCancellationTests {
+    @Test("A cancelled refresh is not a failure")
+    @MainActor
+    func cancellationIsNotAnError() async {
+        let store = TodayStore(api: HangingAPI(), isConfigured: true)
+
+        let refresh = Task { await store.load() }
+        // Let load() get as far as its first await before pulling the rug.
+        try? await Task.sleep(for: .milliseconds(50))
+        refresh.cancel()
+        _ = await refresh.value
+
+        #expect(store.error == nil, "a cancelled refresh rendered as \"Today's check did not finish\"")
+    }
+
+    /// Three screens pull to refresh, so fixing only the one that was reported
+    /// leaves the same bug on the other two.
+    @Test("Every screen that pulls to refresh survives cancellation")
+    @MainActor
+    func everyRefreshPathSurvives() async {
+        let plants = PlantsStore(api: HangingAPI(), isConfigured: true)
+        let story = PlantStoryStore(api: HangingAPI(), plant: .fixture())
+
+        let first = Task { await plants.load() }
+        let second = Task { await story.load() }
+        try? await Task.sleep(for: .milliseconds(50))
+        first.cancel()
+        second.cancel()
+        _ = await first.value
+        _ = await second.value
+
+        #expect(plants.error == nil)
+        #expect(story.error == nil)
+    }
+
+    /// The spinner has to stop even when the work it was waiting on was thrown
+    /// away, or the view is left claiming it is still loading.
+    @Test("A cancelled refresh stops loading")
+    @MainActor
+    func cancellationClearsLoading() async {
+        let store = TodayStore(api: HangingAPI(), isConfigured: true)
+
+        let refresh = Task { await store.load() }
+        try? await Task.sleep(for: .milliseconds(50))
+        refresh.cancel()
+        _ = await refresh.value
+
+        #expect(!store.isLoading)
+    }
+}
