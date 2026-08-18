@@ -2,11 +2,11 @@ package store
 
 import (
 	"context"
-	"os"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/pgtest"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
@@ -15,13 +15,8 @@ import (
 func testStore(t *testing.T) (*Store, context.Context) {
 	t.Helper()
 
-	dsn := os.Getenv("PLANTY_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set PLANTY_TEST_DATABASE_URL to run store integration tests")
-	}
-
 	ctx := context.Background()
-	s, err := Open(ctx, dsn)
+	s, err := Open(ctx, pgtest.DSN(t))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -225,10 +220,7 @@ func TestShelterRoundTrip(t *testing.T) {
 // together race on a fresh database. This reproduces that and expects the
 // advisory lock to serialise them instead of one failing.
 func TestConcurrentMigrationsDoNotRace(t *testing.T) {
-	dsn := os.Getenv("PLANTY_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set PLANTY_TEST_DATABASE_URL to run store integration tests")
-	}
+	dsn := pgtest.DSN(t)
 	ctx := context.Background()
 
 	const racers = 6

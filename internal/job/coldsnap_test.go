@@ -2,10 +2,10 @@ package job
 
 import (
 	"context"
-	"os"
 	"testing"
 	"time"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/pgtest"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -15,13 +15,8 @@ const weatherEntity = "weather.nws_home"
 func testStore(t *testing.T) (*store.Store, context.Context) {
 	t.Helper()
 
-	dsn := os.Getenv("PLANTY_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set PLANTY_TEST_DATABASE_URL to run job tests")
-	}
-
 	ctx := context.Background()
-	s, err := store.Open(ctx, dsn)
+	s, err := store.Open(ctx, pgtest.DSN(t))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

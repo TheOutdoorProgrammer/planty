@@ -115,6 +115,8 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] **Judge and Home Assistant packages tested.** `replay` rebuilds a diagnosis conversation with index arithmetic nobody had checked; the API rejects two messages in a row from the same role, so a slip there would make every follow-up fail outright. Now proven to alternate for 1, 2, 3 and 6 prior turns, to send the photographs only once, and to pair each answer with the question it answered
 - [x] **A pot with no drainage hole was only reported if somebody had also recorded the material.** It is the most common way a plant drowns, and it was being dropped from both the daily judgment and the autopsy. Now reported on its own, covered by a table over every combination
 - [x] **A stale weather forecast is rejected.** Today's daily entry is past-dated by the afternoon yet carries tonight's low, so it has to survive; anything older than a day describes a night that has been and gone
+- [x] **The cold watch is tested end to end**, against a fake Home Assistant that records what was sent: who gets named, that the margin warns early, that a sheltered plant is not warned about twice, that the tenderest plant gates everyone going back out, and that the warning follows you to your backup while you are away
+- [x] **Each test package gets its own database.** `go test ./...` runs packages in parallel, so tests that read the whole garden were being decided by another package's rows
 
 ## 11. Bugs found while building
 
@@ -128,3 +130,5 @@ Nothing is done until it builds, is tested, and is committed.
 - [x] `GET /v1/plants/{slug}` did not return what the contract promised. Now includes readings and the current verdict
 - [x] The plugin's budget test asserted a magic number (two requests) rather than the invariant it cared about. Rewritten to assert the count does not scale with garden size, which is the property that actually matters
 - [x] The first autopsy note was rejected by the SDK's own conformance validator: notes require `Provenance`, because Dusk never infers where a claim came from
+- [x] **Half the cold feature was unreachable.** `Shelter` and `Unshelter` existed in the store and were tested, but nothing could call them: no route, no client, nothing. The warning to bring plants in could never be answered, so it would have repeated every afternoon forever and no plant would ever have become eligible to go back out. Now `POST /v1/shelter` and `POST /v1/unshelter`, and the warning itself says to reply
+- [x] **The test suite shared one database across packages running in parallel.** The cold watch reads every plant and away period, so the API package's fixtures were quietly deciding the job package's results. It only ever failed in the full suite, never when a package was run on its own

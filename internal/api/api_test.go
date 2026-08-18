@@ -8,12 +8,12 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/api"
+	"github.com/TheOutdoorProgrammer/planty/internal/pgtest"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -24,13 +24,8 @@ import (
 func newServer(t *testing.T) (http.Handler, *store.Store, context.Context) {
 	t.Helper()
 
-	dsn := os.Getenv("PLANTY_TEST_DATABASE_URL")
-	if dsn == "" {
-		t.Skip("set PLANTY_TEST_DATABASE_URL to run api tests")
-	}
-
 	ctx := context.Background()
-	db, err := store.Open(ctx, dsn)
+	db, err := store.Open(ctx, pgtest.DSN(t))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

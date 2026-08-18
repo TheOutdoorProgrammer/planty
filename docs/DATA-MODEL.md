@@ -183,7 +183,11 @@ POST   /v1/questions/{id}/answer  record what the owner said
 POST   /v1/away                   record a period with a backup contact
 
 GET    /v1/cold-watch             which plants need bringing in for a given forecast_low_f
+POST   /v1/shelter                record that plants came indoors; {"slugs":[...]} or {"all":true}
+POST   /v1/unshelter              record that they went back out
 ```
+
+**The cold warning has to be answerable.** Without `/v1/shelter` the afternoon warning repeats forever and no plant ever becomes eligible to go back out, so the notification itself asks you to reply. `{"all":true}` is the honest default: the real interaction happens at dusk with an armful of pots, not with a list of slugs.
 
 **Photo upload accepts either shape.** Post raw bytes with a `Content-Type` and `?caption=`, or a `multipart/form-data` body with a `photo` part and an optional `caption` field. `URLSession` builds multipart naturally and curl posts raw bytes naturally; rejecting either would be arbitrary.
 
