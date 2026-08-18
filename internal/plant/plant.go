@@ -98,6 +98,10 @@ type Plant struct {
 	AcquiredAt *time.Time `json:"acquired_at,omitempty"`
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`
 
+	// Set when carried indoors ahead of a cold night, so the system can also
+	// say when to put it back out.
+	ShelteredAt *time.Time `json:"sheltered_at,omitempty"`
+
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

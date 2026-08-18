@@ -28,8 +28,16 @@ func (s *Store) AskOwner(ctx context.Context, q plant.Question) (plant.Question,
 	if q.Question == "" {
 		return plant.Question{}, errors.New("question is required")
 	}
+	// Default to the plant's steward: an agent asking about a plant should not
+	// have to know who owns it.
+	if q.AskedOf == "" && q.PlantID != nil {
+		if err := s.pool.QueryRow(ctx,
+			`SELECT steward FROM plants WHERE id = $1`, *q.PlantID).Scan(&q.AskedOf); err != nil {
+			return plant.Question{}, err
+		}
+	}
 	if q.AskedOf == "" {
-		return plant.Question{}, errors.New("asked_of is required")
+		return plant.Question{}, errors.New("asked_of is required when no plant is named")
 	}
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO questions (plant_id, asked_of, question, why)

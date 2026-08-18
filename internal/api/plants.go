@@ -92,6 +92,22 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 	s.ok(w, http.StatusOK, body)
 }
 
+// updatePlant applies a sparse patch, so an agent can change one field.
+func (s *Server) updatePlant(w http.ResponseWriter, r *http.Request) {
+	var patch store.PlantPatch
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+
+	updated, err := s.store.UpdatePlant(r.Context(), r.PathValue("slug"), patch)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	s.ok(w, http.StatusOK, updated)
+}
+
 // archivePlant retires a plant. It is never a hard delete: what was done to a
 // plant that died is the record most worth keeping.
 func (s *Server) archivePlant(w http.ResponseWriter, r *http.Request) {

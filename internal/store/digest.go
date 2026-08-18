@@ -39,7 +39,7 @@ func scanDigestEntry(row pgx.Row) (plant.DigestEntry, error) {
 		&p.Accessibility, &p.WateringMethod, &p.LetPotDripper,
 		&p.PotSizeIn, &p.PotMaterial, &p.HasDrainage, &p.SoilMix,
 		&light, &p.MinTempF, &profile,
-		&acquired, &p.ArchivedAt, &p.CreatedAt, &p.UpdatedAt,
+		&acquired, &p.ArchivedAt, &p.ShelteredAt, &p.CreatedAt, &p.UpdatedAt,
 		&v.ID, &v.PlantID, &v.ForDate, &v.Action, &v.Reasoning,
 		&v.Confidence, &evidence, &v.CreatedAt, &v.AcknowledgedAt,
 	)

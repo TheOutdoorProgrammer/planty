@@ -23,7 +23,7 @@ const plantColumns = `
 	accessibility, watering_method, letpot_dripper,
 	pot_size_in, coalesce(pot_material, ''), has_drainage, coalesce(soil_mix, ''),
 	light_exposure, min_temp_f, care_profile,
-	acquired_at, archived_at, created_at, updated_at`
+	acquired_at, archived_at, sheltered_at, created_at, updated_at`
 
 func scanPlant(row pgx.Row) (plant.Plant, error) {
 	var p plant.Plant
@@ -38,7 +38,7 @@ func scanPlant(row pgx.Row) (plant.Plant, error) {
 		&p.Accessibility, &p.WateringMethod, &p.LetPotDripper,
 		&p.PotSizeIn, &p.PotMaterial, &p.HasDrainage, &p.SoilMix,
 		&light, &p.MinTempF, &profile,
-		&acquired, &p.ArchivedAt, &p.CreatedAt, &p.UpdatedAt,
+		&acquired, &p.ArchivedAt, &p.ShelteredAt, &p.CreatedAt, &p.UpdatedAt,
 	)
 	if err != nil {
 		return plant.Plant{}, err

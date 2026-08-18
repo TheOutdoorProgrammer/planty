@@ -33,28 +33,80 @@ func (c ColdWatch) Run(ctx context.Context) error {
 		return fmt.Errorf("forecast: %w", err)
 	}
 
-	at := c.Store
-	plants, err := at.ColdWatch(ctx, low-ColdMarginF)
+	plants, err := c.Store.ColdWatch(ctx, low-ColdMarginF)
 	if err != nil {
 		return fmt.Errorf("cold watch query: %w", err)
 	}
-	if len(plants) == 0 {
-		c.Log.Info("cold watch clear", "forecast_low_f", low)
-		return nil
+
+	var atRisk []plant.Plant
+	for _, p := range plants {
+		if p.ShelteredAt == nil {
+			atRisk = append(atRisk, p)
+		}
 	}
 
+	if len(atRisk) > 0 {
+		return c.warn(ctx, low, atRisk)
+	}
+	c.Log.Info("cold watch clear", "forecast_low_f", low)
+	return c.putBackOut(ctx, low)
+}
+
+func (c ColdWatch) warn(ctx context.Context, low float64, atRisk []plant.Plant) error {
 	away, hasBackup := c.backup(ctx)
-	message := coldMessage(low, plants, away)
 
 	target := c.Notifier
 	if hasBackup && away.BackupNotify != "" {
 		target = away.BackupNotify
 	}
 
-	c.Log.Warn("cold watch triggered", "forecast_low_f", low, "plants", len(plants))
-	return c.HA.Notify(ctx, target, "Bring the plants in", message, map[string]any{
-		"data": map[string]any{"tag": "planty-cold", "importance": "high"},
-	})
+	c.Log.Warn("cold watch triggered", "forecast_low_f", low, "plants", len(atRisk))
+	return c.HA.Notify(ctx, target, "Bring the plants in",
+		coldMessage(low, atRisk, away), map[string]any{
+			"data": map[string]any{"tag": "planty-cold", "importance": "high"},
+		})
+}
+
+// putBackOut names plants stuck indoors once the weather has actually turned.
+func (c ColdWatch) putBackOut(ctx context.Context, low float64) error {
+	sheltered, since, err := c.Store.Sheltered(ctx)
+	if err != nil || len(sheltered) == 0 {
+		return err
+	}
+
+	// Every sheltered plant must clear its own threshold, not just the hardiest.
+	needed := 0.0
+	for _, p := range sheltered {
+		if p.MinTempF != nil && *p.MinTempF > needed {
+			needed = *p.MinTempF
+		}
+	}
+	if low < needed+ColdMarginF {
+		c.Log.Info("still too cold to put them back out", "forecast_low_f", low)
+		return nil
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "Tonight only drops to %.0fF. These have been inside %s and can go back out:\n",
+		low, humanDays(since))
+	for _, p := range sheltered {
+		fmt.Fprintf(&b, "\n- %s", p.CommonName)
+	}
+
+	c.Log.Info("safe to put plants back out", "plants", len(sheltered))
+	return c.HA.Notify(ctx, c.Notifier, "Put the plants back out", b.String(), nil)
+}
+
+func humanDays(since time.Time) string {
+	days := int(time.Since(since).Hours() / 24)
+	switch {
+	case days < 1:
+		return "since today"
+	case days == 1:
+		return "since yesterday"
+	default:
+		return fmt.Sprintf("for %d days", days)
+	}
 }
 
 // backup returns the away period covering tonight, if there is one.
