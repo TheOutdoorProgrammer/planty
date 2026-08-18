@@ -39,7 +39,7 @@ func (d Daily) Run(ctx context.Context) error {
 		}
 	}
 
-	digest, err := d.Store.Digest(ctx, 36*time.Hour)
+	digest, err := d.Store.Digest(ctx, plant.StaleAfter)
 	if err != nil {
 		return fmt.Errorf("digest: %w", err)
 	}

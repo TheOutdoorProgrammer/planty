@@ -55,7 +55,8 @@ final class TodayStore {
                 digest: visibleDigest,
                 error: error,
                 knownPlantCount: knownPlantCount,
-                now: clock()
+                now: clock(),
+                didJustFinish: !resolvedIDs.isEmpty
             ),
             policy: policy
         )

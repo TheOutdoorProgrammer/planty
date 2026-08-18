@@ -5,20 +5,15 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
-// StaleAfter is how old the newest verdict may be before the digest says so.
-// Sized past a missed daily run so one hiccup does not cry stale.
-const StaleAfter = 36 * time.Hour
-
 // today answers "what should I do right now" for both clients.
 func (s *Server) today(w http.ResponseWriter, r *http.Request) {
-	digest, err := s.store.Digest(r.Context(), StaleAfter)
+	digest, err := s.store.Digest(r.Context(), plant.StaleAfter)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return

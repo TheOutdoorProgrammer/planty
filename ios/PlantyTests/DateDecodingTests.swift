@@ -8,19 +8,19 @@ struct DateDecodingTests {
     @Test("No fractional seconds, which is what Go writes for a whole second")
     func wholeSeconds() throws {
         let date = try #require(PlantyDateFormat.date(from: "2026-08-18T08:04:32Z"))
-        #expect(date.timeIntervalSince1970 == 1_755_504_272)
+        #expect(date.timeIntervalSince1970 == 1_787_040_272)
     }
 
     @Test("Three fractional digits")
     func milliseconds() throws {
         let date = try #require(PlantyDateFormat.date(from: "2026-08-18T08:04:32.250Z"))
-        #expect(abs(date.timeIntervalSince1970 - 1_755_504_272.25) < 0.001)
+        #expect(abs(date.timeIntervalSince1970 - 1_787_040_272.25) < 0.001)
     }
 
     @Test("Nine fractional digits, which ISO8601DateFormatter rejects untouched")
     func nanoseconds() throws {
         let date = try #require(PlantyDateFormat.date(from: "2026-08-18T08:04:32.123456789Z"))
-        #expect(abs(date.timeIntervalSince1970 - 1_755_504_272.123) < 0.002)
+        #expect(abs(date.timeIntervalSince1970 - 1_787_040_272.123) < 0.002)
     }
 
     @Test("A numeric offset instead of Z")
@@ -58,7 +58,7 @@ struct DateDecodingTests {
 
     @Test("Encoding round-trips through the decoder")
     func roundTrip() throws {
-        let original = Date(timeIntervalSince1970: 1_755_504_272.5)
+        let original = Date(timeIntervalSince1970: 1_787_040_272.5)
         let encoded = PlantyDateFormat.string(from: original)
         let decoded = try #require(PlantyDateFormat.date(from: encoded))
         #expect(abs(decoded.timeIntervalSince1970 - original.timeIntervalSince1970) < 0.002)

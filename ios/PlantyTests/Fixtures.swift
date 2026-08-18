@@ -3,8 +3,8 @@ import Foundation
 @testable import Planty
 
 extension Date {
-    /// A fixed clock, so "3 days ago" means the same thing on every run.
-    static let reference = Date(timeIntervalSince1970: 1_755_500_000)
+    /// 2026-08-18T08:04:32Z, the moment the design docs are written around.
+    static let reference = Date(timeIntervalSince1970: 1_787_040_272)
 
     func minus(hours: Double) -> Date {
         addingTimeInterval(-hours * 3600)

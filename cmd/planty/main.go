@@ -27,7 +27,9 @@ const usage = `planty <command>
   serve    run the HTTP API
   ingest   pull current sensor values from Home Assistant
   daily    judge every plant and send the digest
-  cold     check tonight's forecast and warn about plants to bring in
+  cold     check tonight's forecast, both bringing in and putting back out
+  away     pre-departure watering pass, or the briefing on return
+  autopsy  work out what killed a plant: planty autopsy <slug>
   seed     load the sabbatical plants and their open questions
   migrate  apply database migrations and exit`
 
@@ -75,6 +77,10 @@ func run(log *slog.Logger) error {
 		return daily(db, log).Run(ctx)
 	case "cold":
 		return coldWatch(db, log).Run(ctx)
+	case "away":
+		return job.Away{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
+	case "autopsy":
+		return autopsy(ctx, db, log)
 	case "seed":
 		return seed.Friends(ctx, db, log, os.Getenv("PLANTY_FRIEND_NAME"))
 	default:
@@ -164,6 +170,25 @@ func coldWatch(db *store.Store, log *slog.Logger) job.ColdWatch {
 		Weather:  weather,
 		Notifier: notifier(),
 	}
+}
+
+func autopsy(ctx context.Context, db *store.Store, log *slog.Logger) error {
+	if len(os.Args) < 3 {
+		return errors.New("usage: planty autopsy <slug>")
+	}
+
+	record, err := job.Postmortem{
+		Store: db,
+		Judge: judge.New(os.Getenv("ANTHROPIC_API_KEY")),
+		Log:   log,
+	}.Run(ctx, os.Args[2])
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("\nLikely cause: %s\n\n%s\n\nLesson: %s\n",
+		record.LikelyCause, record.Narrative, record.Lesson)
+	return nil
 }
 
 func notifier() string {

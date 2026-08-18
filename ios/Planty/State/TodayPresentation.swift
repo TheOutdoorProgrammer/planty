@@ -25,9 +25,15 @@ enum TodayPresentation: Sendable, Equatable {
 struct CalmSummary: Sendable, Equatable {
     let checked: Int
     let updatedAt: Date
+    /// The last card was cleared in this session, so the copy acknowledges it
+    /// instead of pretending there was never anything to do.
+    var justFinished = false
 
-    var headline: String { "You're done." }
-    var subhead: String { "Nothing needs you right now." }
+    var headline: String { justFinished ? "That's it." : "You're done." }
+
+    var subhead: String {
+        justFinished ? "Everything else is okay." : "Nothing needs you right now."
+    }
 
     var freshnessLine: String {
         let plants = checked == 1 ? "1 plant checked" : "\(checked) plants checked"
@@ -97,6 +103,7 @@ struct TodayInputs: Sendable, Equatable {
     var error: PlantyError?
     var knownPlantCount: Int?
     var now: Date
+    var didJustFinish = false
 }
 
 extension TodayPresentation {
@@ -140,7 +147,13 @@ extension TodayPresentation {
         }
 
         guard !digest.entries.isEmpty else {
-            return .calm(CalmSummary(checked: digest.checked, updatedAt: digest.date))
+            return .calm(
+                CalmSummary(
+                    checked: digest.checked,
+                    updatedAt: digest.date,
+                    justFinished: inputs.didJustFinish
+                )
+            )
         }
 
         let sorted = digest.sortedEntries

@@ -66,14 +66,16 @@ extension Digest {
 /// Wording for how long ago something happened, used everywhere the app has to
 /// name freshness out loud.
 enum RelativeAge {
+    /// Uses RelativeDateTimeFormatter, not `.formatted(.relative:)`, because
+    /// the latter has no reference date and silently uses the system clock.
     static func phrase(since: Date, now: Date) -> String {
-        let elapsed = now.timeIntervalSince(since)
-        if elapsed < 90 * 60 {
+        if now.timeIntervalSince(since) < 90 * 60 {
             return "less than an hour ago"
         }
-        return since.formatted(
-            .relative(presentation: .named, unitsStyle: .wide)
-        )
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        formatter.dateTimeStyle = .named
+        return formatter.localizedString(for: since, relativeTo: now)
     }
 
     /// "yesterday at 8:01 AM", for the loading row that keeps old data visible.

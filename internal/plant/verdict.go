@@ -84,3 +84,7 @@ type Digest struct {
 
 // AllClear reports whether nothing needs doing, given data is actually fresh.
 func (d Digest) AllClear() bool { return len(d.Entries) == 0 && d.StaleSince == nil }
+
+// StaleAfter is how old the newest verdict may be before a digest says so.
+// Sized past a missed daily run, so one hiccup does not cry stale.
+const StaleAfter = 36 * time.Hour
