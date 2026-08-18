@@ -152,18 +152,24 @@ func (c *Client) Forecast(ctx context.Context, entityID string) ([]Forecast, err
 	return nil, fmt.Errorf("no forecast returned for %s", entityID)
 }
 
+// StaleForecast bounds how far back a period may be dated. Today's daily entry
+// is past-dated by the afternoon yet carries tonight's low, so it must survive.
+const StaleForecast = 24 * time.Hour
+
 // TonightLow returns the lowest temperature forecast within the window.
 func (c *Client) TonightLow(ctx context.Context, entityID string, within time.Duration) (float64, error) {
 	periods, err := c.Forecast(ctx, entityID)
 	if err != nil {
 		return 0, err
 	}
-	cutoff := time.Now().Add(within)
+
+	now := time.Now()
+	cutoff, earliest := now.Add(within), now.Add(-StaleForecast)
 
 	low := 0.0
 	found := false
 	for _, p := range periods {
-		if p.DateTime.After(cutoff) {
+		if p.DateTime.After(cutoff) || p.DateTime.Before(earliest) {
 			continue
 		}
 		if !found || p.Low() < low {
@@ -171,7 +177,7 @@ func (c *Client) TonightLow(ctx context.Context, entityID string, within time.Du
 		}
 	}
 	if !found {
-		return 0, fmt.Errorf("no forecast periods within %s", within)
+		return 0, fmt.Errorf("no usable forecast for %s within %s", entityID, within)
 	}
 	return low, nil
 }
