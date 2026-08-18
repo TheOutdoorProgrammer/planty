@@ -158,16 +158,16 @@ GET    /healthz                   liveness, and the only unauthenticated concern
 
 GET    /v1/plants                 list; filter by domain, steward, status, watering_method, include_archived
 POST   /v1/plants                 create; sparse, the service fills domain/status/steward/accessibility/watering
-GET    /v1/plants/{slug}          record plus risk score, recent observations and last watered
+GET    /v1/plants/{slug}          record, risk, observations, last watered, latest readings, current verdict
 PATCH  /v1/plants/{slug}          sparse update; omitted fields are left alone
 DELETE /v1/plants/{slug}          archive, never a hard delete; ?status=dead records why
 
 GET    /v1/plants/{slug}/observations   history, newest first
 POST   /v1/plants/{slug}/observations   log watered, repotted, fertilized, pruned, moved, symptom, note, died
 POST   /v1/plants/{slug}/harvests       log a harvest, with quantity and unit
-POST   /v1/plants/{slug}/photos         upload raw image bytes; Content-Type sets the format
+POST   /v1/plants/{slug}/photos         upload; raw bytes or multipart, both accepted
 GET    /v1/plants/{slug}/timeline       photos oldest first, with short-lived links
-POST   /v1/plants/{slug}/diagnose       read the photo timeline and report what changed
+POST   /v1/plants/{slug}/diagnosis      read the photo timeline and report what changed
 
 GET    /v1/today                  the digest; carries all_clear and stale_since separately
 POST   /v1/verdicts/{id}/ack      acknowledge, which stops escalation
@@ -185,7 +185,9 @@ POST   /v1/away                   record a period with a backup contact
 GET    /v1/cold-watch             which plants need bringing in for a given forecast_low_f
 ```
 
-**Photo upload takes raw bytes, not multipart.** The `Content-Type` header carries the format and `?caption=` carries the note, so a phone client posts the image directly instead of assembling a multipart body.
+**Photo upload accepts either shape.** Post raw bytes with a `Content-Type` and `?caption=`, or a `multipart/form-data` body with a `photo` part and an optional `caption` field. `URLSession` builds multipart naturally and curl posts raw bytes naturally; rejecting either would be arbitrary.
+
+**Timeline returns `{photos: [...], count}`.** Each photo carries a presigned `url` valid for 30 minutes, so a client renders images straight from object storage rather than proxying every byte through the service.
 
 **`POST /v1/questions` defaults `asked_of` to the plant's steward.** An agent asking a question about a plant should not have to know who owns it.
 

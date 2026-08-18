@@ -1,5 +1,8 @@
 # Planty logo
 
+> **Superseded.** These are the starfish marks. The mascot is now a seal, in
+> `design/logo/seal/`. See `design/MASCOT.md`.
+
 Planty is a cheerfully underqualified starfish who beams with pride at the crooked pot and visibly struggling plant in his care.
 The plant has a clear stem, two lively leaves, and one drooping leaf so the joke reads without making the mark feel gloomy.
 

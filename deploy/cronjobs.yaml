@@ -74,6 +74,43 @@ spec:
                 capabilities:
                   drop: ["ALL"]
 ---
+# Chase unacknowledged verdicts. Waking hours only; the ladder caps at three.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: planty-chase
+  namespace: planty
+spec:
+  schedule: "0 13,20 * * *"
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+          containers:
+            - name: chase
+              image: ghcr.io/theoutdoorprogrammer/planty:latest
+              args: ["chase"]
+              envFrom:
+                - configMapRef:
+                    name: planty-config
+                - secretRef:
+                    name: planty-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+---
 # Away mode. Runs after the daily digest so a return briefing lands with the
 # morning's verdicts already computed rather than a day behind.
 apiVersion: batch/v1

@@ -1,5 +1,8 @@
 # Planty UI concept
 
+> **Mascot note:** this document describes a pink starfish. The mascot is now a seal.
+> Everything else here still holds; see `design/MASCOT.md`.
+
 ## The promise
 
 Planty answers one question: **what should I do while I am standing here with this plant?**

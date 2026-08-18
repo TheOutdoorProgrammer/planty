@@ -1,5 +1,8 @@
 # Planty design notes
 
+> **Mascot note:** this document describes a pink starfish. The mascot is now a seal.
+> Everything else here still holds; see `design/MASCOT.md`.
+
 ## The central decision
 
 Planty should optimize for **confident inaction**, not engagement.
