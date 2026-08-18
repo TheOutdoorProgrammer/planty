@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -50,36 +51,58 @@ func (s *Server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
+
+	saved, err := s.keepPhoto(r.Context(), p, body, contentType, caption, time.Now().UTC())
+	if err != nil {
+		s.fail(w, statusForPhoto(err), err)
+		return
+	}
+	s.ok(w, http.StatusCreated, saved)
+}
+
+// ErrPhotoType and ErrPhotoSize are the two ways a photograph is refused
+// before anything is written, and both are the caller's fault.
+var (
+	ErrPhotoType = errors.New("send image/jpeg, image/png or image/webp")
+	ErrPhotoSize = errors.New("photo is too large")
+)
+
+// keepPhoto puts one image in storage and records it against a plant. Shared,
+// because a plant created from a photograph keeps that photograph the same way
+// an uploaded one is kept.
+func (s *Server) keepPhoto(ctx context.Context, p plant.Plant, body []byte,
+	contentType, caption string, takenAt time.Time) (plant.Photo, error) {
 	ext, ok := photoTypes[contentType]
 	if !ok {
-		s.fail(w, http.StatusUnsupportedMediaType,
-			errors.New("send image/jpeg, image/png or image/webp"))
-		return
+		return plant.Photo{}, ErrPhotoType
 	}
 	if len(body) > MaxPhotoBytes {
-		s.fail(w, http.StatusRequestEntityTooLarge, errors.New("photo is too large"))
-		return
+		return plant.Photo{}, ErrPhotoSize
 	}
 
-	takenAt := time.Now().UTC()
 	key := photos.Key(p.Slug, takenAt, ext)
-	if _, err := s.photos.Put(r.Context(), key, contentType,
+	if _, err := s.photos.Put(ctx, key, contentType,
 		bytes.NewReader(body), int64(len(body))); err != nil {
-		s.fail(w, http.StatusBadGateway, err)
-		return
+		return plant.Photo{}, err
 	}
 
-	saved, err := s.store.SavePhoto(r.Context(), plant.Photo{
+	return s.store.SavePhoto(ctx, plant.Photo{
 		PlantID:    p.ID,
 		StorageKey: key,
 		TakenAt:    takenAt,
 		Caption:    caption,
 	})
-	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
-		return
+}
+
+func statusForPhoto(err error) int {
+	switch {
+	case errors.Is(err, ErrPhotoType):
+		return http.StatusUnsupportedMediaType
+	case errors.Is(err, ErrPhotoSize):
+		return http.StatusRequestEntityTooLarge
+	default:
+		return http.StatusBadGateway
 	}
-	s.ok(w, http.StatusCreated, saved)
 }
 
 // readUpload accepts either shape, because the two clients have different

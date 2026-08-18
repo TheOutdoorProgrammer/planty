@@ -232,3 +232,42 @@ func Slugify(name string) string {
 	}
 	return strings.Trim(b.String(), "-")
 }
+
+// FreeSlug returns a slug nobody holds yet, numbering from the second one on.
+// Owning three pothos is ordinary, and slugs are unique, so naming a plant
+// after its species has to survive doing it twice.
+func (s *Store) FreeSlug(ctx context.Context, name string) (string, error) {
+	base := Slugify(name)
+	if base == "" {
+		return "", fmt.Errorf("no slug can be made from %q", name)
+	}
+
+	rows, err := s.pool.Query(ctx,
+		`SELECT slug FROM plants WHERE slug = $1 OR slug LIKE $1 || '-%'`, base)
+	if err != nil {
+		return "", fmt.Errorf("look up slugs like %s: %w", base, err)
+	}
+	defer rows.Close()
+
+	taken := make(map[string]bool)
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return "", err
+		}
+		taken[slug] = true
+	}
+	if err := rows.Err(); err != nil {
+		return "", err
+	}
+
+	if !taken[base] {
+		return base, nil
+	}
+	for n := 2; n <= len(taken)+2; n++ {
+		if candidate := fmt.Sprintf("%s-%d", base, n); !taken[candidate] {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("no free slug for %q", name)
+}

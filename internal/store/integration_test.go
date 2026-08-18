@@ -383,3 +383,65 @@ func TestMoistureRoseAfterDetectsWaterThatNeverArrived(t *testing.T) {
 		t.Error("moisture did not actually rise; the claim should not verify")
 	}
 }
+
+// Photographing a second pothos has to work. Slugs are unique, so naming a
+// plant after its species collides the moment somebody owns two.
+func TestFreeSlugNumbersTheSecondOfASpecies(t *testing.T) {
+	s, ctx := testStore(t)
+
+	first, err := s.FreeSlug(ctx, "Golden Pothos")
+	if err != nil {
+		t.Fatalf("first slug: %v", err)
+	}
+	if first != "golden-pothos" {
+		t.Errorf("the first one got %q, want the plain slug", first)
+	}
+
+	claim(t, s, ctx, first, "Golden Pothos")
+
+	second, err := s.FreeSlug(ctx, "Golden Pothos")
+	if err != nil {
+		t.Fatalf("second slug: %v", err)
+	}
+	if second != "golden-pothos-2" {
+		t.Errorf("the second one got %q, want golden-pothos-2", second)
+	}
+
+	claim(t, s, ctx, second, "Golden Pothos")
+
+	third, err := s.FreeSlug(ctx, "golden pothos")
+	if err != nil {
+		t.Fatalf("third slug: %v", err)
+	}
+	if third != "golden-pothos-3" {
+		t.Errorf("the third one got %q, want golden-pothos-3", third)
+	}
+}
+
+func TestFreeSlugRefusesANameWithNothingInIt(t *testing.T) {
+	s, ctx := testStore(t)
+
+	if _, err := s.FreeSlug(ctx, "  !!!  "); err == nil {
+		t.Error("a name with no usable characters produced a slug")
+	}
+}
+
+// claim creates a plant holding an exact slug, which newPlant deliberately
+// cannot do because it uniquifies every slug it is given.
+func claim(t *testing.T, s *Store, ctx context.Context, slug, name string) {
+	t.Helper()
+
+	p, err := s.CreatePlant(ctx, plant.Plant{
+		CommonName:     name,
+		Slug:           slug,
+		Domain:         plant.DomainHouseplant,
+		Status:         plant.StatusAlive,
+		Steward:        plant.StewardSelf,
+		Accessibility:  plant.AccessEasy,
+		WateringMethod: plant.WateringHand,
+	})
+	if err != nil {
+		t.Fatalf("claim %s: %v", slug, err)
+	}
+	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusGone) })
+}

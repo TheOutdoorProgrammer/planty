@@ -159,6 +159,7 @@ GET    /healthz                   liveness, and the only unauthenticated concern
 
 GET    /v1/plants                 list; filter by domain, steward, status, watering_method, include_archived
 POST   /v1/plants                 create; sparse, the service fills domain/status/steward/accessibility/watering
+POST   /v1/plants/from-photo      photograph one to add it: identify, record, keep the photo as frame one
 GET    /v1/plants/{slug}          record, risk, observations, last watered, latest readings, current verdict
 PATCH  /v1/plants/{slug}          sparse update; omitted fields are left alone
 DELETE /v1/plants/{slug}          archive, never a hard delete; ?status=dead records why
@@ -192,7 +193,16 @@ POST   /v1/unshelter              record that they went back out
 
 **`POST /v1/identify` belongs to no plant, deliberately.** Nobody knows which plant it is yet, and it may not be one on record. It takes a `photo` multipart part or raw bytes, and answers `{candidates: [{common_name, scientific_name, confidence}], count}` with at most three, most likely first. An empty list is a valid answer and a better one than a guessed name.
 
-The app sends a Vision cutout rather than the raw frame, and only after its own on-device classifier agrees the subject is a plant, so this is never spent on a photo of a dog. With no `ANTHROPIC_API_KEY` it answers 503 and the app falls back to showing those on-device labels.
+The app sends a Vision cutout rather than the raw frame, and only after its own on-device classifier agrees the subject is a plant, so this is never spent on a photo of a dog. With no judge configured it answers 503 and the app falls back to showing those on-device labels.
+
+**`POST /v1/plants/from-photo` is the same identification, kept.** `/v1/identify` answers a question and throws the photograph away; this one names the plant, creates it, and keeps the photograph as the first frame of its timeline, which is the whole point of a timeline starting on day one.
+
+It takes the image the same two ways upload does, and any of `common_name`, `botanical_name`, `location`, `steward` and `domain` as query overrides.
+A given `common_name` wins outright, because somebody holding the plant knows better than a model holding a picture of it.
+It answers `{plant, candidates, photo}` so the app can show what else was considered and let you correct it, and 422 when nothing was recognised and no name was supplied, because inventing a species is the one thing the identify prompt forbids.
+
+Owning three pothos is ordinary and slugs are unique, so the second one becomes `golden-pothos-2`.
+If the photograph fails to store the plant still exists, and the reply carries `photo_error` rather than unwinding a record you can see was created.
 
 **The cold warning has to be answerable.** Without `/v1/shelter` the afternoon warning repeats forever and no plant ever becomes eligible to go back out, so the notification itself asks you to reply. `{"all":true}` is the honest default: the real interaction happens at dusk with an armful of pots, not with a list of slugs.
 
