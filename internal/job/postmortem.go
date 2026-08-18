@@ -20,6 +20,26 @@ type Postmortem struct {
 	Log   *slog.Logger
 }
 
+// Sweep analyses every dead plant that has not been looked at yet.
+func (p Postmortem) Sweep(ctx context.Context) (int, error) {
+	pending, err := p.Store.DeadWithoutPostmortem(ctx)
+	if err != nil {
+		return 0, err
+	}
+
+	var written int
+	for _, subject := range pending {
+		if _, err := p.Run(ctx, subject.Slug); err != nil {
+			// One failure must not block the rest, or a single bad record
+			// silently stops every future autopsy.
+			p.Log.Error("autopsy failed", "plant", subject.Slug, "error", err)
+			continue
+		}
+		written++
+	}
+	return written, nil
+}
+
 // Run analyses one dead plant. Idempotent: an existing autopsy is left alone.
 func (p Postmortem) Run(ctx context.Context, slug string) (plant.Postmortem, error) {
 	subject, err := p.Store.GetPlant(ctx, slug)

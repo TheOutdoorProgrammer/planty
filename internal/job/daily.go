@@ -39,6 +39,14 @@ func (d Daily) Run(ctx context.Context) error {
 		}
 	}
 
+	// A death is worth understanding, and nobody remembers to ask for it.
+	if written, err := (Postmortem{Store: d.Store, Judge: d.Judge, Log: d.Log}).
+		Sweep(ctx); err != nil {
+		d.Log.Error("postmortem sweep failed", "error", err)
+	} else if written > 0 {
+		d.Log.Info("postmortems written", "count", written)
+	}
+
 	digest, err := d.Store.Digest(ctx, plant.StaleAfter)
 	if err != nil {
 		return fmt.Errorf("digest: %w", err)

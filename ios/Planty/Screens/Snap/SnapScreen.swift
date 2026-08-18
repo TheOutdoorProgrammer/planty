@@ -39,7 +39,7 @@ struct SnapScreen: View {
                     isPickingPlant = false
                 }
             }
-            .task { await prepare() }
+            .task(id: session.selectedTab) { await prepareIfVisible() }
             .onDisappear { camera.stop() }
             .onChange(of: photoItem) { _, item in
                 Task { await load(item) }
@@ -115,6 +115,16 @@ struct SnapScreen: View {
                     store.clearToast()
                 }
         }
+    }
+
+    /// TabView builds neighbouring tabs eagerly, and asking for the camera
+    /// before the user has opened Snap is how permission prompts get denied.
+    private func prepareIfVisible() async {
+        guard session.selectedTab == .snap else {
+            camera.stop()
+            return
+        }
+        await prepare()
     }
 
     private func prepare() async {

@@ -133,6 +133,31 @@ func (s *Store) SavePostmortem(ctx context.Context, p plant.Postmortem) error {
 	return err
 }
 
+// DeadWithoutPostmortem returns plants that died and were never analysed.
+// Archived ones are included: archiving is exactly how a death is recorded.
+func (s *Store) DeadWithoutPostmortem(ctx context.Context) ([]plant.Plant, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT `+plantColumnsFor("p")+`
+		FROM plants p
+		LEFT JOIN postmortems m ON m.plant_id = p.id
+		WHERE p.status = 'dead' AND m.id IS NULL
+		ORDER BY p.updated_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []plant.Plant
+	for rows.Next() {
+		p, err := scanPlant(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, p)
+	}
+	return out, rows.Err()
+}
+
 // Postmortem returns a dead plant's analysis.
 func (s *Store) Postmortem(ctx context.Context, plantID uuid.UUID) (plant.Postmortem, error) {
 	row := s.pool.QueryRow(ctx, `

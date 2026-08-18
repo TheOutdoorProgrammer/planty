@@ -30,7 +30,7 @@ struct PlantsLibraryScreen: View {
             .navigationTitle("Plants")
             .searchable(text: $store.searchText, prompt: "Name, species, owner or room")
             .refreshable { await store.load() }
-            .task { await store.load() }
+            .task { await loadWithStatuses() }
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { isAdding = true } label: {
@@ -82,6 +82,15 @@ struct PlantsLibraryScreen: View {
         }
         .listStyle(.insetGrouped)
         .scrollContentBackground(.hidden)
+    }
+
+    /// Without the digest every row honestly reads Unknown, so fetch it even
+    /// when the user opened this tab first.
+    private func loadWithStatuses() async {
+        await store.load()
+        if session.today.digest == nil {
+            await session.today.load()
+        }
     }
 
     private func state(for plant: Plant) -> CareState {
