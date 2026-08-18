@@ -138,15 +138,19 @@ func (c *Client) Forecast(ctx context.Context, entityID string) ([]Forecast, err
 		"entity_id": entityID,
 		"type":      "daily",
 	}
-	var resp map[string]struct {
-		Forecast []Forecast `json:"forecast"`
+	// The entity map is nested under service_response, alongside changed_states.
+	// Decoding the top level as the map reads changed_states, which is an array.
+	var resp struct {
+		ServiceResponse map[string]struct {
+			Forecast []Forecast `json:"forecast"`
+		} `json:"service_response"`
 	}
 	err := c.do(ctx, http.MethodPost,
 		"/api/services/weather/get_forecasts?return_response=true", body, &resp)
 	if err != nil {
 		return nil, err
 	}
-	if entry, ok := resp[entityID]; ok {
+	if entry, ok := resp.ServiceResponse[entityID]; ok {
 		return entry.Forecast, nil
 	}
 	return nil, fmt.Errorf("no forecast returned for %s", entityID)

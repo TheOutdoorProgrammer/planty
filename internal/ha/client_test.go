@@ -17,8 +17,13 @@ func forecastServer(t *testing.T, entity string, periods []map[string]any) (*Cli
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen = append(seen, r)
 		w.Header().Set("Content-Type", "application/json")
+		// The shape Home Assistant really returns: the entity map is nested
+		// under service_response, alongside changed_states.
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			entity: map[string]any{"forecast": periods},
+			"changed_states": []any{},
+			"service_response": map[string]any{
+				entity: map[string]any{"forecast": periods},
+			},
 		})
 	}))
 	t.Cleanup(server.Close)

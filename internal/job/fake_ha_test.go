@@ -42,8 +42,13 @@ func newFakeHA(t *testing.T, entity string) *fakeHA {
 
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/api/services/weather/get_forecasts"):
+			// The shape Home Assistant really returns. A fake that flattened
+			// this agreed with the bug and the cold watch never once ran.
 			_ = json.NewEncoder(w).Encode(map[string]any{
-				f.entity: map[string]any{"forecast": f.periods},
+				"changed_states": []any{},
+				"service_response": map[string]any{
+					f.entity: map[string]any{"forecast": f.periods},
+				},
 			})
 
 		case strings.HasPrefix(r.URL.Path, "/api/services/notify/"):
