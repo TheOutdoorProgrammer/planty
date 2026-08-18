@@ -151,26 +151,43 @@ Pollination is called out because indoor tomatoes do not set fruit without physi
 
 Both clients call the same thing. Anything the app can do by tapping, an agent can do by asking.
 
+This is the shipped surface, not a plan. Every route below exists.
+
 ```text
-GET    /v1/plants                 list, filterable by domain, steward, status, watering_method
-POST   /v1/plants                 create
-GET    /v1/plants/{slug}          full record with latest readings and current verdict
-PATCH  /v1/plants/{slug}          update
-DELETE /v1/plants/{slug}          archive, never a hard delete
+GET    /healthz                   liveness, and the only unauthenticated concern
 
-POST   /v1/plants/{slug}/observations   log watered, repotted, symptom, note
-POST   /v1/plants/{slug}/photos         upload, returns the key and queues analysis
-GET    /v1/plants/{slug}/timeline       observations, photos, readings and verdicts, merged
+GET    /v1/plants                 list; filter by domain, steward, status, watering_method, include_archived
+POST   /v1/plants                 create; sparse, the service fills domain/status/steward/accessibility/watering
+GET    /v1/plants/{slug}          record plus risk score, recent observations and last watered
+PATCH  /v1/plants/{slug}          sparse update; omitted fields are left alone
+DELETE /v1/plants/{slug}          archive, never a hard delete; ?status=dead records why
 
-GET    /v1/today                  what needs doing, the digest the app and the agent both read
-POST   /v1/verdicts/{id}/ack      acknowledge
+GET    /v1/plants/{slug}/observations   history, newest first
+POST   /v1/plants/{slug}/observations   log watered, repotted, fertilized, pruned, moved, symptom, note, died
+POST   /v1/plants/{slug}/harvests       log a harvest, with quantity and unit
+POST   /v1/plants/{slug}/photos         upload raw image bytes; Content-Type sets the format
+GET    /v1/plants/{slug}/timeline       photos oldest first, with short-lived links
+POST   /v1/plants/{slug}/diagnose       read the photo timeline and report what changed
+
+GET    /v1/today                  the digest; carries all_clear and stale_since separately
+POST   /v1/verdicts/{id}/ack      acknowledge, which stops escalation
 
 GET    /v1/sensors                links and calibration state
-POST   /v1/sensors                link an HA entity to a plant
-PATCH  /v1/sensors/{id}           record calibration baselines
+POST   /v1/sensors                link a Home Assistant entity to a plant or a zone
+PATCH  /v1/sensors/{id}           record dry and wet baselines
 
-POST   /v1/harvests               log a harvest
+GET    /v1/questions              the owner queue; also returns as_text, ready to send
+POST   /v1/questions              queue one; asked_of defaults to the plant's steward
+POST   /v1/questions/{id}/answer  record what the owner said
+
+POST   /v1/away                   record a period with a backup contact
+
+GET    /v1/cold-watch             which plants need bringing in for a given forecast_low_f
 ```
+
+**Photo upload takes raw bytes, not multipart.** The `Content-Type` header carries the format and `?caption=` carries the note, so a phone client posts the image directly instead of assembling a multipart body.
+
+**`POST /v1/questions` defaults `asked_of` to the plant's steward.** An agent asking a question about a plant should not have to know who owns it.
 
 The Dusk plugin maps its actions onto exactly these endpoints and stores nothing of its own.
 Dusk reflects what this service says, and when this service cannot be reached the plugin reports `partial` rather than an empty catalogue, because an unreachable service and a garden with no plants in it must never look the same.
