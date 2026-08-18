@@ -5,106 +5,110 @@ Nothing is done until it builds, is tested, and is committed.
 
 ## Current state
 
-23 unit tests plus 7 Postgres integration tests, all green under `-race`.
-22 HTTP routes, 8 CLI commands, 3 migrations, verified end to end against a real Postgres.
+**Go:** 32 unit tests plus 9 Postgres integration tests, green under `-race`. 22 routes, 10 commands, 4 migrations.
+**iOS:** 92 tests in 12 suites, `** TEST SUCCEEDED **`, verified independently. Release builds for simulator and arm64 device, zero warnings.
+**Dusk plugin:** 80 tests under `-race`, goreleaser green on four targets.
 
 ## 1. Backend service
 
-- [x] Domain model: Plant, Observation, SensorLink, Reading, Verdict, Photo, Harvest, Digest, Question, AwayPeriod, Postmortem
-- [x] Postgres schema, three migrations, enums, check constraints, partial indexes
-- [x] Store layer for every type, sparse patch update included
+- [x] Domain model for every entity
+- [x] Postgres schema, four migrations, enums, check constraints, partial indexes
+- [x] Store layer, including sparse patch update
 - [x] 22 HTTP routes
 - [x] Archive instead of delete
-- [x] Sparse creates and sparse patches, so an agent can work from half a sentence
-- [x] Sensor links, calibration, readings ingest from Home Assistant
-- [x] Verdicts and the `/v1/today` digest
+- [x] Sparse creates and patches, so an agent can work from half a sentence
+- [x] Sensor links, calibration, readings ingest
+- [x] Verdicts, the `/v1/today` digest, and the escalation ladder
 - [x] Home Assistant client: states, forecast, notify, announce
-- [x] Claude judgment (Opus 5, structured output, refusal handling)
-- [x] Photo storage to S3/MinIO, timeline with presigned links
-- [x] Vision diagnosis across a photo timeline
-- [x] CLI: serve, ingest, daily, cold, away, autopsy, seed, migrate
-- [x] Dockerfile, CI, release workflow, Kubernetes manifests, four CronJobs
+- [x] Claude judgment: daily verdicts, vision diagnosis, autopsies
+- [x] Photo storage to MinIO, timeline with presigned links
+- [x] CLI: serve, ingest, daily, cold, away, chase, water, autopsy, seed, migrate
+- [x] Dockerfile, CI, release workflow, manifests, five CronJobs
 
 ## 2. The things that stop plants dying
 
-- [x] **Cold snap watch**, forecast-driven with a 3F margin biased toward the cheap mistake
+- [x] **Cold snap watch**, forecast-driven, 3F margin biased toward the cheap mistake
 - [x] **Put them back out**, gated on every sheltered plant clearing its own threshold
-- [x] **Runaway safety**, cron-scheduled so there is no `for:` clock to reset
-- [x] **Hydrophobic soil detection**, verified by integration test
-- [x] **Per-sensor calibration**, uncalibrated probes refuse to produce a fraction
-- [x] **Friend's plants are a stricter tier**, weighted in `Risk()`
-- [x] **Sensor priority by accessibility**, typed column feeding `Risk()`
-- [x] **Calm, stale and never-run are three distinct states**, tested
-- [ ] **Closed watering loop.** Needs the LetPot pump exposed through the HSTEP component
-- [ ] **Hand-watered plants nag harder.** Risk scoring is in; repeat escalation is not
+- [x] **Runaway safety**, duration held by the process with a deferred pump-off
+- [x] **Hydrophobic soil detection**, covered by integration test
+- [x] **Per-sensor calibration**, uncalibrated probes refuse to answer
+- [x] **Friend's plants are a stricter tier**
+- [x] **Sensor priority by accessibility**
+- [x] **Calm, stale and never-run are three distinct states**, enforced on both sides
+- [x] **Hand-watered plants nag harder**, bounded three-rung ladder, speakers only on the last rung for a plant whose neglect costs something
+- [x] **Closed watering loop written**, including a single wet plant vetoing the whole line
+- [ ] Watering loop needs the HSTEP component installed and the pump exposed as a switch (hardware, not code)
 
 ## 3. Three domains
 
 - [x] houseplant, edible_indoor, edible_outdoor
-- [x] Care profile: days to maturity, sow and transplant dates, frost dates, succession
-- [x] Harvest logging with quantity and unit
-- [x] **Tomato pollination** carried as `needs_pollination` and surfaced to the judge
-- [x] Fan schedule written as a Home Assistant automation, doubling as pollination agitation
-- [ ] Reminders beyond the daily digest
+- [x] Care profile: maturity, sow and transplant dates, frost dates, succession
+- [x] Harvest logging
+- [x] **Tomato pollination** carried and surfaced to the judge
+- [x] Fan schedule as a Home Assistant automation, doubling as pollination agitation
+- [x] Reminders: the daily digest plus the escalation ladder
 
 ## 4. Mushroom kit: deliberately NOT automated
 
-- [x] Daily reminder automation, gated on an `input_boolean` so it stops when the block is spent
-- [x] Fan on a fixed schedule for fresh air exchange
-- [x] The reasoning written down: an RH threshold over mists, and over misting is exactly how bacterial blotch happens
+- [x] Daily reminder, gated on an `input_boolean` so it stops when the block is spent
+- [x] Fan on a fixed schedule
+- [x] The reasoning written down: an RH threshold over mists, and over misting is how bacterial blotch happens
 
-## 5. Dusk plugin (nerdswhofish/dusk-plugin-planty)
+## 5. Dusk plugin
 
-- [x] Builds, vets clean, **80 tests under `-race`**, goreleaser green on all four targets
-- [x] Full CRUD as actions, proxied to the service, storing nothing in Dusk
-- [x] `partial: true` on an unreachable service, tested from both sides
-- [x] Dry run on every action
-- [x] Four ADRs
+- [x] Builds, 80 tests under `-race`, goreleaser green
+- [x] Full CRUD as actions, storing nothing in Dusk
+- [x] `partial: true` on an unreachable service, tested both ways
+- [x] Dry run on every action, four ADRs
 - [x] Added to `nerdswhofish/go.work`
-- [ ] Wire into Dusk config and mint the `plant` kind as `reference`
+- [ ] Wire into Dusk config and mint the `plant` kind as `reference` (Joey's call)
 
-## 6. iOS app (SwiftUI)
+## 6. iOS app
 
-- [x] 57 Swift files: models, networking, config, design system, screens
-- [ ] Agent still running; needs compile confirmation and a review pass
+- [x] Xcode project, 48 app files, 10 test files
+- [x] **92 tests in 12 suites passing**, verified independently
+- [x] Release builds for simulator and arm64 device, zero warnings, Swift 6 strict concurrency
+- [x] Calm versus stale as a pure function with 20+ tests; staleness removes reassurance, never an alarm
+- [x] Three tabs, diagnosis from a photo, no health claims, purple badges that only change sort order
+- [ ] Diagnosis replies still stubbed; `RemoteDiagnosisService` written, swap is one line
+- [ ] Photo comparison scrubber, sensor calibration writes, notifications
 
 ## 7. Three additions
 
 ### 7a. Away mode
 
-- [x] Away periods with a backup contact
-- [x] Cold watch escalates to the backup while away
-- [x] Pre-departure pass naming the hand-watered plants
-- [x] Return briefing
+- [x] Away periods, backup contact, cold watch and chase both escalate to the backup
+- [x] Pre-departure pass, return briefing
 
 ### 7b. Post-mortem
 
-- [x] Full history gathering, reading thinning, Claude analysis, storage
-- [x] `planty autopsy <slug>`
-- [ ] Trigger automatically on status change to dead
+- [x] History gathering, reading thinning, Claude analysis, storage, `planty autopsy`
+- [x] Sweeps automatically with the daily job
 - [ ] Write a Dusk gotcha note attached to the plant
 
 ### 7c. Ask-the-owner queue
 
-- [x] Queue, API, `as_text` rendering, seeded with the seven real questions
+- [x] Queue, API, `as_text` rendering, seeded with seven real questions
 - [x] `asked_of` defaults to the plant's steward
 
 ## 8. Seed data
 
-- [x] The friend's five, with the owner's exact words
-- [x] All five at a 55F threshold
-- [x] Tests assert every seeded plant validates and carries a threshold
-- [x] Seeding runs in CI against a real Postgres
+- [x] The friend's five with his exact words, all at 55F, validated in CI
 
 ## 9. Brand
 
-- [x] Mascot: the seal, open-eyed and closed-eyed, hero and icon, with measured scale tests
+- [x] Mascot: the seal. Hero and icon, open and closed eyes, measured scale tests
+- [x] Wordmarks for dark and light backgrounds
+- [x] `design/MASCOT.md` resolves the drift across three older design docs
 - [ ] Joey picks open versus closed
-- [ ] Wordmark for dark and light backgrounds
 
 ## 10. Bugs found while building
 
-- [x] `.gitignore`: unanchored `planty` also matched the `cmd/planty` source directory
+- [x] `.gitignore`: unanchored `planty` also matched the `cmd/planty` source directory, so `main.go` was never committed
 - [x] `nerdswhofish/go.work` did not list the new plugin
-- [x] **The digest join emitted invalid SQL.** Splitting a column list on commas shredded every `coalesce(x, '')` into two fragments. Compiled fine, passed every unit test, failed only against a real Postgres. Now generated rather than string-substituted, and covered by an integration test
-- [x] `stale_since` used a zero-time sentinel to mean "never ran". Now an explicit `never_run`
+- [x] **The digest join emitted invalid SQL.** Splitting a column list on commas shredded every `coalesce(x, '')`. Compiled, vetted, passed every unit test, failed only against real Postgres. Now generated, and covered
+- [x] `stale_since` used a zero-time sentinel for "never ran". Now an explicit `never_run`
+- [x] iOS `RelativeAge.phrase` ignored its `now` parameter, so "3 days ago" rendered as "last year"
+- [x] iOS requested camera permission on launch, because `TabView` builds neighbouring tabs eagerly
+- [x] **Client and server had drifted apart:** the app assumed multipart upload and `/diagnosis`, the service shipped raw bytes and `/diagnose`. Server now accepts both upload shapes and uses `/diagnosis`
+- [x] `GET /v1/plants/{slug}` did not return what the contract promised. Now includes readings and the current verdict
