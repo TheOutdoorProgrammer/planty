@@ -13,63 +13,72 @@ on:
         type: choice
         default: patch
         options: [patch, minor, major]
+      dry-run:
+        description: Build and sign, publish nothing, cut no tag
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 jobs:
   release:
-    runs-on: macos-15
+    # Xcode 26 is the default here, which the iOS 26 deployment target needs.
+    runs-on: macos-26
     permissions:
       contents: write
-      # Publishing to Fledge with a workload identity token, so there is no
-      # upload token stored in this repository at all.
+      # Publishing with a workload identity token, so no upload token is
+      # stored in this repository at all.
       id-token: write
     steps:
       - uses: actions/checkout@v5
         with:
           # Not optional: quill reads the tag list to work out the next version
-          # and refuses a shallow checkout rather than restarting the line at 0.
+          # and refuses a shallow checkout rather than restarting from zero.
           fetch-depth: 0
 
-      - name: Xcode
-        run: sudo xcode-select -s /Applications/Xcode_26.app
-
-      # Automatic signing needs an account. On a runner that means an App Store
-      # Connect key, because there is no Xcode session to borrow one from.
-      - name: App Store Connect key
-        env:
-          KEY: ${{ secrets.ASC_KEY_P8 }}
-          KEY_ID: ${{ secrets.ASC_KEY_ID }}
-        run: |
-          mkdir -p ~/private_keys
-          printf '%s' "$KEY" > ~/private_keys/AuthKey_${KEY_ID}.p8
+      - name: Toolchain
+        run: xcodebuild -version
 
       - name: Test
+        working-directory: ios
         run: |
           xcodebuild test \
             -scheme Planty \
-            -destination 'platform=iOS Simulator,name=iPhone 17' \
-            -skipPackagePluginValidation
-        working-directory: ios
+            -destination 'platform=iOS Simulator,name=iPhone 17'
+
+      # Automatic signing needs an account, and a runner has no Xcode session
+      # to borrow one from, so it authenticates with an App Store Connect key.
+      - name: App Store Connect key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/keys"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
 
       - name: Archive and export
+        working-directory: ios
         env:
-          ASC_ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           TEAM: ${{ secrets.APPLE_TEAM_ID }}
           PLANTY_BASE_URL: ${{ secrets.PLANTY_BASE_URL }}
           FLEDGE_BASE_URL: ${{ secrets.FLEDGE_URL }}
         run: |
           set -euo pipefail
+          auth=(
+            -allowProvisioningUpdates
+            -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
+            -authenticationKeyID "$ASC_KEY_ID"
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          )
+
           xcodebuild archive \
             -scheme Planty \
             -archivePath "$RUNNER_TEMP/Planty.xcarchive" \
             -destination 'generic/platform=iOS' \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER" \
+            "${auth[@]}" \
             DEVELOPMENT_TEAM="$TEAM" \
             PLANTY_BASE_URL="$PLANTY_BASE_URL" \
             FLEDGE_BASE_URL="$FLEDGE_BASE_URL"
@@ -89,22 +98,23 @@ jobs:
             -archivePath "$RUNNER_TEMP/Planty.xcarchive" \
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_${ASC_KEY_ID}.p8 \
-            -authenticationKeyID "$ASC_KEY_ID" \
-            -authenticationKeyIssuerID "$ASC_ISSUER"
-        working-directory: ios
+            "${auth[@]}"
+
+          ls -la "$RUNNER_TEMP/export"
 
       - uses: TheOutdoorProgrammer/quill@v1
         id: release
         with:
           bump: ${{ inputs.bump }}
           scope: ${{ inputs.scope }}
+          dry-run: ${{ inputs.dry-run }}
           publish: fledge
           fledge-server: ${{ secrets.FLEDGE_URL }}
-          # Passed so the archive is checked before a tag is cut: a missing one
-          # otherwise burns the version number.
+          # Passed so the archive is checked before the tag is cut. Without it
+          # a missing archive fails afterwards and burns the version number.
           fledge-ipa: ${{ runner.temp }}/export/*.ipa
 
       - name: Where it landed
-        run: echo "${{ steps.release.outputs.page-url }}" >> "$GITHUB_STEP_SUMMARY"
+        if: steps.release.outputs.page-url != ''
+        run: |
+          echo "Install page: ${{ steps.release.outputs.page-url }}" >> "$GITHUB_STEP_SUMMARY"
