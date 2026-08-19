@@ -113,7 +113,9 @@ final class AppSession {
     }
 
     func diagnosisStore(plant: Plant, photo: CapturedPhoto?) -> DiagnosisStore {
-        DiagnosisStore(service: diagnosis, api: api, plant: plant, photo: photo)
+        DiagnosisStore(service: diagnosis, api: api, plant: plant, photo: photo) { [capture] _ in
+            await capture.upload()?.id
+        }
     }
 
     func consultStore(for plant: Plant) -> ConsultStore {

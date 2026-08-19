@@ -9,6 +9,7 @@ import Observation
 final class RemindersStore {
     private(set) var reminders: [Reminder] = []
     private(set) var isLoading = false
+    private(set) var hasLoaded = false
     private(set) var error: PlantyError?
 
     let plant: Plant
@@ -33,13 +34,18 @@ final class RemindersStore {
         do {
             reminders = try await api.reminders(slug: plant.slug)
             error = nil
+            hasLoaded = true
         } catch {
             guard !PlantyError.isCancellation(error) else { return }
             self.error = PlantyError.from(error)
+            hasLoaded = true
         }
     }
 
-    func save(_ reminder: NewReminder) async {
+    /// Returns the failure instead of banking it, so the sheet that owns the
+    /// draft can keep the draft on screen. Callers with no sheet of their own
+    /// bank the failure into `error` themselves.
+    func save(_ reminder: NewReminder) async -> PlantyError? {
         do {
             let saved = try await api.setReminder(slug: plant.slug, reminder: reminder)
             if let index = reminders.firstIndex(where: { $0.kind == saved.kind }) {
@@ -49,13 +55,14 @@ final class RemindersStore {
             }
             // Due-ness comes from the service, and a fresh reminder has none.
             await load()
+            return nil
         } catch {
-            self.error = PlantyError.from(error)
+            return PlantyError.from(error)
         }
     }
 
     func setActive(_ reminder: Reminder, to active: Bool) async {
-        await save(
+        let failure = await save(
             NewReminder(
                 kind: reminder.kind,
                 everyDays: reminder.everyDays,
@@ -64,6 +71,7 @@ final class RemindersStore {
                 note: reminder.note
             )
         )
+        if let failure { error = failure }
     }
 
     func delete(_ reminder: Reminder) async {
@@ -78,6 +86,9 @@ final class RemindersStore {
     /// Records that the chore was done, which is the only thing that moves a
     /// reminder's next due date.
     func markDone(_ reminder: Reminder) async {
+        // A paused reminder must not record: one mis-tap would forge a watering
+        // claim, and the service's sensor verification then reads it as a clog.
+        guard reminder.active else { return }
         do {
             _ = try await api.addObservation(
                 slug: plant.slug,

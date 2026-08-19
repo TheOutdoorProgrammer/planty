@@ -41,7 +41,7 @@ struct DiagnosisScreen: View {
         .navigationTitle(store.plant.commonName)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) { composer }
-        .task { await store.begin(comparingAgainst: 0) }
+        .task { await store.begin() }
     }
 
     private func capturedPhoto(_ photo: CapturedPhoto) -> some View {

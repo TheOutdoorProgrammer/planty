@@ -19,16 +19,22 @@ final class DiagnosisStore {
     private let api: any PlantyAPI
     private var conversationID: UUID?
 
+    /// Uploads today's photo and answers with its stored id. Injected because
+    /// the capture flow owns the image and its upload state.
+    private let uploader: (@MainActor (CapturedPhoto) async -> UUID?)?
+
     init(
         service: any DiagnosisService,
         api: any PlantyAPI,
         plant: Plant,
-        photo: CapturedPhoto?
+        photo: CapturedPhoto?,
+        uploader: (@MainActor (CapturedPhoto) async -> UUID?)? = nil
     ) {
         self.service = service
         self.api = api
         self.plant = plant
         self.photo = photo
+        self.uploader = uploader
     }
 
     var latestTurn: DiagnosisTurn? {
@@ -41,19 +47,47 @@ final class DiagnosisStore {
 
     /// Only ever counts photos it actually has, because "Comparing today's
     /// photo with 6 earlier photos" has to be true to be worth saying.
-    func begin(comparingAgainst earlierPhotos: Int) async {
+    ///
+    /// The count is read here rather than passed in: the caller used to hand
+    /// over a hardcoded zero, so every diagnosis opened by claiming there was
+    /// nothing earlier to compare against, for a product whose whole job is
+    /// the comparison.
+    func begin() async {
         guard messages.isEmpty else { return }
         messages.append(DiagnosisMessage(speaker: .user, text: "Something looks off."))
-        stageLine = earlierPhotos > 0
-            ? "Comparing today's photo with \(earlierPhotos) earlier photos."
+        isThinking = true
+        stageLine = "Sending today's photo."
+
+        let uploadedID = await uploadIfNeeded()
+        let earlier = await countEarlierPhotos()
+        isThinking = false
+
+        stageLine = earlier > 0
+            ? "Comparing today's photo with \(earlier) earlier \(earlier == 1 ? "photo" : "photos")."
             : "Reading today's photo. There is nothing earlier to compare it with."
-        await ask { [service, plant, photo] in
+
+        await ask { [service, plant] in
             try await service.open(
                 slug: plant.slug,
-                photoID: photo?.uploaded?.id,
+                photoID: uploadedID,
                 prompt: "Something looks off."
             )
         }
+    }
+
+    /// The model is asked about a specific frame, so that frame has to exist
+    /// on the service. A failure here is not fatal: the answer degrades to the
+    /// stored timeline rather than not arriving.
+    private func uploadIfNeeded() async -> UUID? {
+        if let already = photo?.uploaded?.id { return already }
+        guard let photo, let uploader else { return nil }
+        return await uploader(photo)
+    }
+
+    private func countEarlierPhotos() async -> Int {
+        guard let timeline = try? await api.timeline(slug: plant.slug) else { return 0 }
+        let todays = photo?.uploaded?.id
+        return timeline.photos.filter { $0.id != todays }.count
     }
 
     func send() async {
