@@ -110,7 +110,7 @@ cmd/planty/          The binary: serve plus the scheduled jobs
 internal/plant/      Domain types shared by every surface
 internal/store/      Postgres, and the only thing that touches it
 internal/api/        HTTP, the whole contract in docs/DATA-MODEL.md
-internal/judge/      Claude: daily verdicts, vision diagnosis, consultations, autopsies
+internal/judge/      Claude: daily verdicts, consultations, identification, autopsies
 internal/agent/      The only commands a model may run, and the hook that enforces it
 internal/job/        Scheduled work
 internal/photos/     S3/MinIO object storage
