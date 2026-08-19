@@ -168,4 +168,3 @@ func valueOf(args []string, flag string) string {
 	}
 	return "<absent>"
 }
-

@@ -282,7 +282,7 @@ func TestTimelineIsCappedAtTheNewestFrames(t *testing.T) {
 // is dead, and it then answers a question about a living plant as an autopsy.
 func TestALivingPlantIsNotNarratedAsDead(t *testing.T) {
 	h := History{Plant: plant.Plant{
-		CommonName: "Golden pothos",
+		CommonName:  "Golden pothos",
 		CareProfile: plant.CareProfile{OwnerSays: "it likes being ignored"},
 	}}
 
