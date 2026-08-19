@@ -292,8 +292,9 @@ struct OpenQuestionTests {
         let store = TodayStore(api: api, isConfigured: true)
         await store.load()
 
-        await store.answer(question, with: "About three years")
+        let failure = await store.answer(question, with: "About three years")
 
+        #expect(failure == nil)
         #expect(api.answeredQuestions.count == 1)
         #expect(api.answeredQuestions.first?.1 == "About three years")
     }
@@ -304,8 +305,22 @@ struct OpenQuestionTests {
         let api = FakeAPI()
         let store = TodayStore(api: api, isConfigured: true)
 
-        await store.answer(.fixture(), with: "   ")
+        let failure = await store.answer(.fixture(), with: "   ")
 
+        #expect(failure == nil)
+        #expect(api.answeredQuestions.isEmpty)
+    }
+
+    @Test("A failed answer is returned to the sheet")
+    @MainActor
+    func answerFailureIsReturned() async {
+        let api = FakeAPI()
+        api.failure = .offline
+        let store = TodayStore(api: api, isConfigured: true)
+
+        let failure = await store.answer(.fixture(), with: "About three years")
+
+        #expect(failure == .offline)
         #expect(api.answeredQuestions.isEmpty)
     }
 

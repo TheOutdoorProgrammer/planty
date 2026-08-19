@@ -119,14 +119,15 @@ final class TodayStore {
     /// queue has an outlet instead of filling up unread.
     var openQuestions: [OpenQuestion] { digest?.openQuestions ?? [] }
 
-    func answer(_ question: OpenQuestion, with words: String) async {
+    func answer(_ question: OpenQuestion, with words: String) async -> PlantyError? {
         let said = words.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !said.isEmpty else { return }
+        guard !said.isEmpty else { return nil }
         do {
             try await api.answerQuestion(id: question.id, answer: said)
             await load()
+            return nil
         } catch {
-            actionError = PlantyError.from(error)
+            return PlantyError.from(error)
         }
     }
 

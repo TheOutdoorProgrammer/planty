@@ -110,9 +110,10 @@ An item is checked only after the implementation, regression test, commit, and p
   A slower result for photo A can overwrite the candidates displayed beside photo B.
   Fixed by assigning every identification a request identity and allowing only the newest request to publish, with a regression test where the first photo finishes last.
 
-- [ ] **PNT-021 — Owner-question answer failures discard the typed answer.**
+- [x] **PNT-021 — Owner-question answer failures discard the typed answer.**
   `TodayStore.answer` absorbs the failure, while `AnswerSheet` always dismisses after awaiting it.
   The error appears only after the exact answer text has been destroyed.
+  Fixed by returning the write failure to the answer sheet, keeping the sheet and typed answer in place, and rendering the failure beside the draft.
 
 - [ ] **PNT-022 — Note-save failures are invisible inside the editor.**
   `NotesStore` records the error behind the presented sheet, while `NoteSheet` receives only a false Boolean and renders no failure.

@@ -5,7 +5,7 @@ import SwiftUI
 /// are not in the conversation to be asked.
 struct OpenQuestionsCard: View {
     let questions: [OpenQuestion]
-    let answer: (OpenQuestion, String) async -> Void
+    let answer: (OpenQuestion, String) async -> PlantyError?
 
     @State private var answering: OpenQuestion?
 
@@ -78,15 +78,24 @@ struct OpenQuestionsCard: View {
 /// Records what the person said, in their words rather than a summary.
 private struct AnswerSheet: View {
     let question: OpenQuestion
-    let save: (String) async -> Void
+    let save: (String) async -> PlantyError?
 
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @State private var saving = false
+    @State private var failure: PlantyError?
 
     var body: some View {
         NavigationStack {
             Form {
+                if let failure {
+                    Section {
+                        SheetErrorRow(
+                            headline: "Not saved. Your answer is still here.",
+                            error: failure
+                        )
+                    }
+                }
                 Section {
                     Text(question.question)
                         .font(.headline)
@@ -109,18 +118,22 @@ private struct AnswerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .disabled(saving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         saving = true
+                        failure = nil
                         Task {
-                            await save(text)
-                            dismiss()
+                            failure = await save(text)
+                            saving = false
+                            if failure == nil { dismiss() }
                         }
                     }
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
                 }
             }
         }
+        .interactiveDismissDisabled(saving)
     }
 }
