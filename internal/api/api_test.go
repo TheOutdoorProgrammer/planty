@@ -606,6 +606,29 @@ func TestShelterNeedsToKnowWhatMoved(t *testing.T) {
 	}
 }
 
+func TestMalformedShelterRequestCannotMoveEverything(t *testing.T) {
+	h, db, ctx := newServer(t)
+	minTemp := 55.0
+	slug := createPlant(t, h, map[string]any{
+		"common_name": "Still outside", "slug": unique("still-outside"), "min_temp_f": minTemp,
+	})
+	req := httptest.NewRequest(http.MethodPost, "/v1/shelter", strings.NewReader(`{"all":true`))
+	rec := httptest.NewRecorder()
+
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+	p, err := db.GetPlant(ctx, slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.ShelteredAt != nil {
+		t.Fatal("a partially decoded request moved every plant")
+	}
+}
+
 func TestPostmortemsListIsEmptyNotNull(t *testing.T) {
 	h, _, _ := newServer(t)
 

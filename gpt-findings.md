@@ -66,9 +66,10 @@ An item is checked only after the implementation, regression test, commit, and p
   The server binds all interfaces, has no authentication or Origin/Host protection, and JSON handlers do not consistently require `application/json`.
   A hostile website opened by a LAN client can send simple blind writes even though CORS prevents it from reading responses.
 
-- [ ] **PNT-012 — Malformed shelter JSON can still execute a bulk move.**
+- [x] **PNT-012 — Malformed shelter JSON can still execute a bulk move.**
   `internal/api/shelter.go:27-46` discards the decoder error and then inspects a partially populated request.
   A truncated body that decoded `"all": true` first can mutate every eligible plant.
+  Fixed by rejecting decode failures before inspecting any request fields, with an integration test proving a partially decoded bulk request leaves the plant outside.
 
 - [ ] **PNT-013 — Plant PATCH bypasses aggregate validation.**
   Creation calls `Plant.Valid`, but `internal/store/update.go:39-132` writes patch fields directly.

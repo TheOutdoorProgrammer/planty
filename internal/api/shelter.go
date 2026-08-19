@@ -27,7 +27,10 @@ func (s *Server) unshelter(w http.ResponseWriter, r *http.Request) {
 func (s *Server) moveIndoors(w http.ResponseWriter, r *http.Request, inside bool) {
 	var ask shelterRequest
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&ask)
+		if err := json.NewDecoder(r.Body).Decode(&ask); err != nil {
+			s.fail(w, http.StatusBadRequest, errors.New("shelter request must be valid JSON"))
+			return
+		}
 	}
 	if !ask.All && len(ask.Slugs) == 0 {
 		s.fail(w, http.StatusBadRequest,
