@@ -20,9 +20,11 @@ import (
 const MaxOfferedPhotos = 12
 
 // consultRequest is a question about a plant, optionally continuing an earlier
-// conversation. No photograph: the record is the subject.
+// conversation and optionally carrying a photograph taken to answer one the
+// model asked for, which is the only way to satisfy "show me the undersides".
 type consultRequest struct {
 	Message        string     `json:"message"`
+	Photo          string     `json:"photo,omitempty"`
 	ConversationID *uuid.UUID `json:"conversation_id,omitempty"`
 }
 
@@ -64,8 +66,26 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// A photograph taken mid-conversation is usually one the model asked for,
+	// so it is kept against the plant rather than discarded: a close-up of the
+	// undersides of the leaves is exactly the history worth having later.
+	offered := s.offerPhotos(r, p)
+	var attached *uuid.UUID
+	if ask.Photo != "" {
+		shot, raw, media, err := s.keepAnswerPhoto(r.Context(), p, ask.Photo)
+		if err != nil {
+			s.fail(w, statusForPhoto(err), err)
+			return
+		}
+		attached = &shot.ID
+		offered = append(offered, judge.Offer{
+			Label: "just taken, in answer to what you asked for",
+			Media: media, Bytes: raw,
+		})
+	}
+
 	answer, err := s.judge.Consult(
-		r.Context(), history, s.offerPhotos(r, p), ask.Message, prior, conversation)
+		r.Context(), history, offered, ask.Message, prior, conversation)
 	if err != nil {
 		s.fail(w, http.StatusBadGateway, err)
 		return
@@ -76,6 +96,7 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 		ConversationID: conversation,
 		Asked:          ask.Message,
 		Reply:          answer,
+		PhotoID:        attached,
 	})
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)

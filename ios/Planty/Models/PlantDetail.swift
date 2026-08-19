@@ -12,6 +12,10 @@ struct PlantDetail: Decodable, Sendable, Hashable {
     var sensors: [SensorLink]?
     var readings: [Reading]?
 
+    /// Read from the envelope as well as from the plant inside it, because the
+    /// endpoint may hang it off either and reading only one would show nothing.
+    var toxicity: Toxicity?
+
     enum CodingKeys: String, CodingKey {
         case plant
         case risk
@@ -21,6 +25,7 @@ struct PlantDetail: Decodable, Sendable, Hashable {
         case photos
         case sensors
         case readings
+        case toxicity
     }
 }
 

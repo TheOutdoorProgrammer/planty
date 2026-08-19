@@ -19,9 +19,13 @@ protocol PlantyAPI: Sendable {
     func shelter(slugs: [String], indoors: Bool) async throws -> Int
     func identify(jpeg: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate]
 
-    /// Ask about a plant from its record. No photograph: the answer comes from
-    /// what is already known, and any pictures are offered rather than sent.
+    /// Ask about a plant from its record. The answer comes from what is already
+    /// known; a photo only rides along when the model asked to see something.
     func ask(slug: String, question: PlantQuestion) async throws -> PlantAnswer
+
+    /// Ask about anything, naming no plant. Creates nothing, so photographing
+    /// a stranger's fern is not a reason to invent a record for it.
+    func ask(_ question: ScratchQuestion) async throws -> ScratchAnswer
 
     /// Create a plant from a photograph: identified, recorded, and the picture
     /// kept as the first frame of its story.

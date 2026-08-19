@@ -44,6 +44,11 @@ struct Plant: Codable, Sendable, Hashable, Identifiable {
     var photoURL: URL?
     var photoTakenAt: Date?
 
+    /// Species-level, so it rides with the plant rather than the detail
+    /// envelope. Nil means the endpoint sent none, which is not the same as
+    /// a record whose ratings are all `unknown`.
+    var toxicity: Toxicity?
+
     enum CodingKeys: String, CodingKey {
         case id
         case slug
@@ -72,6 +77,7 @@ struct Plant: Codable, Sendable, Hashable, Identifiable {
         case updatedAt = "updated_at"
         case photoURL = "photo_url"
         case photoTakenAt = "photo_taken_at"
+        case toxicity
     }
 }
 

@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
@@ -15,16 +17,47 @@ func (s *Store) SavePhoto(ctx context.Context, p plant.Photo) (plant.Photo, erro
 	if p.TakenAt.IsZero() {
 		p.TakenAt = time.Now().UTC()
 	}
+	// A photograph taken to ask about something nobody owns belongs to no
+	// plant, and the zero uuid is how that arrives here.
+	var owner any
+	if p.PlantID != uuid.Nil {
+		owner = p.PlantID
+	}
+
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO photos (plant_id, storage_key, taken_at, caption)
 		VALUES ($1, $2, $3, nullif($4,''))
 		RETURNING id, plant_id, storage_key, taken_at, coalesce(caption,''),
 		          coalesce(vision_findings,''), analyzed_at, created_at`,
-		p.PlantID, p.StorageKey, p.TakenAt, p.Caption)
+		owner, p.StorageKey, p.TakenAt, p.Caption)
 
 	var out plant.Photo
-	err := row.Scan(&out.ID, &out.PlantID, &out.StorageKey, &out.TakenAt,
+	var back *uuid.UUID
+	err := row.Scan(&out.ID, &back, &out.StorageKey, &out.TakenAt,
 		&out.Caption, &out.VisionFindings, &out.AnalyzedAt, &out.CreatedAt)
+	if back != nil {
+		out.PlantID = *back
+	}
+	return out, err
+}
+
+// Photo returns one image by id, whether or not it belongs to a plant.
+func (s *Store) Photo(ctx context.Context, id uuid.UUID) (plant.Photo, error) {
+	row := s.pool.QueryRow(ctx, `
+		SELECT id, plant_id, storage_key, taken_at, coalesce(caption,''),
+		       coalesce(vision_findings,''), analyzed_at, created_at
+		FROM photos WHERE id = $1`, id)
+
+	var out plant.Photo
+	var owner *uuid.UUID
+	err := row.Scan(&out.ID, &owner, &out.StorageKey, &out.TakenAt,
+		&out.Caption, &out.VisionFindings, &out.AnalyzedAt, &out.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plant.Photo{}, ErrNotFound
+	}
+	if owner != nil {
+		out.PlantID = *owner
+	}
 	return out, err
 }
 

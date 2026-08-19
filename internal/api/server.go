@@ -61,6 +61,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PUT /v1/plants/{slug}/reminders", s.setReminder)
 	mux.HandleFunc("DELETE /v1/plants/{slug}/reminders/{kind}", s.deleteReminder)
 
+	// No slug: a question about something in a shop is not a plant you own.
+	mux.HandleFunc("POST /v1/ask", s.ask)
+
 	mux.HandleFunc("POST /v1/identify", s.identify)
 	mux.HandleFunc("POST /v1/plants/from-photo", s.plantFromPhoto)
 

@@ -69,7 +69,12 @@ type ConsultTurn struct {
 	ConversationID uuid.UUID    `json:"conversation_id"`
 	Asked          string       `json:"asked"`
 	Reply          judge.Answer `json:"reply"`
-	CreatedAt      time.Time    `json:"created_at"`
+
+	// Set when the person attached a photograph to this turn, which is how a
+	// conversation survives losing its model session: the pictures can be
+	// handed over again rather than being gone.
+	PhotoID   *uuid.UUID `json:"photo_id,omitempty"`
+	CreatedAt time.Time  `json:"created_at"`
 }
 
 // SaveConsultTurn records one question and its answer.
@@ -84,6 +89,7 @@ func (s *Store) SaveConsultTurn(ctx context.Context, t ConsultTurn) (ConsultTurn
 		ConversationID: t.ConversationID,
 		Asked:          t.Asked,
 		Reply:          reply,
+		PhotoID:        t.PhotoID,
 	})
 	if err != nil {
 		return ConsultTurn{}, err
@@ -126,7 +132,7 @@ func asDiagnosis(t turn) (DiagnosisTurn, error) {
 func asConsult(t turn) (ConsultTurn, error) {
 	out := ConsultTurn{
 		ID: t.ID, PlantID: t.PlantID, ConversationID: t.ConversationID,
-		Asked: t.Asked, CreatedAt: t.CreatedAt,
+		Asked: t.Asked, PhotoID: t.PhotoID, CreatedAt: t.CreatedAt,
 	}
 	if len(t.Reply) > 0 {
 		if err := json.Unmarshal(t.Reply, &out.Reply); err != nil {

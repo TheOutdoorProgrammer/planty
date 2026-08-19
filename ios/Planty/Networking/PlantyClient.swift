@@ -65,6 +65,10 @@ struct PlantyClient: PlantyAPI {
                        body: question, patience: Patience.model)
     }
 
+    func ask(_ question: ScratchQuestion) async throws -> ScratchAnswer {
+        try await send("POST", "/v1/ask", body: question, patience: Patience.model)
+    }
+
     /// Naming, creating and keeping the photograph are one call, so a first
     /// plant cannot end up half-made with its picture thrown away.
     func createPlantFromPhoto(_ ask: PlantFromPhoto) async throws -> PlantFromPhotoResult {

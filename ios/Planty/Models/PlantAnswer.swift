@@ -29,15 +29,47 @@ struct PlantAnswer: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// What the app sends to ask something. No photograph: the record is the
-/// subject, and requiring a new picture to ask anything is the thing this
-/// endpoint exists to avoid.
-struct PlantQuestion: Encodable, Sendable {
+/// What the app sends to ask something. The record is the subject, so a photo
+/// is optional: it is there for the turn where the model asks to see one.
+struct PlantQuestion: Encodable, Sendable, Hashable {
     var message: String
+
+    /// Base64 JPEG on the wire, which is what `Data` encodes to by default.
+    var photo: Data?
     var conversationID: UUID?
 
     enum CodingKeys: String, CodingKey {
         case message
+        case photo
         case conversationID = "conversation_id"
+    }
+}
+
+/// POST /v1/ask. A question about anything at all: no plant is named, none is
+/// created, and no plant's timeline is touched.
+struct ScratchQuestion: Encodable, Sendable, Hashable {
+    /// Both optional, at least one required. A photo on its own is a question.
+    var message: String?
+    var photo: Data?
+    var conversationID: UUID?
+
+    enum CodingKeys: String, CodingKey {
+        case message
+        case photo
+        case conversationID = "conversation_id"
+    }
+}
+
+/// What POST /v1/ask answers with. Flatter than PlantAnswer because there is no
+/// record behind it to cite, look at, or suggest follow-ups from.
+struct ScratchAnswer: Decodable, Sendable, Hashable, Identifiable {
+    let id: UUID
+    let conversationID: UUID
+    let answer: String
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case conversationID = "conversation_id"
+        case answer
     }
 }

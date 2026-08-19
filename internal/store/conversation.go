@@ -33,11 +33,18 @@ func (s *Store) saveTurn(ctx context.Context, kind string, t turn) (turn, error)
 	if t.ConversationID == uuid.Nil {
 		t.ConversationID = uuid.New()
 	}
+	// A question about a plant nobody owns has no plant, and the zero uuid is
+	// how that arrives here. Writing it literally would fail the foreign key.
+	var owner any
+	if t.PlantID != uuid.Nil {
+		owner = t.PlantID
+	}
+
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO diagnosis_turns (plant_id, conversation_id, asked, reply, photo_id, kind)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING `+turnColumns,
-		t.PlantID, t.ConversationID, t.Asked, []byte(t.Reply), t.PhotoID, kind)
+		owner, t.ConversationID, t.Asked, []byte(t.Reply), t.PhotoID, kind)
 	return scanTurn(row)
 }
 
@@ -67,10 +74,14 @@ func (s *Store) conversation(ctx context.Context, kind string,
 func scanTurn(row interface{ Scan(dest ...any) error }) (turn, error) {
 	var t turn
 	var reply []byte
+	var owner *uuid.UUID
 
-	if err := row.Scan(&t.ID, &t.PlantID, &t.ConversationID, &t.Asked,
+	if err := row.Scan(&t.ID, &owner, &t.ConversationID, &t.Asked,
 		&reply, &t.PhotoID, &t.CreatedAt); err != nil {
 		return turn{}, err
+	}
+	if owner != nil {
+		t.PlantID = *owner
 	}
 	t.Reply = reply
 	return t, nil
