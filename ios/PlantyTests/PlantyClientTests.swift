@@ -266,6 +266,66 @@ struct PlantyClientTests {
         )
     }
 
+    /// Both ask endpoints wait on a model, and both may carry a picture. A
+    /// wrong path here is a 404 that no unit test above would have caught.
+    @Test("Both ask endpoints post where the contract says, with the photo inline")
+    func askEndpointsCarryTheirPhoto() async throws {
+        let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0])
+
+        StubTransport.respond(json: #"""
+            {
+              "id": "4E4D4C4B-4A49-4847-4645-444342414039",
+              "conversation_id": "5F5E5D5C-5B5A-5958-5756-555453525150",
+              "answer": "That is a peace lily."
+            }
+            """#)
+        _ = try await StubTransport.client().ask(ScratchQuestion(message: "what is this?", photo: jpeg))
+
+        var request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/ask")
+        #expect(request.timeoutInterval == Patience.model, "a scratch ask waits on a model")
+        var body = try #require(String(bytes: try #require(request.httpBody), encoding: .utf8))
+        #expect(body.contains("\"photo\":\"\(jpeg.base64EncodedString())\""))
+
+        StubTransport.respond(json: #"""
+            {
+              "id": "4E4D4C4B-4A49-4847-4645-444342414039",
+              "conversation_id": "5F5E5D5C-5B5A-5958-5756-555453525150",
+              "reply": "It looks fine.",
+              "confidence": 0.8,
+              "suggested_follow_ups": []
+            }
+            """#)
+        _ = try await StubTransport.client().ask(
+            slug: "mona",
+            question: PlantQuestion(message: "look here", photo: jpeg)
+        )
+
+        request = try #require(StubResponder.shared.requests.first)
+        #expect(request.url?.path == "/v1/plants/mona/ask")
+        #expect(request.timeoutInterval == Patience.model)
+        body = try #require(String(bytes: try #require(request.httpBody), encoding: .utf8))
+        #expect(body.contains("\"photo\":\"\(jpeg.base64EncodedString())\""))
+    }
+
+    @Test("A question with no photo sends no photo key at all")
+    func aQuestionWithoutAPhotoOmitsIt() async throws {
+        StubTransport.respond(json: #"""
+            {
+              "id": "4E4D4C4B-4A49-4847-4645-444342414039",
+              "conversation_id": "5F5E5D5C-5B5A-5958-5756-555453525150",
+              "answer": "Hard to say without seeing it."
+            }
+            """#)
+        _ = try await StubTransport.client().ask(ScratchQuestion(message: "what is this?"))
+
+        let request = try #require(StubResponder.shared.requests.first)
+        let body = try #require(String(bytes: try #require(request.httpBody), encoding: .utf8))
+        #expect(!body.contains("photo"))
+        #expect(!body.contains("conversation_id"), "a new conversation resumes nothing")
+    }
+
     @Test("A slug with a space still builds a usable path")
     func escapesSlug() async throws {
         StubTransport.respond(json: #"{"observations": []}"#)
@@ -313,5 +373,25 @@ struct PatienceTests {
     @Test("An ordinary read still fails fast")
     func ordinaryCallsFailFast() {
         #expect(Patience.ordinary <= 30, "a hung read must become a visible error")
+    }
+
+    /// `timeoutIntervalForResource` belongs to the session and caps the whole
+    /// load, so a 60 second one silently truncated every 180 second request.
+    @Test("The patient session's resource limit does not cap its own requests")
+    func patientSessionIsNotCappedByItsOwnResourceLimit() {
+        let patient = URLSession.plantyPatient.configuration
+
+        #expect(patient.timeoutIntervalForRequest >= Patience.model)
+        #expect(patient.timeoutIntervalForResource >= Patience.model)
+    }
+
+    /// The client only reaches for the patient session when a caller asked for
+    /// patience, so a default-session client must still hand model calls over.
+    @Test("A client built the ordinary way still has a patient session behind it")
+    func defaultClientKeepsAPatientSession() {
+        let client = PlantyClient(configuration: .unconfigured)
+
+        #expect(client.patientSession === URLSession.plantyPatient)
+        #expect(client.session !== client.patientSession)
     }
 }

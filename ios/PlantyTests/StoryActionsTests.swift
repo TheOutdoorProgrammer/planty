@@ -130,6 +130,10 @@ final class RecordingAPI: PlantyAPI, @unchecked Sendable {
         throw PlantyError.notFound
     }
 
+    func ask(_ question: ScratchQuestion) async throws -> ScratchAnswer {
+        throw PlantyError.notFound
+    }
+
     func createPlantFromPhoto(_ request: PlantFromPhoto) async throws -> PlantFromPhotoResult {
         throw PlantyError.notFound
     }

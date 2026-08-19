@@ -96,6 +96,8 @@ func (d Deps) show(ctx context.Context, out io.Writer, args []string) error {
 	}
 	_, _ = fmt.Fprintln(out, care)
 
+	_, _ = fmt.Fprintln(out, describeToxicity(p.Toxicity))
+
 	if pot := describePot(p); pot != "" {
 		_, _ = fmt.Fprintln(out, pot)
 	}

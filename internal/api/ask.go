@@ -78,10 +78,15 @@ func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// The same shape a plant consultation returns, so one client decoder
+	// covers both conversations rather than two that drift.
 	s.ok(w, http.StatusOK, map[string]any{
-		"id":              saved.ID,
-		"conversation_id": saved.ConversationID,
-		"answer":          answer,
+		"id":                   saved.ID,
+		"conversation_id":      saved.ConversationID,
+		"reply":                answer.Reply,
+		"confidence":           answer.Confidence,
+		"looked_at":            answer.LookedAt,
+		"suggested_follow_ups": answer.Suggestions,
 	})
 }
 

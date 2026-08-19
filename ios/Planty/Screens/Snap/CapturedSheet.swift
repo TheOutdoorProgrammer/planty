@@ -11,6 +11,10 @@ struct CapturedSheet: View {
     let lookOff: () -> Void
     let retake: () -> Void
 
+    /// Straight into a chat about this picture. It exists because the only way
+    /// to ask about something used to be inventing a plant record for it first.
+    let justAsk: () -> Void
+
     /// Identification sits with the unknown-plant prompt because that is the
     /// moment somebody is deciding what this actually is.
     var identification: IdentificationStore?
@@ -29,6 +33,8 @@ struct CapturedSheet: View {
                     useCandidate?(candidate)
                 }
             }
+
+            justAskCard
 
             Text("What happened here?")
                 .font(.title3.weight(.bold))
@@ -51,6 +57,18 @@ struct CapturedSheet: View {
         }
         .disabled(isBusy)
         .overlay { if isBusy { savingOverlay } }
+    }
+
+    /// Offered whether or not a plant is picked, because a plant you do not
+    /// keep is exactly the thing you most want to ask about.
+    private var justAskCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button("Just ask about it", action: justAsk)
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.purple))
+            Text("Opens a chat about this photo. No plant is created and nothing is saved.")
+                .font(.footnote)
+                .foregroundStyle(PlantyColor.secondaryText)
+        }
     }
 
     private var preview: some View {

@@ -41,6 +41,9 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     private var _answer: PlantAnswer = .fixture()
     private var _asked: [(String, PlantQuestion)] = []
     private var _reminders: [Reminder] = []
+    private var _scratchAsks: [ScratchQuestion] = []
+    private var _created: [String] = []
+    private var _uploads: [(String, Data)] = []
 
     var answer: PlantAnswer {
         get { lock.withLock { _answer } }
@@ -48,6 +51,12 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     }
 
     var asked: [(String, PlantQuestion)] { lock.withLock { _asked } }
+    var scratchAsks: [ScratchQuestion] { lock.withLock { _scratchAsks } }
+
+    /// Every way a plant or a photo can come into existence, so a chat that
+    /// promises to create nothing can be held to it.
+    var created: [String] { lock.withLock { _created } }
+    var uploads: [(String, Data)] { lock.withLock { _uploads } }
 
     var reminderList: [Reminder] {
         get { lock.withLock { _reminders } }
@@ -78,6 +87,7 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
 
     func createPlant(_ draft: NewPlant) async throws -> Plant {
         try check()
+        lock.withLock { _created.append(draft.commonName) }
         return .fixture(commonName: draft.commonName)
     }
 
@@ -110,6 +120,7 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
 
     func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo {
         try check()
+        lock.withLock { _uploads.append((slug, jpeg)) }
         return Photo(
             id: UUID(),
             plantID: UUID(),
@@ -171,6 +182,12 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
         return lock.withLock { _answer }
     }
 
+    func ask(_ question: ScratchQuestion) async throws -> PlantAnswer {
+        try check()
+        lock.withLock { _scratchAsks.append(question) }
+        return lock.withLock { _answer }
+    }
+
     func reminders(slug: String) async throws -> [Reminder] {
         try check()
         return reminderList
@@ -203,8 +220,10 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
 
     func createPlantFromPhoto(_ ask: PlantFromPhoto) async throws -> PlantFromPhotoResult {
         try check()
+        let name = ask.commonName ?? "Stub"
+        lock.withLock { _created.append(name) }
         return PlantFromPhotoResult(
-            plant: .fixture(commonName: ask.commonName ?? "Stub"),
+            plant: .fixture(commonName: name),
             candidates: [],
             photoError: nil
         )

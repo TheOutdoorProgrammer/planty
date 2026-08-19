@@ -1,11 +1,11 @@
 import SwiftUI
 
-/// Ask about a plant without photographing it first. The record is the subject,
-/// and any pictures are offered to the model rather than attached, so a simple
-/// question stays cheap and quick.
+/// Ask Planty something. With a plant the record is the subject and pictures
+/// are optional; with none it is a scratch chat that files nothing anywhere.
 struct ConsultScreen: View {
     @State var store: ConsultStore
     @FocusState private var composerFocused: Bool
+    @State private var isAttaching = false
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -19,7 +19,7 @@ struct ConsultScreen: View {
                             .id(message.id)
                     }
                     if store.isThinking {
-                        ThinkingRow(stageLine: "Reading \(store.plant.commonName)'s record.")
+                        ThinkingRow(stageLine: store.thinkingLine)
                     }
                     if let error = store.error {
                         askError(error)
@@ -35,24 +35,24 @@ struct ConsultScreen: View {
             }
         }
         .plantyPage()
-        .navigationTitle("Ask about \(store.plant.commonName)")
+        .navigationTitle(store.title)
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) { composer }
+        .task { await store.begin() }
+        .sheet(isPresented: $isAttaching) {
+            PhotoAttachSheet { jpeg in store.attach(jpeg: jpeg) }
+        }
     }
 
     /// An empty chat is a blank stare, so it opens with what it already knows
-    /// and three questions its own record can answer.
+    /// and three questions it can actually answer.
     private var opening: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Ask me anything about \(store.plant.commonName).")
+            Text(openingTitle)
                 .font(.headline)
                 .foregroundStyle(PlantyColor.foreground)
 
-            Text("""
-                I have its watering log, its readings and what earlier photos \
-                showed. I will only open a photo if seeing one would change \
-                the answer.
-                """)
+            Text(openingBody)
                 .font(.subheadline)
                 .foregroundStyle(PlantyColor.secondaryText)
 
@@ -68,21 +68,58 @@ struct ConsultScreen: View {
         .plantyCard(padding: 16)
     }
 
+    private var openingTitle: String {
+        guard let plant = store.plant else { return "Ask about anything." }
+        return "Ask me anything about \(plant.commonName)."
+    }
+
+    private var openingBody: String {
+        guard store.plant != nil else {
+            return """
+                This one is not about a plant you keep. Nothing is created and \
+                nothing is saved to any plant's story.
+                """
+        }
+        return """
+            I have its watering log, its readings and what earlier photos \
+            showed. I will only open a photo if seeing one would change \
+            the answer.
+            """
+    }
+
     @ViewBuilder
     private func row(_ message: ConsultMessage) -> some View {
         switch message.speaker {
         case .user:
-            HStack {
-                Spacer(minLength: 40)
-                Text(message.text)
-                    .font(.body)
-                    .foregroundStyle(PlantyColor.background)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .background(PlantyColor.pink, in: RoundedRectangle(cornerRadius: 18))
-            }
+            userBubble(message)
         case .planty:
             answerCard(message)
+        }
+    }
+
+    /// The photo is shown next to the words it was sent with, so nobody has to
+    /// remember which picture a question was about.
+    private func userBubble(_ message: ConsultMessage) -> some View {
+        HStack {
+            Spacer(minLength: 40)
+            VStack(alignment: .trailing, spacing: 8) {
+                if let jpeg = message.photo, let image = UIImage(data: jpeg) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: 220, maxHeight: 220)
+                        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .accessibilityLabel("Photo you sent")
+                }
+                if !message.text.isEmpty {
+                    Text(message.text)
+                        .font(.body)
+                        .foregroundStyle(PlantyColor.background)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 10)
+                        .background(PlantyColor.pink, in: RoundedRectangle(cornerRadius: 18))
+                }
+            }
         }
     }
 
@@ -128,14 +165,21 @@ struct ConsultScreen: View {
             icon: "exclamationmark.triangle.fill"
         ) {
             VStack(spacing: 8) {
-                if store.failed != nil {
+                if let attempt = store.failed {
+                    if attempt.photo != nil {
+                        Text("Your photo is still here. It was not sent anywhere.")
+                            .font(.footnote)
+                            .foregroundStyle(PlantyColor.secondaryText)
+                    }
                     Button("Ask again") {
                         Task { await store.retry() }
                     }
                     .buttonStyle(PrimaryButtonStyle())
 
-                    Button("Edit the question") { store.recoverDraft() }
-                        .buttonStyle(SecondaryButtonStyle())
+                    Button(attempt.photo == nil ? "Edit the question" : "Edit it and keep the photo") {
+                        store.recoverDraft()
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
                 } else {
                     Button("Dismiss") { store.clearError() }
                         .buttonStyle(SecondaryButtonStyle())
@@ -145,28 +189,78 @@ struct ConsultScreen: View {
     }
 
     private var composer: some View {
-        HStack(spacing: 10) {
-            TextField("Ask about this plant…", text: $store.composer, axis: .vertical)
-                .textFieldStyle(.plain)
-                .lineLimit(1...4)
-                .focused($composerFocused)
-                .padding(12)
-                .background(PlantyColor.surface, in: Capsule())
-
-            Button {
-                composerFocused = false
-                Task { await store.send() }
-            } label: {
-                Image(systemName: "arrow.up.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(PlantyColor.pink)
+        VStack(spacing: 10) {
+            if let jpeg = store.attachment {
+                attached(jpeg)
             }
-            .frame(minWidth: 44, minHeight: 44)
-            .accessibilityLabel("Send question")
-            .disabled(store.composer.trimmingCharacters(in: .whitespaces).isEmpty || store.isThinking)
+            HStack(spacing: 10) {
+                Button {
+                    composerFocused = false
+                    isAttaching = true
+                } label: {
+                    Image(systemName: "camera.fill")
+                        .font(.title3)
+                        .foregroundStyle(PlantyColor.cyan)
+                }
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel("Add a photo to this message")
+
+                TextField(composerPrompt, text: $store.composer, axis: .vertical)
+                    .textFieldStyle(.plain)
+                    .lineLimit(1...4)
+                    .focused($composerFocused)
+                    .padding(12)
+                    .background(PlantyColor.surface, in: Capsule())
+
+                Button {
+                    composerFocused = false
+                    Task { await store.send() }
+                } label: {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(.title)
+                        .foregroundStyle(PlantyColor.pink)
+                }
+                .frame(minWidth: 44, minHeight: 44)
+                .accessibilityLabel("Send question")
+                .disabled(!store.canSend)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)
         .background(.ultraThinMaterial)
+    }
+
+    private var composerPrompt: String {
+        store.attachment == nil
+            ? (store.plant == nil ? "Ask about anything…" : "Ask about this plant…")
+            : "Say something about the photo, or just send it"
+    }
+
+    /// Shown before it goes, with a way out: an attachment nobody can see or
+    /// remove is a photo you send by accident.
+    private func attached(_ jpeg: Data) -> some View {
+        HStack(spacing: 12) {
+            if let image = UIImage(data: jpeg) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+            Text("Photo attached to your next message.")
+                .font(.footnote)
+                .foregroundStyle(PlantyColor.secondaryText)
+            Spacer(minLength: 8)
+            Button {
+                store.removeAttachment()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.title3)
+                    .foregroundStyle(PlantyColor.secondaryText)
+            }
+            .frame(minWidth: 44, minHeight: 44)
+            .accessibilityLabel("Remove the attached photo")
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

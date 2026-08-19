@@ -32,6 +32,10 @@ final class PlantStoryStore {
     var chapters: [StoryChapter] { StoryBuilder.chapters(from: timeline) }
     var series: [SensorSeries] { timeline.series }
 
+    /// The envelope wins over the plant inside it, and either will do: reading
+    /// only one would show nothing if the service moved it.
+    var toxicity: Toxicity? { detail?.toxicity ?? plant.toxicity }
+
     var verdict: Verdict? {
         detail?.verdict ?? timeline.verdicts.max { $0.forDate < $1.forDate }
     }

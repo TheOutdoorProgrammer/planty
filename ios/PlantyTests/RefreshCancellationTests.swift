@@ -49,6 +49,10 @@ private final class HangingAPI: PlantyAPI, @unchecked Sendable {
         try await Task.sleep(for: .seconds(60))
         throw PlantyError.notFound
     }
+    func ask(_ question: ScratchQuestion) async throws -> ScratchAnswer {
+        try await Task.sleep(for: .seconds(60))
+        throw PlantyError.notFound
+    }
     func reminders(slug: String) async throws -> [Reminder] {
         try await Task.sleep(for: .seconds(60))
         return []

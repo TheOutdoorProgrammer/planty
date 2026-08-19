@@ -125,7 +125,7 @@ struct ConsultRecoveryTests {
         store.composer = "is this too wet?"
         await store.send()
 
-        #expect(store.failed == "is this too wet?")
+        #expect(store.failed?.text == "is this too wet?")
         #expect(store.messages.count == 1, "the unanswered question is still on screen")
 
         api.failure = nil

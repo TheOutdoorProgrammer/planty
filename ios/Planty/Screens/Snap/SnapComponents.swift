@@ -50,6 +50,11 @@ struct PlantChip: View {
 struct CameraStage: View {
     let camera: CameraController
     @Binding var photoItem: PhotosPickerItem?
+
+    /// Overridden where the shot is not a whole-plant portrait: a chat asking
+    /// for the underside of a leaf must not tell you to frame the whole plant.
+    var guidance = "Fit the whole plant in the frame."
+    var footnote = "One photo is enough."
     let shutter: () -> Void
 
     @ScaledMetric(relativeTo: .largeTitle) private var shutterSize: CGFloat = 74
@@ -57,7 +62,7 @@ struct CameraStage: View {
     var body: some View {
         VStack(spacing: 16) {
             preview
-            Text("Fit the whole plant in the frame.")
+            Text(guidance)
                 .font(.subheadline)
                 .foregroundStyle(PlantyColor.secondaryText)
 
@@ -85,7 +90,7 @@ struct CameraStage: View {
                     .accessibilityHidden(true)
             }
 
-            Text("One photo is enough.")
+            Text(footnote)
                 .font(.footnote)
                 .foregroundStyle(PlantyColor.secondaryText)
         }

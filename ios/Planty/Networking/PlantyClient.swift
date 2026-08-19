@@ -65,7 +65,7 @@ struct PlantyClient: PlantyAPI {
                        body: question, patience: Patience.model)
     }
 
-    func ask(_ question: ScratchQuestion) async throws -> ScratchAnswer {
+    func ask(_ question: ScratchQuestion) async throws -> PlantAnswer {
         try await send("POST", "/v1/ask", body: question, patience: Patience.model)
     }
 
@@ -81,7 +81,7 @@ struct PlantyClient: PlantyAPI {
             query.append(URLQueryItem(name: "lon", value: String(longitude)))
         }
         for (name, value) in [
-            ("common_name", ask.commonName), ("location", ask.location), ("steward", ask.steward),
+            ("common_name", ask.commonName), ("location", ask.location), ("steward", ask.steward)
         ] {
             if let value, !value.isEmpty { query.append(URLQueryItem(name: name, value: value)) }
         }

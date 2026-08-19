@@ -46,7 +46,8 @@ struct PlantQuestion: Encodable, Sendable, Hashable {
 }
 
 /// POST /v1/ask. A question about anything at all: no plant is named, none is
-/// created, and no plant's timeline is touched.
+/// created, and no plant's timeline is touched. Answered by `PlantAnswer`, the
+/// same shape the plant-scoped endpoint returns.
 struct ScratchQuestion: Encodable, Sendable, Hashable {
     /// Both optional, at least one required. A photo on its own is a question.
     var message: String?
@@ -57,19 +58,5 @@ struct ScratchQuestion: Encodable, Sendable, Hashable {
         case message
         case photo
         case conversationID = "conversation_id"
-    }
-}
-
-/// What POST /v1/ask answers with. Flatter than PlantAnswer because there is no
-/// record behind it to cite, look at, or suggest follow-ups from.
-struct ScratchAnswer: Decodable, Sendable, Hashable, Identifiable {
-    let id: UUID
-    let conversationID: UUID
-    let answer: String
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case conversationID = "conversation_id"
-        case answer
     }
 }

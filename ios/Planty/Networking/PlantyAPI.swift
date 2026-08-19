@@ -25,7 +25,7 @@ protocol PlantyAPI: Sendable {
 
     /// Ask about anything, naming no plant. Creates nothing, so photographing
     /// a stranger's fern is not a reason to invent a record for it.
-    func ask(_ question: ScratchQuestion) async throws -> ScratchAnswer
+    func ask(_ question: ScratchQuestion) async throws -> PlantAnswer
 
     /// Create a plant from a photograph: identified, recorded, and the picture
     /// kept as the first frame of its story.

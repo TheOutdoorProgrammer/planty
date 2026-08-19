@@ -16,6 +16,7 @@ struct PlantStoryScreen: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 currentState
+                toxicityCard
 
                 if let deathError {
                     deathCard(deathError)
@@ -118,6 +119,28 @@ struct PlantStoryScreen: View {
     private func recordDeath() async {
         deathError = await store.markDead()
         if deathError == nil { session.library.apply(store.plant) }
+    }
+
+    /// The call to action opens the chat with the question already asked, so an
+    /// unchecked plant does not become an empty box to retype it into.
+    @ViewBuilder
+    private var toxicityCard: some View {
+        if let toxicity = store.toxicity {
+            ToxicityCard(toxicity: toxicity, plantName: store.plant.commonName) {
+                NavigationLink {
+                    ConsultScreen(
+                        store: session.consultStore(
+                            for: store.plant,
+                            asking: "Is \(store.plant.commonName) dangerous to cats, dogs or people?"
+                        )
+                    )
+                } label: {
+                    Label("Ask whether this is dangerous", systemImage: "bubble.left.and.text.bubble.right.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.purple))
+            }
+        }
     }
 
     /// Asking needs no photograph, which is why it sits here rather than

@@ -118,8 +118,16 @@ final class AppSession {
         }
     }
 
-    func consultStore(for plant: Plant) -> ConsultStore {
-        ConsultStore(api: api, plant: plant)
+    /// `asking` is sent the moment the screen opens, for entry points that
+    /// already know the question and would only make the user retype it.
+    func consultStore(for plant: Plant, asking question: String? = nil) -> ConsultStore {
+        ConsultStore(api: api, plant: plant, pending: question)
+    }
+
+    /// A chat about a photograph with no plant behind it. Nothing is created
+    /// and no timeline is touched, which is the entire point of it.
+    func scratchConsultStore(photo: Data?) -> ConsultStore {
+        ConsultStore(api: api, plant: nil, attachment: photo)
     }
 
     func remindersStore(for plant: Plant) -> RemindersStore {

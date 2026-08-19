@@ -30,6 +30,8 @@ struct SnapScreen: View {
                 switch route {
                 case .diagnosis(let plant, let photo):
                     DiagnosisScreen(store: session.diagnosisStore(plant: plant, photo: photo))
+                case .justAsk(let photo):
+                    ConsultScreen(store: session.scratchConsultStore(photo: photo.jpeg))
                 }
             }
             .overlay(alignment: .top) { toast }
@@ -114,6 +116,7 @@ struct SnapScreen: View {
                 record: { kind in Task { await store.save(recording: kind) } },
                 lookOff: { startDiagnosis(photo: photo) },
                 retake: { store.retake() },
+                justAsk: { route.append(.justAsk(photo: photo)) },
                 identification: session.identification,
                 useCandidate: { candidate in matchPlant(named: candidate) }
             )
@@ -202,6 +205,10 @@ struct SnapScreen: View {
 
 enum SnapRoute: Hashable {
     case diagnosis(plant: Plant, photo: CapturedPhoto)
+
+    /// A chat about the picture with no plant behind it. Nothing is created,
+    /// so the photo stays on the capture screen exactly as it was.
+    case justAsk(photo: CapturedPhoto)
 }
 
 extension CapturedPhoto: Hashable {

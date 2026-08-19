@@ -12,6 +12,37 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
+// describeToxicity renders a rating for show. An unchecked plant says so in
+// as many words, because a blank line here reads as reassurance.
+func describeToxicity(t plant.Toxicity) string {
+	if !t.Checked() {
+		return "toxicity: nobody has looked this up. Do not tell anyone it is safe."
+	}
+
+	line := fmt.Sprintf("toxicity: cats %s, dogs %s, people %s",
+		t.Cats, t.Dogs, t.People)
+	if t.IdentifiedAs != "" {
+		line += fmt.Sprintf(" (as %s)", t.IdentifiedAs)
+	}
+	if t.Basis == plant.BasisDerived {
+		line += "; levels graded here rather than by the source"
+	}
+	for _, extra := range []struct{ label, value string }{
+		{"principle", t.Principle},
+		{"signs", t.Signs},
+		{"parts", strings.Join(t.Parts, ", ")},
+		{"routes", strings.Join(t.Routes, ", ")},
+		{"notes", t.Notes},
+		{"first aid", t.FirstAid},
+		{"source", t.Source},
+	} {
+		if extra.value != "" {
+			line += fmt.Sprintf("\n  %s: %s", extra.label, extra.value)
+		}
+	}
+	return line
+}
+
 // toxicity records what a plant does to whatever eats it. Write only: reading
 // it back is part of show, since a rating is meaningless without the plant it
 // is about.
