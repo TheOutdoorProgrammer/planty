@@ -10,9 +10,14 @@ import (
 
 func runVerb(t *testing.T, d Deps, args ...string) (string, error) {
 	t.Helper()
+	return runVerbCtx(t, context.Background(), d, args...)
+}
+
+func runVerbCtx(t *testing.T, ctx context.Context, d Deps, args ...string) (string, error) {
+	t.Helper()
 
 	var out bytes.Buffer
-	err := Run(context.Background(), d, &out, args)
+	err := Run(ctx, d, &out, args)
 	return out.String(), err
 }
 

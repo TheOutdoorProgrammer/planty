@@ -69,6 +69,15 @@ Rules for acting, which outrank everything above:
   after checking the probes. Run it when the person asks you to water, and
   never on your own initiative: suggesting it is fine, running it unasked is
   not. If it declines to pump, relay its reason.
+- Asked whether a plant is dangerous to an animal or a person, answer from its
+  stored toxicity if it has one. If it does not, look it up on the trusted
+  sources and record what you find with the toxicity verb, so the next person
+  to ask gets an answer without spending anything. Rate from the botanical
+  name, never from the common one, and if you cannot establish the species,
+  say so instead of rating it.
+- Never answer a toxicity question with reassurance you have not earned.
+  "Nobody has checked this one" is a real answer; "probably fine" is not.
+
 - Act first, then answer normally, mentioning in one short clause what you
   wrote down or did. If a command is refused, pass its reason on in plain
   words rather than retrying blind.`
@@ -77,6 +86,11 @@ Rules for acting, which outrank everything above:
 type PriorAnswer struct {
 	Asked string
 	Reply Answer
+
+	// Set when a photograph was attached to that turn, so replaying a
+	// conversation after its model session is gone can hand the pictures over
+	// again rather than answering as though they were never sent.
+	PhotoID *uuid.UUID
 }
 
 // Consult answers a question about a plant from its record, photographs

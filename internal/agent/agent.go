@@ -186,6 +186,31 @@ Verdicts and owners:
               planty agent answer --question <id> --answer <text>
               example: planty agent answer --question 6f0dd1c2-6b3a-4e0e-9d3f-2a4b8c9d0e1f --answer "Repotted in March"
 
+  toxicity    record what a plant does to whatever eats it
+              planty agent toxicity --plant <slug> [--cats <level>] [--dogs <level>]
+                [--people <level>] [--basis source|derived] [--identified-as <botanical name>]
+                [--principle <text>] [--signs <text>] [--parts <a,b>] [--routes <a,b>]
+                [--notes <text>] [--first-aid <text>] [--source <host>]
+              levels: safe, mild, moderate, severe, unknown
+                safe     no toxic principle reported
+                mild     self-limiting; rinse the mouth and watch
+                moderate systemic effects plausible; ring a vet
+                severe   can kill from a household mouthful; go now
+              parts: all, bulb, leaf, stem, sap, flower, fruit, seed, root
+              routes: eaten, skin, eyes, breathed
+              --basis source means the reference stated that level itself, derived
+                means you graded it. The ASPCA only publishes toxic or non-toxic,
+                so anything finer than that is derived, and saying so is required.
+              --identified-as is the botanical name you actually looked up, and
+                matters more than any other field here: "lily" is six unrelated
+                plants and two of them kill cats. Never rate from a common name.
+              --principle is required for moderate or severe.
+              --first-aid only when the obvious advice is wrong, e.g. a cat that
+                groomed lily pollen needs a vet before any sign shows.
+              example: planty agent toxicity --plant easter-lily --cats severe --dogs mild
+                --people mild --basis derived --identified-as "Lilium longiflorum"
+                --principle "unidentified nephrotoxin" --source www.aspca.org
+
   away        record a period nobody is home, with a backup contact
               planty agent away --from <date> --until <date> [--contact <name>] [--notify <service>] [--note <text>]
               example: planty agent away --from 2026-08-20 --until 2026-08-27 --contact "Sam"`
@@ -209,9 +234,10 @@ var verbs = map[string]func(Deps, context.Context, io.Writer, []string) error{
 	"remind": Deps.setReminder,
 	"forget": Deps.forgetReminder,
 
-	"create":  Deps.create,
-	"update":  Deps.update,
-	"archive": Deps.archive,
+	"create":   Deps.create,
+	"update":   Deps.update,
+	"archive":  Deps.archive,
+	"toxicity": Deps.toxicity,
 
 	"water":     Deps.water,
 	"shelter":   Deps.shelter,
