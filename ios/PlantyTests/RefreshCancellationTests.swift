@@ -87,6 +87,40 @@ struct RefreshCancellationTests {
         #expect(story.error == nil)
     }
 
+    /// The tests above cancel a `Task.sleep`, so the store sees a raw
+    /// `CancellationError`. The real app never does: the client converts every
+    /// error at its boundary first, which is exactly where this broke.
+    @Test("A cancellation that came through the client is still a cancellation")
+    @MainActor
+    func cancellationSurvivesTheClientBoundary() async {
+        let asClientReportsIt = PlantyError.from(URLError(.cancelled))
+
+        #expect(asClientReportsIt == .cancelled, "the client flattened it to \(asClientReportsIt)")
+        #expect(PlantyError.isCancellation(asClientReportsIt))
+        #expect(PlantyError.isCancellation(URLError(.cancelled)))
+        #expect(PlantyError.isCancellation(CancellationError()))
+
+        let api = FakeAPI()
+        api.failure = asClientReportsIt
+        let store = TodayStore(api: api, isConfigured: true)
+        await store.load()
+
+        #expect(store.error == nil, "a cancelled refresh rendered as a failed check")
+    }
+
+    /// A real failure still has to reach the screen, or this fix has swapped a
+    /// noisy bug for a silent one.
+    @Test("A real failure is still reported")
+    @MainActor
+    func genuineFailuresStillSurface() async {
+        let api = FakeAPI()
+        api.failure = .offline
+        let store = TodayStore(api: api, isConfigured: true)
+        await store.load()
+
+        #expect(store.error == .offline)
+    }
+
     /// The spinner has to stop even when the work it was waiting on was thrown
     /// away, or the view is left claiming it is still loading.
     @Test("A cancelled refresh stops loading")

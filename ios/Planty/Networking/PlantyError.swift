@@ -12,10 +12,15 @@ enum PlantyError: Error, Sendable, Equatable {
     case decoding(String)
     case transport(String)
 
+    /// Work thrown away, not work that failed. Its own case because the client
+    /// converts at the boundary, and `.transport("cancelled")` could only be
+    /// recognised by matching a localised string.
+    case cancelled
+
     /// True when retrying might work and nothing is wrong with the plants.
     var isTransient: Bool {
         switch self {
-        case .offline, .timedOut, .transport: true
+        case .offline, .timedOut, .transport, .cancelled: true
         case .server(let status, _): status >= 500
         default: false
         }
@@ -41,24 +46,28 @@ extension PlantyError: LocalizedError {
             "The service sent something Planty could not read. \(detail)"
         case .transport(let detail):
             detail
+        case .cancelled:
+            "Interrupted."
         }
     }
 
-    /// Work thrown away, not work that failed. SwiftUI cancels a `.refreshable`
-    /// task when the gesture ends, so a good refresh arrives here as an error.
+    /// SwiftUI cancels a `.refreshable` task when the gesture ends, so a good
+    /// refresh arrives as an error and must never be shown as a failed check.
     static func isCancellation(_ error: any Error) -> Bool {
-        if error is CancellationError { return true }
-        if let urlError = error as? URLError { return urlError.code == .cancelled }
+        if case .cancelled = PlantyError.from(error) { return true }
         return false
     }
 
     static func from(_ error: any Error) -> PlantyError {
         if let planty = error as? PlantyError { return planty }
+        if error is CancellationError { return .cancelled }
         if let decoding = error as? DecodingError {
             return .decoding(String(describing: decoding))
         }
         let urlError = error as? URLError
         switch urlError?.code {
+        case .cancelled:
+            return .cancelled
         case .notConnectedToInternet, .networkConnectionLost, .dataNotAllowed:
             return .offline
         case .timedOut:
