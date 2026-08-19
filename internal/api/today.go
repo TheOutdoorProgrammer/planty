@@ -234,3 +234,25 @@ func (s *Server) addHarvest(w http.ResponseWriter, r *http.Request) {
 	}
 	s.ok(w, http.StatusCreated, created)
 }
+
+func (s *Server) listHarvests(w http.ResponseWriter, r *http.Request) {
+	var plantID *uuid.UUID
+	if slug := r.PathValue("slug"); slug != "" {
+		p, err := s.store.GetPlant(r.Context(), slug)
+		if err != nil {
+			s.fail(w, http.StatusInternalServerError, err)
+			return
+		}
+		plantID = &p.ID
+	}
+
+	harvests, err := s.store.Harvests(r.Context(), plantID)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{
+		"harvests": harvests,
+		"count":    len(harvests),
+	})
+}

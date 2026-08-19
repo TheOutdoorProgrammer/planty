@@ -140,6 +140,7 @@ An item is checked only after the implementation, regression test, commit, and p
 - [ ] **PNT-026 — Harvests are write-only.**
   The service, CLI, and iOS can record yield but cannot list, aggregate, correct, or delete it.
   This contradicts the data model's stated purpose of answering yield-per-plant-per-season questions.
+  Global and per-plant history reads now exist as groundwork for PNT-029; aggregation, correction, and deletion remain open here.
 
 - [ ] **PNT-027 — Harvest writes accept meaningless data.**
   There is no domain or database validation for positive finite quantity, a non-empty unit, plausible timestamps, or applicable plant domains, and no correction path exists.

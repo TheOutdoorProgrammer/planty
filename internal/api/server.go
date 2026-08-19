@@ -59,6 +59,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /v1/notes/{id}", s.updateNote)
 	mux.HandleFunc("DELETE /v1/notes/{id}", s.deleteNote)
 
+	mux.HandleFunc("GET /v1/harvests", s.listHarvests)
+	mux.HandleFunc("GET /v1/plants/{slug}/harvests", s.listHarvests)
 	mux.HandleFunc("POST /v1/plants/{slug}/harvests", s.addHarvest)
 	mux.HandleFunc("POST /v1/plants/{slug}/photos", s.uploadPhoto)
 	mux.HandleFunc("GET /v1/plants/{slug}/timeline", s.timeline)

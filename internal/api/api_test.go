@@ -327,6 +327,45 @@ func TestAHarvestOnAMissingPlantIsFourOhFour(t *testing.T) {
 	}
 }
 
+func TestHarvestHistoryNamesItsPlantsAndCanBeFiltered(t *testing.T) {
+	h, _, _ := newServer(t)
+	first := createPlant(t, h, map[string]any{
+		"common_name": "Harvest history tomato", "slug": unique("harvest-history"),
+	})
+	second := createPlant(t, h, map[string]any{
+		"common_name": "Other harvest tomato", "slug": unique("other-harvest"),
+	})
+	for slug, quantity := range map[string]float64{first: 4, second: 2} {
+		rec, _ := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/harvests", map[string]any{
+			"quantity": quantity, "unit": "tomatoes",
+		})
+		if rec.Code != http.StatusCreated {
+			t.Fatalf("log harvest for %s: got %d", slug, rec.Code)
+		}
+	}
+
+	rec, all := do(t, h, http.MethodGet, "/v1/harvests", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("global history: got %d, body %s", rec.Code, rec.Body.String())
+	}
+	if all["count"].(float64) < 2 {
+		t.Fatalf("global history count = %v", all["count"])
+	}
+
+	rec, filtered := do(t, h, http.MethodGet, "/v1/plants/"+first+"/harvests", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("plant history: got %d, body %s", rec.Code, rec.Body.String())
+	}
+	rows := filtered["harvests"].([]any)
+	if len(rows) != 1 {
+		t.Fatalf("filtered history has %d rows, want 1", len(rows))
+	}
+	row := rows[0].(map[string]any)
+	if row["slug"] != first || row["common_name"] != "Harvest history tomato" {
+		t.Fatalf("history lost plant identity: %v", row)
+	}
+}
+
 func TestObservationRecordsWhoSaidIt(t *testing.T) {
 	h, _, _ := newServer(t)
 	slug := createPlant(t, h, map[string]any{

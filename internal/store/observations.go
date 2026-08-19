@@ -96,3 +96,41 @@ func (s *Store) AddHarvest(ctx context.Context, h plant.Harvest) (plant.Harvest,
 		&out.Unit, &out.Notes, &out.CreatedAt)
 	return out, classify(err)
 }
+
+// HarvestRecord carries enough plant identity for a garden-wide history to be
+// useful without making one plant lookup per row.
+type HarvestRecord struct {
+	Slug       string `json:"slug"`
+	CommonName string `json:"common_name"`
+	plant.Harvest
+}
+
+// Harvests returns yield newest first, optionally narrowed to one plant.
+func (s *Store) Harvests(ctx context.Context, plantID *uuid.UUID) ([]HarvestRecord, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT p.slug, p.common_name,
+		       h.id, h.plant_id, h.occurred_at, h.quantity, h.unit,
+		       coalesce(h.notes, ''), h.created_at
+		FROM harvests h
+		JOIN plants p ON p.id = h.plant_id
+		WHERE ($1::uuid IS NULL OR h.plant_id = $1)
+		ORDER BY h.occurred_at DESC, h.created_at DESC`, plantID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	out := []HarvestRecord{}
+	for rows.Next() {
+		var record HarvestRecord
+		if err := rows.Scan(
+			&record.Slug, &record.CommonName,
+			&record.ID, &record.PlantID, &record.OccurredAt,
+			&record.Quantity, &record.Unit, &record.Notes, &record.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		out = append(out, record)
+	}
+	return out, rows.Err()
+}

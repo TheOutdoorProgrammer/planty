@@ -166,6 +166,8 @@ DELETE /v1/plants/{slug}          archive, never a hard delete; ?status=dead rec
 
 GET    /v1/plants/{slug}/observations   history, newest first
 POST   /v1/plants/{slug}/observations   log watered, misted, repotted, fertilized, pruned, moved, symptom, note, died
+GET    /v1/harvests                     list harvest history across the garden
+GET    /v1/plants/{slug}/harvests       list one plant's harvest history
 POST   /v1/plants/{slug}/harvests       log a harvest, with quantity and unit
 POST   /v1/plants/{slug}/photos         upload; raw bytes or multipart, with optional RFC3339 taken_at
 GET    /v1/plants/{slug}/timeline       photos oldest first, with short-lived links
