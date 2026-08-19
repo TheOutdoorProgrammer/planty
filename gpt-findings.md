@@ -49,9 +49,10 @@ An item is checked only after the implementation, regression test, commit, and p
 
 ## P1: correctness, security, and data integrity
 
-- [ ] **PNT-008 — Photo capture time is sent by iOS and discarded by Go.**
+- [x] **PNT-008 — Photo capture time is sent by iOS and discarded by Go.**
   `ios/Planty/Networking/PlantyClient.swift:220-238` sends multipart `taken_at`, but `internal/api/photos.go:46-53,118-140` stores `time.Now()` and never reads it.
   Imported historical photos are placed at upload time, corrupting the timeline used for longitudinal comparisons.
+  Fixed by accepting and validating RFC3339 `taken_at` on both multipart and raw upload shapes, defaulting only omitted timestamps to now, and adding regression tests for preservation and rejection.
 
 - [ ] **PNT-009 — Multipart image endpoints do not enforce their advertised request limits.**
   `internal/api/identify.go:158-175` bounds a local reader but parses the original `r.Body`, and `ParseMultipartForm` in `internal/api/photos.go:127` is a memory threshold rather than a request-size limit.

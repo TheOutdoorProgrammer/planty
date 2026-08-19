@@ -43,13 +43,16 @@ func (s *Server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, contentType, caption, err := readUpload(r)
+	body, contentType, caption, takenAt, err := readUpload(r)
 	if err != nil {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
+	if takenAt.IsZero() {
+		takenAt = time.Now().UTC()
+	}
 
-	saved, err := s.keepPhoto(r.Context(), p, body, contentType, caption, time.Now().UTC())
+	saved, err := s.keepPhoto(r.Context(), p, body, contentType, caption, takenAt)
 	if err != nil {
 		s.fail(w, statusForPhoto(err), err)
 		return
@@ -115,29 +118,56 @@ func statusForPhoto(err error) int {
 // readUpload accepts either shape, because the two clients have different
 // natural idioms: URLSession builds multipart, and curl or an agent posts raw
 // bytes with a Content-Type. Rejecting one of them would be arbitrary.
-func readUpload(r *http.Request) (body []byte, contentType, caption string, err error) {
+func readUpload(r *http.Request) (
+	body []byte,
+	contentType string,
+	caption string,
+	takenAt time.Time,
+	err error,
+) {
 	caption = r.URL.Query().Get("caption")
 	contentType = r.Header.Get("Content-Type")
+	takenAt, err = parseUploadTime(r.URL.Query().Get("taken_at"))
+	if err != nil {
+		return nil, "", "", time.Time{}, err
+	}
 
 	if !strings.HasPrefix(contentType, "multipart/form-data") {
 		body, err = io.ReadAll(io.LimitReader(r.Body, MaxPhotoBytes+1))
-		return body, contentType, caption, err
+		return body, contentType, caption, takenAt, err
 	}
 
 	if err := r.ParseMultipartForm(MaxPhotoBytes); err != nil {
-		return nil, "", "", err
+		return nil, "", "", time.Time{}, err
 	}
 	file, header, err := r.FormFile("photo")
 	if err != nil {
-		return nil, "", "", errors.New("multipart upload needs a 'photo' part")
+		return nil, "", "", time.Time{}, errors.New("multipart upload needs a 'photo' part")
 	}
 	defer func() { _ = file.Close() }()
 
 	if given := r.FormValue("caption"); given != "" {
 		caption = given
 	}
+	if given := r.FormValue("taken_at"); given != "" {
+		takenAt, err = parseUploadTime(given)
+		if err != nil {
+			return nil, "", "", time.Time{}, err
+		}
+	}
 	body, err = io.ReadAll(io.LimitReader(file, MaxPhotoBytes+1))
-	return body, header.Header.Get("Content-Type"), caption, err
+	return body, header.Header.Get("Content-Type"), caption, takenAt, err
+}
+
+func parseUploadTime(raw string) (time.Time, error) {
+	if raw == "" {
+		return time.Time{}, nil
+	}
+	takenAt, err := time.Parse(time.RFC3339Nano, raw)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("taken_at must be RFC3339: %w", err)
+	}
+	return takenAt.UTC(), nil
 }
 
 // timeline returns a plant's photos with short-lived links, so the app renders

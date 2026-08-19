@@ -167,7 +167,7 @@ DELETE /v1/plants/{slug}          archive, never a hard delete; ?status=dead rec
 GET    /v1/plants/{slug}/observations   history, newest first
 POST   /v1/plants/{slug}/observations   log watered, misted, repotted, fertilized, pruned, moved, symptom, note, died
 POST   /v1/plants/{slug}/harvests       log a harvest, with quantity and unit
-POST   /v1/plants/{slug}/photos         upload; raw bytes or multipart, both accepted
+POST   /v1/plants/{slug}/photos         upload; raw bytes or multipart, with optional RFC3339 taken_at
 GET    /v1/plants/{slug}/timeline       photos oldest first, with short-lived links
 POST   /v1/plants/{slug}/diagnosis      read the photo timeline and report what changed
 POST   /v1/plants/{slug}/ask            ask about it from its record; no photo needed; {message, conversation_id}
