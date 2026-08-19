@@ -115,9 +115,10 @@ An item is checked only after the implementation, regression test, commit, and p
   The error appears only after the exact answer text has been destroyed.
   Fixed by returning the write failure to the answer sheet, keeping the sheet and typed answer in place, and rendering the failure beside the draft.
 
-- [ ] **PNT-022 — Note-save failures are invisible inside the editor.**
+- [x] **PNT-022 — Note-save failures are invisible inside the editor.**
   `NotesStore` records the error behind the presented sheet, while `NoteSheet` receives only a false Boolean and renders no failure.
   Save appears to do nothing even though the draft remains open.
+  Fixed by passing the concrete failure into the note sheet, rendering it beside the preserved draft, and preventing interactive dismissal while the write is running.
 
 - [ ] **PNT-023 — Photo viewer claims a save succeeded without observing the result.**
   `ios/Planty/Screens/Story/PhotoViewer.swift:73-107` calls `UIImageWriteToSavedPhotosAlbum` with no completion callback and immediately displays `Saved to Photos`.

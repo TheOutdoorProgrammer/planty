@@ -46,12 +46,14 @@ struct NotesScreen: View {
         .task { await store.load() }
         .sheet(isPresented: $writing) {
             NoteSheet(title: "", text: "") { title, body in
-                await store.write(title: title, body: body)
+                let saved = await store.write(title: title, body: body)
+                return saved ? nil : store.error ?? .transport("The note was not saved.")
             }
         }
         .sheet(item: $editing) { note in
             NoteSheet(title: note.heading ?? "", text: note.body) { title, body in
-                await store.rewrite(note, title: title, body: body)
+                let saved = await store.rewrite(note, title: title, body: body)
+                return saved ? nil : store.error ?? .transport("The note was not saved.")
             }
         }
         .confirmationDialog(
@@ -125,15 +127,24 @@ struct NotesScreen: View {
 private struct NoteSheet: View {
     @State var title: String
     @State var text: String
-    let save: (String, String) async -> Bool
+    let save: (String, String) async -> PlantyError?
 
     @Environment(\.dismiss) private var dismiss
     @State private var saving = false
+    @State private var failure: PlantyError?
     @FocusState private var bodyFocused: Bool
 
     var body: some View {
         NavigationStack {
             Form {
+                if let failure {
+                    Section {
+                        SheetErrorRow(
+                            headline: "Not saved. Your note is still here.",
+                            error: failure
+                        )
+                    }
+                }
                 Section {
                     TextField("A heading, if it helps", text: $title)
                 }
@@ -150,14 +161,16 @@ private struct NoteSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .disabled(saving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
                         saving = true
+                        failure = nil
                         Task {
-                            let saved = await save(title, text)
+                            failure = await save(title, text)
                             saving = false
-                            if saved { dismiss() }
+                            if failure == nil { dismiss() }
                         }
                     }
                     .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
@@ -165,5 +178,6 @@ private struct NoteSheet: View {
             }
             .onAppear { bodyFocused = true }
         }
+        .interactiveDismissDisabled(saving)
     }
 }
