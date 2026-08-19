@@ -226,8 +226,9 @@ Replaying is marginally cheaper for a two-turn exchange and breaks even at three
 Sessions live in the service's own scratch space, which does not survive a restart, so a conversation can outlive the session it was using.
 A resume that finds nothing falls back to replaying the transcript: slower, still correct, and invisible from the app.
 
-**A consultation can write, through one command and nothing else.** Told "I watered it this morning" or "remind me to mist this twice a day", it records that rather than telling you to.
-Writes go through `planty agent`, a three-verb surface with no way to water anything, and they land with source `agent` so the record always says who claimed a thing happened.
+**A consultation can write, through one command and nothing else.** Told "I watered it this morning", "move it to the entryway" or "remind me to mist this twice a day", it does that rather than telling you to.
+Writes go through `planty agent`, which covers the whole service except `autopsy`, and they land with source `agent` so the record always says who claimed a thing happened.
+Its reference is `planty agent help`, and the same text is handed to the model in its system prompt so it never has to explore to find a flag.
 The daily verdict, identification and autopsies stay read-only: a scheduled judgment that recorded observations would be judging evidence it wrote itself.
 `PLANTY_JUDGE_CAN_ACT=false` turns it off. `adr/0002` records what holds it shut and what was rejected.
 

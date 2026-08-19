@@ -19,9 +19,11 @@ So the question is not "can it act" but "what exactly can it do, and what stops 
 
 Chosen: **a `planty agent` verb set, granted through an allowlist and a hook**, and only during a consultation.
 
-`Bash(planty *)` was rejected on inspection: the planty CLI can run the pump (`water`), migrate the schema, seed fixtures, fire notifications at a phone, and start another judgment (`autopsy`) that spends more tokens recursively.
-Prefix-matching the binary would hand over all of it.
-`planty agent` has three verbs (`log`, `remind`, `forget`), and there is deliberately no way to water anything from it.
+`Bash(planty *)` was rejected on inspection: prefix-matching the binary hands over `migrate`, `seed`, `serve`, every scheduled job, and `autopsy`, which starts another model run and spends tokens recursively.
+
+`planty agent` is its own surface, and it is now broad: reading (`plants`, `show`, `observations`, `reminders`, `sensors`, `today`, `questions`, `coldwatch`) and writing (`log`, `harvest`, `remind`, `forget`, `create`, `update`, `archive`, `water`, `shelter`, `unshelter`, `link`, `calibrate`, `ack`, `ask`, `answer`, `away`).
+Watering is included deliberately, on the owner's explicit instruction: it is a real action a person asks for out loud, and refusing it in the one place you can ask would be a worse product for no security gain, since the same person can run the pump from the app.
+`autopsy` stays out, and the excluded set has a test that fails the moment a verb sneaks in.
 
 MCP remains the better shape if the surface ever grows, because typed tools beat a command line the model has to construct. It was not needed for three verbs.
 
@@ -48,6 +50,6 @@ Good:
 
 Bad, and accepted:
 
-- The model constructs a command line, so it can get the syntax wrong. Validation catches it and the error goes back as text, but a typed tool surface would not have the failure mode at all.
+- The model constructs a command line, so it can get the syntax wrong. One case was found live and is worth naming: asked to rename a plant to "Big Pothos", it wrote `--name Big Pothos` unquoted, and Go's `flag` package takes `Big` and drops `Pothos` silently. Every verb now refuses leftover words rather than accepting a truncated value. A typed tool surface would not have the failure mode at all, which is the strongest argument for moving to MCP if this grows further.
 - The allowlist is a string match. It is why there is a second layer.
 - `--safe-mode` had to go. It does **not** exclude ambient permission rules, and it silently disables hooks, which would have removed layer 2 without saying so. Isolation is now `--setting-sources ''` and `--strict-mcp-config`, which also stopped ambient MCP servers attaching to judgments, something `--safe-mode` had been claiming to prevent and did not.
