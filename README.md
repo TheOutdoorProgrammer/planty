@@ -27,10 +27,12 @@ Everything else is a way of talking to it.
 | Surface | What it is for |
 | --- | --- |
 | **Service** (Go, Kubernetes, Postgres) | Ingests readings, stores observations and photos, calls Claude for judgment, generates the daily verdict |
-| **iOS app** (SwiftUI, `ios/`) | For when you are standing in front of the plant holding a watering can. Photograph it, log what you did, ask what is wrong |
+| **iOS app** (SwiftUI, `ios/`) | For when you are standing in front of the plant holding a watering can. Photograph it, log what you did, edit its record, set reminders, ask it anything, and record the death of one |
 | **Dusk plugin** ([dusk-plugin-planty](https://github.com/NerdsWhoFish/dusk-plugin-planty)) | The same operations, for agents. Add a plant by describing it, log that you watered something, ask what needs doing |
 
 The app and the plugin call the same API and have the same powers.
+
+**Everything is reachable by hand.** The conversation is an accelerator, never the only road: anything you can ask for in the chat is also a control on a screen, and anything a screen can do the API can do too.
 Anything you can do by tapping, an agent can do by asking, and the other way round.
 The plugin stores nothing in Dusk: it hands everything to this service and reflects back what the service says.
 
