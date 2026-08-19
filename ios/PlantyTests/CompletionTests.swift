@@ -122,3 +122,46 @@ struct CompletionTests {
         #expect(capture.settled == nil)
     }
 }
+
+/// The first run: an empty library, one photo, and a promise that Planty can
+/// help after the picture. It used to end at an empty picker with the photo
+/// discarded, which is the worst possible first minute.
+@Suite("Adding the first plant from a photo")
+struct PhotoFirstTests {
+    @Test("A photo becomes a plant, named or not")
+    @MainActor
+    func photoBecomesAPlant() async {
+        let api = FakeAPI()
+        let store = CaptureStore(api: api)
+        store.accept(jpeg: Data("photo".utf8))
+
+        let made = await store.createPlant(named: "Blue oyster", metadata: CaptureMetadata())
+
+        #expect(made?.commonName == "Blue oyster")
+        #expect(store.selectedPlant?.id == made?.id, "the new plant is not selected for the next step")
+        #expect(store.stage == .ready)
+    }
+
+    @Test("A failure keeps the photo rather than losing it")
+    @MainActor
+    func failureKeepsThePhoto() async {
+        let api = FakeAPI()
+        api.failure = .offline
+        let store = CaptureStore(api: api)
+        store.accept(jpeg: Data("photo".utf8))
+
+        let made = await store.createPlant(named: nil, metadata: CaptureMetadata())
+
+        #expect(made == nil)
+        #expect(store.stage.photo?.jpeg == Data("photo".utf8), "the picture was thrown away")
+    }
+
+    @Test("Nothing is created without a photo to create it from")
+    @MainActor
+    func noPhotoNoPlant() async {
+        let api = FakeAPI()
+        let store = CaptureStore(api: api)
+
+        #expect(await store.createPlant(named: "Ghost", metadata: CaptureMetadata()) == nil)
+    }
+}

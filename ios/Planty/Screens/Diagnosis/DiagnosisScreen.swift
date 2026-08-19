@@ -14,7 +14,7 @@ struct DiagnosisScreen: View {
                         capturedPhoto(photo)
                     }
                     ForEach(store.messages) { message in
-                        MessageRow(message: message, plant: store.plant) { action in
+                        MessageRow(message: message, plant: store.plant, taken: store.taken) { action in
                             Task { await store.perform(action) }
                         }
                         .id(message.id)
@@ -23,7 +23,11 @@ struct DiagnosisScreen: View {
                         ThinkingRow(stageLine: store.stageLine)
                     }
                     if let error = store.error {
-                        DiagnosisErrorCard(error: error, plantName: store.plant.commonName) {
+                        DiagnosisErrorCard(
+                            error: error,
+                            plantName: store.plant.commonName,
+                            photoIsSaved: store.photo?.uploaded != nil
+                        ) {
                             Task { await store.send(followUp: "Try that comparison again") }
                         }
                     }
@@ -120,32 +124,43 @@ struct ThinkingRow: View {
     }
 }
 
+/// Says only what is true. This card used to promise the photo was "safely in
+/// the story" when the upload was the thing that failed, and that an offline
+/// answer would arrive later when nothing was ever queued: closing the app
+/// destroys the conversation.
 struct DiagnosisErrorCard: View {
     let error: PlantyError
     let plantName: String
+    /// Whether the photograph actually reached the service. The difference
+    /// between "your picture is kept" and "take it again" is the whole message.
+    let photoIsSaved: Bool
     let retry: () -> Void
 
     var body: some View {
-        if case .offline = error {
-            StateMessage(
-                title: "Photo saved. Diagnosis is waiting for a connection.",
-                message: "You can close Planty. The answer will appear here when it is ready.",
-                accent: PlantyColor.cyan,
-                icon: "wifi.slash"
-            ) { EmptyView() }
-        } else {
-            StateMessage(
-                title: "Planty could not finish this comparison.",
-                message: """
-                    The photo is safely in \(plantName)'s story. Try the \
-                    diagnosis again, or add a note about what you saw.
-                    """,
-                accent: PlantyColor.orange,
-                icon: "exclamationmark.bubble"
-            ) {
-                Button("Try again", action: retry)
-                    .buttonStyle(PrimaryButtonStyle(color: PlantyColor.orange))
-            }
+        StateMessage(
+            title: title,
+            message: message,
+            accent: PlantyColor.orange,
+            icon: isOffline ? "wifi.slash" : "exclamationmark.bubble"
+        ) {
+            Button("Try again", action: retry)
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.orange))
         }
+    }
+
+    private var isOffline: Bool {
+        if case .offline = error { return true }
+        return false
+    }
+
+    private var title: String {
+        isOffline ? "No connection, so there is no answer yet." : "Planty could not finish this comparison."
+    }
+
+    private var message: String {
+        let fate = photoIsSaved
+            ? "The photo is in \(plantName)'s story."
+            : "The photo is still on your phone and has not been saved."
+        return "\(fate) Nothing is waiting in the background, so try again when you can."
     }
 }

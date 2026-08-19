@@ -118,13 +118,39 @@ struct UnknownPlantCard: View {
 /// Recent first, then friend groups, then mine, matching the library order.
 struct PlantPickerSheet: View {
     let plants: [Plant]
+    /// Offered alongside the list, and the only option at all on a first run.
+    /// Without it an empty library was a dead end with the photo discarded.
+    var addNew: ((String?) -> Void)?
     let pick: (Plant) -> Void
 
     @State private var search = ""
+    @State private var newName = ""
 
     var body: some View {
         NavigationStack {
             List {
+                if addNew != nil {
+                    Section(plants.isEmpty ? "Your first plant" : "Not on the list?") {
+                        TextField("What is it called?", text: $newName)
+                        Button {
+                            let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+                            addNew?(trimmed.isEmpty ? nil : trimmed)
+                        } label: {
+                            Label(
+                                newName.trimmingCharacters(in: .whitespaces).isEmpty
+                                    ? "Add it from this photo"
+                                    : "Add \(newName) from this photo",
+                                systemImage: "plus.circle.fill"
+                            )
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .listRowBackground(PlantyColor.surface)
+                        Text("Leave the name empty and Planty will work it out from the picture.")
+                            .font(.caption)
+                            .foregroundStyle(PlantyColor.secondaryText)
+                            .listRowBackground(PlantyColor.surface)
+                    }
+                }
                 ForEach(groups) { group in
                     Section(group.title) {
                         ForEach(group.plants) { plant in

@@ -113,13 +113,20 @@ final class DiagnosisStore {
 
     /// Offered actions record real observations; the answer is not a substitute
     /// for the record of what the user actually did.
+    /// Offered actions taken so far, so one cannot be filed five times by
+    /// somebody tapping it again to see whether it worked.
+    private(set) var taken: Set<String> = []
+
+    func hasTaken(_ action: DiagnosisOfferedAction) -> Bool { taken.contains(action.title) }
+
     func perform(_ action: DiagnosisOfferedAction) async {
-        guard let kind = action.recordsKind else { return }
+        guard let kind = action.recordsKind, !taken.contains(action.title) else { return }
         do {
             _ = try await api.addObservation(
                 slug: plant.slug,
                 observation: NewObservation(kind: kind, body: action.note)
             )
+            taken.insert(action.title)
             messages.append(DiagnosisMessage(speaker: .user, text: action.title))
         } catch {
             self.error = PlantyError.from(error)

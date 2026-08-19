@@ -160,3 +160,24 @@ struct SectionHeading: View {
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
+
+/// SecondaryButtonStyle's geometry in destructive colour. Belongs next to the
+/// styles it mirrors in DesignSystem; parked here because this change was
+/// scoped away from that directory.
+struct DestructiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(PlantyColor.red)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .padding(.horizontal, 16)
+            .background(
+                PlantyColor.surface.opacity(configuration.isPressed ? 0.7 : 1),
+                in: Capsule()
+            )
+            .overlay {
+                Capsule().stroke(PlantyColor.red.opacity(0.5), lineWidth: 1)
+            }
+            .contentShape(Capsule())
+    }
+}

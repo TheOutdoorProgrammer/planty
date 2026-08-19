@@ -168,6 +168,37 @@ final class CaptureStore {
 
     func clearSettled() { settled = nil }
 
+    /// Names the plant from the photo, creates it, and keeps the picture as
+    /// the first frame of its story. This is the first-run path: the empty
+    /// state promises Planty can help after the picture, and until now tapping
+    /// through led to an empty picker with the photo thrown away.
+    func createPlant(named name: String?, metadata: CaptureMetadata) async -> Plant? {
+        guard let photo = stage.photo else { return nil }
+        stage = .saving(photo, nil)
+
+        do {
+            let made = try await api.createPlantFromPhoto(
+                PlantFromPhoto(
+                    jpeg: photo.jpeg,
+                    metadata: metadata,
+                    commonName: name,
+                    location: nil,
+                    steward: nil
+                )
+            )
+            selectedPlant = made.plant
+            stage = .ready
+            note = ""
+            toast = made.photoError == nil
+                ? "\(made.plant.commonName) added, with today's photo."
+                : "\(made.plant.commonName) added, but the photo was not kept."
+            return made.plant
+        } catch {
+            stage = .failed(photo, nil, PlantyError.from(error))
+            return nil
+        }
+    }
+
     /// Uploads the photo and hands back the stored record, so a diagnosis can
     /// name the frame it is about. Without this the model was asked to compare
     /// a picture the service had never received.

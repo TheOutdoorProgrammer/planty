@@ -3,6 +3,9 @@ import SwiftUI
 struct MessageRow: View {
     let message: DiagnosisMessage
     let plant: Plant
+    /// Which offered actions are already filed, so the button says so instead
+    /// of quietly recording a second copy.
+    var taken: Set<String> = []
     let perform: (DiagnosisOfferedAction) -> Void
 
     var body: some View {
@@ -11,7 +14,7 @@ struct MessageRow: View {
             userBubble
         case .planty:
             if let turn = message.turn {
-                TurnCard(turn: turn, plantName: plant.commonName, perform: perform)
+                TurnCard(turn: turn, plantName: plant.commonName, taken: taken, perform: perform)
             } else {
                 plantyBubble
             }
@@ -44,6 +47,9 @@ struct MessageRow: View {
 struct TurnCard: View {
     let turn: DiagnosisTurn
     let plantName: String
+    /// Which offered actions are already filed, so a second tap says so
+    /// instead of quietly recording a duplicate.
+    var taken: Set<String> = []
     let perform: (DiagnosisOfferedAction) -> Void
 
     private var accent: Color {
@@ -86,8 +92,12 @@ struct TurnCard: View {
             }
 
             ForEach(turn.offeredActions) { action in
-                Button(action.title) { perform(action) }
-                    .buttonStyle(PrimaryButtonStyle(color: accent))
+                let done = taken.contains(action.title)
+                Button(done ? "\(action.title) — recorded" : action.title) {
+                    perform(action)
+                }
+                .buttonStyle(PrimaryButtonStyle(color: done ? PlantyColor.quietDecoration : accent))
+                .disabled(done)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

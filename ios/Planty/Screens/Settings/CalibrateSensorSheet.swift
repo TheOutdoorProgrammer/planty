@@ -5,11 +5,13 @@ import SwiftUI
 /// take each reading rather than asking for two numbers.
 struct CalibrateSensorSheet: View {
     let link: SensorLink
-    let save: (SensorCalibration) -> Void
+    let save: (SensorCalibration) async -> PlantyError?
 
     @Environment(\.dismiss) private var dismiss
     @State private var dry = ""
     @State private var wet = ""
+    @State private var isSaving = false
+    @State private var failure: PlantyError?
 
     var body: some View {
         NavigationStack {
@@ -65,25 +67,49 @@ struct CalibrateSensorSheet: View {
                             .foregroundStyle(PlantyColor.secondaryText)
                     }
                 }
+
+                if let failure {
+                    Section {
+                        Label {
+                            Text("""
+                                \(failure.errorDescription ?? "The service did not answer.") \
+                                Nothing was saved; your readings are still here.
+                                """)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .foregroundStyle(PlantyColor.orange)
+                    }
+                }
             }
             .scrollContentBackground(.hidden)
             .plantyPage()
             .navigationTitle("Calibrate")
             .navigationBarTitleDisplayMode(.inline)
+            .interactiveDismissDisabled(isSaving)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        if let ready = proposed, ready.readsTheRightWayRound {
-                            save(ready)
-                        }
+                    Button(isSaving ? "Saving…" : "Save") {
+                        Task { await attemptSave() }
                     }
-                    .disabled(proposed?.readsTheRightWayRound != true)
+                    .disabled(proposed?.readsTheRightWayRound != true || isSaving)
                 }
             }
         }
+    }
+
+    /// Dismisses only once the service accepted the baselines. A failure keeps
+    /// the sheet open with both readings intact.
+    private func attemptSave() async {
+        guard let ready = proposed, ready.readsTheRightWayRound else { return }
+        isSaving = true
+        failure = await save(ready)
+        isSaving = false
+        if failure == nil { dismiss() }
     }
 
     private var proposed: SensorCalibration? {

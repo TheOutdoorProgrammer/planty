@@ -123,19 +123,40 @@ struct SettingsScreen: View {
         token = session.configuration.token ?? ""
     }
 
-    private func saveAndTest() async {
-        session.updateConfiguration(baseURL: baseURL, token: token)
-        probe = .checking
-        do {
-            try await session.api.health()
-            probe = .healthy
-            await session.today.load()
-            await session.library.load()
-        } catch {
-            probe = .failed(
-                PlantyError.from(error).errorDescription ?? "The service did not answer."
-            )
+    /// Probes the typed configuration before anything persists: a typo'd URL
+    /// must never replace a working one. Clearing the URL is an explicit
+    /// unconfigure and skips the probe, because there is nothing left to ask.
+    private func testAndSave() async {
+        let typedURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let typedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !typedURL.isEmpty else {
+            session.updateConfiguration(baseURL: baseURL, token: token)
+            probe = .idle
+            return
         }
+        guard let url = URL(string: typedURL), url.scheme != nil else {
+            probe = .failed("That is not a URL Planty can call. Nothing was saved.")
+            return
+        }
+
+        probe = .checking
+        let candidate = PlantyConfiguration(
+            baseURL: url,
+            token: typedToken.isEmpty ? nil : typedToken
+        )
+        do {
+            try await PlantyClient(configuration: candidate).health()
+        } catch {
+            let reason = PlantyError.from(error).errorDescription ?? "The service did not answer."
+            probe = .failed("\(reason) Nothing was saved; the working configuration still stands.")
+            return
+        }
+
+        session.updateConfiguration(baseURL: baseURL, token: token)
+        probe = .healthy
+        await session.today.load()
+        await session.library.load()
     }
 }
 
@@ -152,14 +173,29 @@ struct SensorListScreen: View {
     let api: any PlantyAPI
 
     @State private var links: [SensorLink] = []
+    @State private var hasLoaded = false
     @State private var error: PlantyError?
     @State private var calibrating: SensorLink?
+    @State private var isLinking = false
 
     var body: some View {
         List {
             if let error {
                 Text(error.errorDescription ?? "Could not load sensors.")
                     .foregroundStyle(PlantyColor.orange)
+                    .listRowBackground(PlantyColor.surface)
+            }
+            if !hasLoaded {
+                // Before the first answer, a blank list would claim "nothing
+                // is linked", which is the one thing not yet known.
+                HStack(spacing: 12) {
+                    ProgressView()
+                    Text("Asking which probes are linked…")
+                        .foregroundStyle(PlantyColor.secondaryText)
+                }
+                .listRowBackground(PlantyColor.surface)
+            } else if links.isEmpty && error == nil {
+                emptyState
             }
             ForEach(links) { link in
                 Button {
@@ -169,19 +205,49 @@ struct SensorListScreen: View {
                 }
                 .buttonStyle(.plain)
                 .listRowBackground(PlantyColor.surface)
+                .accessibilityHint("Opens calibration.")
             }
         }
         .scrollContentBackground(.hidden)
         .plantyPage()
         .navigationTitle("Sensors")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    isLinking = true
+                } label: {
+                    Label("Link a sensor", systemImage: "plus")
+                }
+            }
+        }
         .sheet(item: $calibrating) { link in
             CalibrateSensorSheet(link: link) { calibration in
-                calibrating = nil
-                Task { await apply(calibration, to: link) }
+                await apply(calibration, to: link)
+            }
+        }
+        .sheet(isPresented: $isLinking) {
+            LinkSensorSheet(api: api) { saved in
+                links.append(saved)
             }
         }
         .task { await load() }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("No sensors are linked.")
+                .font(.headline)
+            Text("""
+                Planty only trusts what it can measure. Link a Home Assistant \
+                probe and its readings start backing the verdicts.
+                """)
+                .font(.subheadline)
+                .foregroundStyle(PlantyColor.secondaryText)
+            Button("Link a sensor") { isLinking = true }
+                .buttonStyle(SecondaryButtonStyle())
+        }
+        .listRowBackground(PlantyColor.surface)
     }
 
     private func row(for link: SensorLink) -> some View {
@@ -207,19 +273,23 @@ struct SensorListScreen: View {
             links = try await api.sensors()
             error = nil
         } catch {
+            guard !PlantyError.isCancellation(error) else { return }
             self.error = PlantyError.from(error)
         }
+        hasLoaded = true
     }
 
-    private func apply(_ calibration: SensorCalibration, to link: SensorLink) async {
+    /// Returns the failure so the calibration sheet can stay open with the
+    /// typed baselines instead of dismissing into a list-level error.
+    private func apply(_ calibration: SensorCalibration, to link: SensorLink) async -> PlantyError? {
         do {
             let saved = try await api.calibrate(sensorID: link.id, to: calibration)
             if let index = links.firstIndex(where: { $0.id == saved.id }) {
                 links[index] = saved
             }
-            error = nil
+            return nil
         } catch {
-            self.error = PlantyError.from(error)
+            return PlantyError.from(error)
         }
     }
 }

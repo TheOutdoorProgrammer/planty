@@ -34,7 +34,18 @@ struct SnapScreen: View {
             }
             .overlay(alignment: .top) { toast }
             .sheet(isPresented: $isPickingPlant) {
-                PlantPickerSheet(plants: session.library.plants) { plant in
+                PlantPickerSheet(plants: session.library.plants) { name in
+                    isPickingPlant = false
+                    Task {
+                        // Identified, created and photographed in one step, so
+                        // a first run never ends holding a picture of nothing.
+                        let metadata = store.stage.photo
+                            .map { CaptureMetadataReader.read(from: $0.jpeg) } ?? CaptureMetadata()
+                        if await store.createPlant(named: name, metadata: metadata) != nil {
+                            await session.library.load()
+                        }
+                    }
+                } pick: { plant in
                     store.selectedPlant = plant
                     isPickingPlant = false
                 }
