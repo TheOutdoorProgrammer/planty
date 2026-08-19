@@ -15,6 +15,7 @@ final class IdentificationStore {
     private(set) var stage = Stage.idle
 
     private let pipeline: IdentificationPipeline
+    private var activeRequest: UUID?
 
     init(pipeline: IdentificationPipeline) {
         self.pipeline = pipeline
@@ -23,12 +24,18 @@ final class IdentificationStore {
     /// Vision and the network both run off the main actor: the pipeline is a
     /// plain Sendable struct, so awaiting it never parks the UI.
     func identify(jpeg: Data, assetID: String?) async {
+        let request = UUID()
+        activeRequest = request
         stage = .working
         let outcome = await pipeline.identify(pickedData: jpeg, assetID: assetID)
+        guard activeRequest == request else { return }
         stage = .done(outcome)
     }
 
-    func reset() { stage = .idle }
+    func reset() {
+        activeRequest = nil
+        stage = .idle
+    }
 
     var outcome: IdentificationOutcome? {
         if case .done(let outcome) = stage { return outcome }

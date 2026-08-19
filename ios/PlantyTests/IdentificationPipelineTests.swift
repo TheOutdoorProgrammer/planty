@@ -41,6 +41,18 @@ private struct FakeIdentifier: PlantIdentifying {
     }
 }
 
+private struct DelayedIdentifier: PlantIdentifying {
+    var backendID = "delayed/v1"
+
+    func identify(imageData: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate] {
+        if imageData == Data([1]) {
+            try await Task.sleep(for: .milliseconds(100))
+        }
+        let name = imageData == Data([1]) ? "First photo" : "Second photo"
+        return [IdentificationCandidate(commonName: name, scientificName: nil, confidence: 0.9)]
+    }
+}
+
 @Suite("Identification pipeline")
 struct IdentificationPipelineTests {
     private let epoch = Date(timeIntervalSince1970: 1_700_000_000)
@@ -202,5 +214,25 @@ struct IdentificationPipelineTests {
         #expect(candidate("a", 0.9).strength == .likely)
         #expect(candidate("a", 0.5).strength == .possible)
         #expect(candidate("a", 0.2).strength == .weak)
+    }
+
+    @Test("A slow identification cannot replace a newer photo's result")
+    @MainActor
+    func newestPhotoWins() async {
+        let delayed = IdentificationStore(pipeline: IdentificationPipeline(
+            intake: PickerOnlyIntake(),
+            analyzer: FakeAnalyzer(),
+            identifier: DelayedIdentifier(),
+            cache: MemoryIdentificationCache()
+        ))
+
+        let first = Task { @MainActor in
+            await delayed.identify(jpeg: Data([1]), assetID: nil)
+        }
+        await Task.yield()
+        await delayed.identify(jpeg: Data([2]), assetID: nil)
+        await first.value
+
+        #expect(delayed.outcome?.identification?.best?.commonName == "Second photo")
     }
 }

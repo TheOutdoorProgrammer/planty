@@ -105,9 +105,10 @@ An item is checked only after the implementation, regression test, commit, and p
   `TodayStore`, `PlantsStore`, and `PlantStoryStore` allow overlapping loads and publish whichever response finishes last.
   `AppSession.updateConfiguration` swaps clients without invalidating in-flight operations, so old-server data can repopulate a newly configured session.
 
-- [ ] **PNT-020 — Overlapping identification can show results for the wrong photo.**
+- [x] **PNT-020 — Overlapping identification can show results for the wrong photo.**
   `SnapScreen` launches unowned tasks and `IdentificationStore.identify` publishes every completion without cancellation or a photo-generation check.
   A slower result for photo A can overwrite the candidates displayed beside photo B.
+  Fixed by assigning every identification a request identity and allowing only the newest request to publish, with a regression test where the first photo finishes last.
 
 - [ ] **PNT-021 — Owner-question answer failures discard the typed answer.**
   `TodayStore.answer` absorbs the failure, while `AnswerSheet` always dismisses after awaiting it.
