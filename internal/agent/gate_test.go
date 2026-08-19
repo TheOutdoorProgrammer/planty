@@ -52,13 +52,30 @@ func TestThePlantyCLIIsNotItselfTheAllowlist(t *testing.T) {
 		"planty water",
 		"planty migrate",
 		"planty seed",
+		"planty autopsy",
 		"planty autopsy golden-pothos",
 		"planty daily",
+		"planty cold",
+		"planty away",
+		"planty chase",
+		"planty thirst",
+		"planty ingest",
+		"planty remind",
 		"planty serve",
+		"planty gate",
 	} {
 		if code := gated(t, command); code != Blocked {
 			t.Errorf("a dangerous planty verb was allowed through: %s", command)
 		}
+	}
+}
+
+// The gate only checks the `planty agent ` prefix; which verbs exist is Run's
+// decision. TestExcludedCommandsAreNotAgentVerbs is the tripwire that fires if
+// somebody ever adds an autopsy verb behind this passing prefix.
+func TestTheGatePassesAgentAutopsyToRunToRefuse(t *testing.T) {
+	if code := gated(t, "planty agent autopsy golden-pothos"); code != 0 {
+		t.Error("the gate started deciding verbs; that job belongs to Run")
 	}
 }
 

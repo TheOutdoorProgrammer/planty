@@ -36,7 +36,7 @@ const usage = `planty <command>
   thirst   report which plants the probes call dry, and water nothing
   water    run the LetPot line and verify it, only when asked by hand
   autopsy  work out what killed a plant: planty autopsy <slug>
-  agent    the short list of things a model may do: planty agent help
+  agent    everything a model may do to the garden: planty agent help
   gate     PreToolUse hook deciding whether a tool call may proceed
   seed     load the sabbatical plants and their open questions
   migrate  apply database migrations and exit
@@ -124,7 +124,9 @@ func run(log *slog.Logger) error {
 	case "autopsy":
 		return autopsy(ctx, db, log)
 	case "agent":
-		return agent.Run(ctx, db, os.Stdout, os.Args[2:])
+		// The agent's water verb runs the same surveyed LetPot pass as `water`.
+		return agent.Run(ctx, agent.Deps{Store: db, Water: water(db, log).Run},
+			os.Stdout, os.Args[2:])
 	case "seed":
 		return seed.Friends(ctx, db, log, os.Getenv("PLANTY_FRIEND_NAME"))
 	default:
