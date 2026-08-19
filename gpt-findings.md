@@ -208,9 +208,10 @@ An item is checked only after the implementation, regression test, commit, and p
 - [ ] **PNT-046 — The API contract advertises a nonexistent diagnosis route.**
   `docs/DATA-MODEL.md` still lists `POST /v1/plants/{slug}/diagnosis`, while the server folded that behavior into consultation and registers no such route.
 
-- [ ] **PNT-047 — Safety-critical pump duration configuration fails open.**
+- [x] **PNT-047 — Safety-critical pump duration configuration fails open.**
   Invalid, zero, or negative `PLANTY_PUMP_SECONDS` silently falls back to two minutes.
   Invalid safety configuration should prevent watering and report the bad value.
+  Fixed by parsing pump duration only when watering is invoked, rejecting every explicitly invalid value, and retaining the default only when configuration is omitted.
 
 - [ ] **PNT-048 — Internal server errors are returned verbatim.**
   Every 5xx response serializes `err.Error()`, including Postgres, object storage, Home Assistant, and Claude CLI errors.

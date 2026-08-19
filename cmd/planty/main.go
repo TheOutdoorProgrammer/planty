@@ -126,12 +126,14 @@ func run(log *slog.Logger) error {
 	case "thirst":
 		return job.Thirst{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
 	case "water":
-		return water(db, log).Run(ctx)
+		return water(ctx, db, log)
 	case "autopsy":
 		return autopsy(ctx, db, log)
 	case "agent":
 		// The agent's water verb runs the same surveyed LetPot pass as `water`.
-		return agent.Run(ctx, agent.Deps{Store: db, Water: water(db, log).Run},
+		return agent.Run(ctx, agent.Deps{Store: db, Water: func(ctx context.Context) error {
+			return water(ctx, db, log)
+		}},
 			os.Stdout, os.Args[2:])
 	case "seed":
 		return seed.Friends(ctx, db, log, os.Getenv("PLANTY_FRIEND_NAME"))
@@ -255,12 +257,10 @@ func coldWatch(db *store.Store, log *slog.Logger) job.ColdWatch {
 	}
 }
 
-func water(db *store.Store, log *slog.Logger) job.Water {
-	runFor := 2 * time.Minute
-	if raw := os.Getenv("PLANTY_PUMP_SECONDS"); raw != "" {
-		if secs, err := strconv.Atoi(raw); err == nil && secs > 0 {
-			runFor = time.Duration(secs) * time.Second
-		}
+func water(ctx context.Context, db *store.Store, log *slog.Logger) error {
+	runFor, err := pumpDuration(os.Getenv("PLANTY_PUMP_SECONDS"))
+	if err != nil {
+		return err
 	}
 	return job.Water{
 		Store:      db,
@@ -270,7 +270,19 @@ func water(db *store.Store, log *slog.Logger) job.Water {
 		PumpSwitch: os.Getenv("PLANTY_PUMP_SWITCH"),
 		PumpSensor: os.Getenv("PLANTY_PUMP_SENSOR"),
 		RunFor:     runFor,
+	}.Run(ctx)
+}
+
+func pumpDuration(raw string) (time.Duration, error) {
+	if raw == "" {
+		return 2 * time.Minute, nil
 	}
+	seconds, err := strconv.ParseInt(raw, 10, 64)
+	const maxDurationSeconds = int64((1<<63 - 1) / time.Second)
+	if err != nil || seconds <= 0 || seconds > maxDurationSeconds {
+		return 0, fmt.Errorf("PLANTY_PUMP_SECONDS must be a positive integer, got %q", raw)
+	}
+	return time.Duration(seconds) * time.Second, nil
 }
 
 func autopsy(ctx context.Context, db *store.Store, log *slog.Logger) error {

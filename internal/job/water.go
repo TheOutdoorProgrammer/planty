@@ -148,9 +148,8 @@ func (w Water) reportConflict(ctx context.Context, thirsty, soaked []string) err
 }
 
 func (w Water) runLine(ctx context.Context, thirsty []string) error {
-	runFor := w.RunFor
-	if runFor <= 0 {
-		runFor = 2 * time.Minute
+	if w.RunFor <= 0 {
+		return errors.New("pump run duration must be positive")
 	}
 
 	started := time.Now().UTC()
@@ -158,7 +157,7 @@ func (w Water) runLine(ctx context.Context, thirsty []string) error {
 		map[string]any{"entity_id": w.PumpSwitch}); err != nil {
 		return fmt.Errorf("start pump: %w", err)
 	}
-	w.Log.Info("pump on", "for", runFor, "thirsty", thirsty)
+	w.Log.Info("pump on", "for", w.RunFor, "thirsty", thirsty)
 
 	// The stop is deferred so a cancelled context or a panic still closes the
 	// valve. A duration this code is holding cannot be reset by a restart the
@@ -173,7 +172,7 @@ func (w Water) runLine(ctx context.Context, thirsty []string) error {
 	}()
 
 	select {
-	case <-time.After(runFor):
+	case <-time.After(w.RunFor):
 	case <-ctx.Done():
 		return ctx.Err()
 	}

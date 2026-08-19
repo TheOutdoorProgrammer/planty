@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 // manual is every command deliberately not on a schedule, and why. A command
@@ -59,6 +60,34 @@ func TestEveryScheduledCommandStillExists(t *testing.T) {
 		if !documented[name] {
 			t.Errorf("a CronJob runs %q, which planty does not offer", name)
 		}
+	}
+}
+
+func TestPumpDurationRejectsUnsafeConfiguration(t *testing.T) {
+	for _, raw := range []string{"nonsense", "0", "-1", "9223372036854775807"} {
+		t.Run(raw, func(t *testing.T) {
+			if _, err := pumpDuration(raw); err == nil {
+				t.Fatalf("pump duration %q was accepted", raw)
+			}
+		})
+	}
+}
+
+func TestPumpDurationDefaultsOnlyWhenOmitted(t *testing.T) {
+	got, err := pumpDuration("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 2*time.Minute {
+		t.Fatalf("default duration = %v, want 2m", got)
+	}
+
+	got, err = pumpDuration("90")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != 90*time.Second {
+		t.Fatalf("configured duration = %v, want 90s", got)
 	}
 }
 

@@ -44,6 +44,19 @@ func TestStaleReadingsCannotDriveWatering(t *testing.T) {
 	}
 }
 
+func TestPumpDoesNotStartWithoutAPositiveDuration(t *testing.T) {
+	f := newFakeHA(t, weatherEntity)
+	err := (Water{
+		HA: f.client(), Log: quietLog(), PumpSwitch: "switch.letpot",
+	}).runLine(context.Background(), []string{"Tomato"})
+	if err == nil {
+		t.Fatal("an unset run duration was accepted")
+	}
+	if len(f.services) != 0 {
+		t.Fatalf("invalid configuration called Home Assistant services: %v", f.services)
+	}
+}
+
 // Planty with no API key still has to run: the cold watch and the watering
 // line are what keep plants alive and neither needs a model. Failing here
 // would fail the digest at eight every morning, forever.
