@@ -76,7 +76,14 @@ func (s *Store) CreatePlant(ctx context.Context, p plant.Plant) (plant.Plant, er
 		return plant.Plant{}, err
 	}
 	if p.Slug == "" {
-		p.Slug = Slugify(p.CommonName)
+		// FreeSlug rather than Slugify: owning two ferns is ordinary, and the
+		// plain form collided so the second one was refused outright. Two
+		// callers already did this and the plain create endpoint did not.
+		free, err := s.FreeSlug(ctx, p.CommonName)
+		if err != nil {
+			return plant.Plant{}, err
+		}
+		p.Slug = free
 	}
 
 	profile, err := json.Marshal(p.CareProfile)

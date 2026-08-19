@@ -98,3 +98,37 @@ func TestUnhashedPhotographsDoNotCollide(t *testing.T) {
 		t.Errorf("unhashed photographs collided: got %d, want 2", len(shots))
 	}
 }
+
+// Owning two ferns is ordinary. The plain create endpoint used the bare slug,
+// so the second one was refused rather than numbered.
+func TestASecondPlantWithTheSameNameIsAccepted(t *testing.T) {
+	s, ctx := testStore(t)
+
+	name := t.Name() + " Fern"
+	first, err := s.CreatePlant(ctx, plant.Plant{
+		CommonName: name, Domain: plant.DomainHouseplant,
+		Steward: plant.StewardSelf, Status: plant.StatusAlive,
+		Location: "sill", Accessibility: plant.AccessEasy,
+		WateringMethod: plant.WateringHand,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := s.CreatePlant(ctx, plant.Plant{
+		CommonName: name, Domain: plant.DomainHouseplant,
+		Steward: plant.StewardSelf, Status: plant.StatusAlive,
+		Location: "shelf", Accessibility: plant.AccessEasy,
+		WateringMethod: plant.WateringHand,
+	})
+	if err != nil {
+		t.Fatalf("a second plant with the same name was refused: %v", err)
+	}
+
+	if second.Slug == first.Slug {
+		t.Errorf("both plants got the slug %q", first.Slug)
+	}
+	if second.CommonName != first.CommonName {
+		t.Error("the name was changed to make the slug unique; only the slug should differ")
+	}
+}
