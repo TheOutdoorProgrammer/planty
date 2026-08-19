@@ -186,6 +186,25 @@ Verdicts and owners:
               planty agent answer --question <id> --answer <text>
               example: planty agent answer --question 6f0dd1c2-6b3a-4e0e-9d3f-2a4b8c9d0e1f --answer "Repotted in March"
 
+  notes       read what has been written down about a plant
+              planty agent notes --plant <slug>
+              example: planty agent notes --plant golden-pothos
+
+  note        write, change or remove one note. --plant writes a new one, --id
+              changes or removes an existing one; ids come from the notes verb
+              planty agent note --plant <slug> --text <text> [--title <title>]
+              planty agent note --id <id> [--text <text>] [--title <title>]
+              planty agent note --id <id> --delete
+              Changing only --text leaves the title alone, and the other way round.
+              example: planty agent note --plant golden-pothos --text "the cat keeps chewing this one"
+
+  attach      file a photograph the person just sent against one of their plants,
+              so it joins that plant's history instead of being only a question.
+              The id is given to you in the catalogue when a photograph is sent.
+              Only for their own plants, and only for a picture not already filed.
+              planty agent attach --plant <slug> --photo <id> [--caption <text>]
+              example: planty agent attach --plant golden-pothos --photo 6f0dd1c2-6b3a-4e0e-9d3f-2a4b8c9d0e1f --caption "undersides of the leaves"
+
   toxicity    record what a plant does to whatever eats it
               planty agent toxicity --plant <slug> [--cats <level>] [--dogs <level>]
                 [--people <level>] [--basis source|derived] [--identified-as <botanical name>]
@@ -230,6 +249,10 @@ var verbs = map[string]func(Deps, context.Context, io.Writer, []string) error{
 
 	"log":     Deps.logObservation,
 	"harvest": Deps.harvest,
+
+	"notes":  Deps.notes,
+	"note":   Deps.note,
+	"attach": Deps.attach,
 
 	"remind": Deps.setReminder,
 	"forget": Deps.forgetReminder,
