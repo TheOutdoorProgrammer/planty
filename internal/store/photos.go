@@ -24,12 +24,21 @@ func (s *Store) SavePhoto(ctx context.Context, p plant.Photo) (plant.Photo, erro
 		owner = p.PlantID
 	}
 
+	// The same capture saved and then asked about arrives twice. Returning the
+	// first row rather than writing a second is what keeps a timeline free of
+	// pairs nobody can tell apart.
+	if existing, found, err := s.PhotoByHash(ctx, p.PlantID, p.ContentHash); err != nil {
+		return plant.Photo{}, err
+	} else if found {
+		return existing, nil
+	}
+
 	row := s.pool.QueryRow(ctx, `
-		INSERT INTO photos (plant_id, storage_key, taken_at, caption)
-		VALUES ($1, $2, $3, nullif($4,''))
+		INSERT INTO photos (plant_id, storage_key, taken_at, caption, content_hash)
+		VALUES ($1, $2, $3, nullif($4,''), nullif($5,''))
 		RETURNING id, plant_id, storage_key, taken_at, coalesce(caption,''),
 		          coalesce(vision_findings,''), analyzed_at, created_at`,
-		owner, p.StorageKey, p.TakenAt, p.Caption)
+		owner, p.StorageKey, p.TakenAt, p.Caption, p.ContentHash)
 
 	var out plant.Photo
 	var back *uuid.UUID
@@ -38,7 +47,43 @@ func (s *Store) SavePhoto(ctx context.Context, p plant.Photo) (plant.Photo, erro
 	if back != nil {
 		out.PlantID = *back
 	}
+	out.ContentHash = p.ContentHash
 	return out, err
+}
+
+// PhotoByHash finds an identical upload already filed against the same owner,
+// so one capture that arrives twice stays one photograph.
+func (s *Store) PhotoByHash(ctx context.Context, plantID uuid.UUID, hash string) (plant.Photo, bool, error) {
+	if hash == "" {
+		return plant.Photo{}, false, nil
+	}
+
+	var owner any
+	if plantID != uuid.Nil {
+		owner = plantID
+	}
+	row := s.pool.QueryRow(ctx, `
+		SELECT id, plant_id, storage_key, taken_at, coalesce(caption,''),
+		       coalesce(vision_findings,''), analyzed_at, created_at
+		FROM photos
+		WHERE content_hash = $1 AND plant_id IS NOT DISTINCT FROM $2`,
+		hash, owner)
+
+	var out plant.Photo
+	var back *uuid.UUID
+	err := row.Scan(&out.ID, &back, &out.StorageKey, &out.TakenAt,
+		&out.Caption, &out.VisionFindings, &out.AnalyzedAt, &out.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plant.Photo{}, false, nil
+	}
+	if err != nil {
+		return plant.Photo{}, false, err
+	}
+	if back != nil {
+		out.PlantID = *back
+	}
+	out.ContentHash = hash
+	return out, true, nil
 }
 
 // AttachPhoto gives an unowned photograph to a plant. Refuses to steal one

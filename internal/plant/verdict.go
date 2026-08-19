@@ -60,6 +60,10 @@ type Photo struct {
 	TakenAt    time.Time `json:"taken_at"`
 	Caption    string    `json:"caption,omitempty"`
 
+	// Identity, so one capture saved and then asked about is one photograph
+	// rather than two nobody can tell apart.
+	ContentHash string `json:"-"`
+
 	// Kept apart from anything a human wrote so a wrong machine reading is never
 	// later mistaken for a first-hand observation.
 	VisionFindings string     `json:"vision_findings,omitempty"`

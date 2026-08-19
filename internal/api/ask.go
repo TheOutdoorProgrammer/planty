@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -160,7 +161,10 @@ func (s *Server) attach(ctx context.Context, conversation uuid.UUID, encoded str
 		return nil, nil, err
 	}
 
-	saved, err := s.store.SavePhoto(ctx, plant.Photo{StorageKey: key, TakenAt: taken})
+	saved, err := s.store.SavePhoto(ctx, plant.Photo{
+		StorageKey: key, TakenAt: taken,
+		ContentHash: fmt.Sprintf("%x", sha256.Sum256(raw)),
+	})
 	if err != nil {
 		return nil, nil, err
 	}

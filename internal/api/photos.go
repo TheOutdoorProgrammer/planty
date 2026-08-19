@@ -3,7 +3,9 @@ package api
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"path"
@@ -75,6 +77,15 @@ func (s *Server) keepPhoto(ctx context.Context, p plant.Plant, body []byte,
 		return plant.Photo{}, ErrPhotoSize
 	}
 
+	// Checked before the upload, so the same capture saved and then asked
+	// about costs one object and one row rather than two of each.
+	sum := fmt.Sprintf("%x", sha256.Sum256(body))
+	if existing, found, err := s.store.PhotoByHash(ctx, p.ID, sum); err != nil {
+		return plant.Photo{}, err
+	} else if found {
+		return existing, nil
+	}
+
 	key := photos.Key(p.Slug, takenAt, ext)
 	if _, err := s.photos.Put(ctx, key, contentType,
 		bytes.NewReader(body), int64(len(body))); err != nil {
@@ -82,10 +93,11 @@ func (s *Server) keepPhoto(ctx context.Context, p plant.Plant, body []byte,
 	}
 
 	return s.store.SavePhoto(ctx, plant.Photo{
-		PlantID:    p.ID,
-		StorageKey: key,
-		TakenAt:    takenAt,
-		Caption:    caption,
+		PlantID:     p.ID,
+		StorageKey:  key,
+		TakenAt:     takenAt,
+		Caption:     caption,
+		ContentHash: sum,
 	})
 }
 
