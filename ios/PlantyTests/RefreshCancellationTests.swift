@@ -61,6 +61,10 @@ private final class HangingAPI: PlantyAPI, @unchecked Sendable {
         try await Task.sleep(for: .seconds(60))
         return []
     }
+
+    func answerQuestion(id: UUID, answer: String) async throws {
+        try await Task.sleep(for: .seconds(60))
+    }
     func householdNotes() async throws -> [PlantNote] {
         try await Task.sleep(for: .seconds(60))
         return []

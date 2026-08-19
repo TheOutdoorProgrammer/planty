@@ -264,3 +264,58 @@ struct HouseholdNotesTests {
         #expect(house.error == .offline)
     }
 }
+
+/// Ten of these piled up in a table with no reader, so the outlet matters as
+/// much as the queue.
+@Suite("Questions waiting on a person")
+struct OpenQuestionTests {
+    @Test("They reach the Today screen")
+    @MainActor
+    func questionsSurface() async {
+        let api = FakeAPI()
+        api.digest = .fixture(openQuestions: [
+            .fixture(question: "Is the front porch covered?", askedOf: "Aric")
+        ])
+        let store = TodayStore(api: api, isConfigured: true)
+        await store.load()
+
+        #expect(store.openQuestions.count == 1)
+        #expect(store.openQuestions.first?.audience == "Aric")
+    }
+
+    @Test("Answering records it and reloads")
+    @MainActor
+    func answeringRecordsIt() async {
+        let api = FakeAPI()
+        let question = OpenQuestion.fixture(question: "How old is it?", askedOf: "Aric")
+        api.digest = .fixture(openQuestions: [question])
+        let store = TodayStore(api: api, isConfigured: true)
+        await store.load()
+
+        await store.answer(question, with: "About three years")
+
+        #expect(api.answeredQuestions.count == 1)
+        #expect(api.answeredQuestions.first?.1 == "About three years")
+    }
+
+    @Test("An empty answer is never sent")
+    @MainActor
+    func emptyAnswersAreNotSent() async {
+        let api = FakeAPI()
+        let store = TodayStore(api: api, isConfigured: true)
+
+        await store.answer(.fixture(), with: "   ")
+
+        #expect(api.answeredQuestions.isEmpty)
+    }
+
+    /// A service that has never heard of them must not break the whole digest.
+    @Test("A digest without the field still decodes")
+    func absentFieldIsFine() throws {
+        let json = Data("""
+        {"date":"2026-08-19T08:00:00Z","entries":[],"checked":3,"never_run":false}
+        """.utf8)
+        let digest = try PlantyCoders.decoder().decode(Digest.self, from: json)
+        #expect(digest.openQuestions.isEmpty)
+    }
+}

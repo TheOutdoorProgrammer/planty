@@ -115,6 +115,21 @@ final class TodayStore {
     /// Records what happened and drops the card, the only route by which an
     /// action may disappear as complete. The acknowledgement stops the service
     /// escalating, so its failure is reported rather than swallowed.
+    /// Waiting on a person rather than a plant, and answered from here so the
+    /// queue has an outlet instead of filling up unread.
+    var openQuestions: [OpenQuestion] { digest?.openQuestions ?? [] }
+
+    func answer(_ question: OpenQuestion, with words: String) async {
+        let said = words.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !said.isEmpty else { return }
+        do {
+            try await api.answerQuestion(id: question.id, answer: said)
+            await load()
+        } catch {
+            actionError = PlantyError.from(error)
+        }
+    }
+
     func complete(_ entry: DigestEntry, kind: ObservationKind, note: String = "") async {
         do {
             _ = try await api.addObservation(

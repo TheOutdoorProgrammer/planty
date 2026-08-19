@@ -44,6 +44,7 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     private var _notes: [PlantNote] = []
     private var _detailVerdict: Verdict?
     private var _household: [PlantNote] = []
+    private var _answered: [(UUID, String)] = []
     private var _scratchAsks: [ScratchQuestion] = []
     private var _created: [String] = []
     private var _uploads: [(String, Data)] = []
@@ -70,6 +71,8 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
         get { lock.withLock { _notes } }
         set { lock.withLock { _notes = newValue } }
     }
+
+    var answeredQuestions: [(UUID, String)] { lock.withLock { _answered } }
 
     var householdList: [PlantNote] {
         get { lock.withLock { _household } }
@@ -217,6 +220,11 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
         return noteList
     }
 
+
+    func answerQuestion(id: UUID, answer: String) async throws {
+        try check()
+        lock.withLock { _answered.append((id, answer)) }
+    }
     func householdNotes() async throws -> [PlantNote] {
         try check()
         return householdList

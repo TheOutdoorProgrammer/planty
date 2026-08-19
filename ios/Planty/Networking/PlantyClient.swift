@@ -118,6 +118,13 @@ struct PlantyClient: PlantyAPI {
         return response.notes
     }
 
+    func answerQuestion(id: UUID, answer: String) async throws {
+        var request = try makeRequest("POST", "/v1/questions/\(id.uuidString)/answer")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try PlantyCoders.encoder().encode(QuestionAnswer(answer: answer))
+        _ = try await perform(request)
+    }
+
     func householdNotes() async throws -> [PlantNote] {
         let response: NoteListResponse = try await get("/v1/notes")
         return response.notes

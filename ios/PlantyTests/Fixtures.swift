@@ -85,9 +85,13 @@ extension Digest {
         date: Date = .reference,
         entries: [DigestEntry] = [],
         checked: Int = 8,
-        staleSince: Date? = nil
+        staleSince: Date? = nil,
+        openQuestions: [OpenQuestion] = []
     ) -> Digest {
-        Digest(date: date, entries: entries, checked: checked, staleSince: staleSince)
+        Digest(
+            date: date, entries: entries, checked: checked,
+            staleSince: staleSince, openQuestions: openQuestions
+        )
     }
 }
 
@@ -199,6 +203,23 @@ extension PlantNote {
             body: body,
             createdAt: createdAt,
             updatedAt: updatedAt ?? createdAt
+        )
+    }
+}
+
+extension OpenQuestion {
+    static func fixture(
+        question: String = "Has it ever been repotted?",
+        askedOf: String = "self",
+        why: String? = nil
+    ) -> OpenQuestion {
+        OpenQuestion(
+            id: UUID(),
+            plantID: nil,
+            askedOf: askedOf,
+            question: question,
+            why: why,
+            createdAt: .reference
         )
     }
 }

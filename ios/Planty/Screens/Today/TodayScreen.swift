@@ -17,6 +17,12 @@ struct TodayScreen: View {
                         UpdateBanner(release: release) { session.updates.dismiss() }
                     }
                     content
+
+                    // Below the day's actions: a question for an absent friend
+                    // is worth surfacing, but never ahead of a thirsty plant.
+                    OpenQuestionsCard(questions: store.openQuestions) { question, answer in
+                        await store.answer(question, with: answer)
+                    }
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 24)

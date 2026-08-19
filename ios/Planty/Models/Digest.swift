@@ -15,12 +15,17 @@ struct Digest: Codable, Sendable, Hashable {
     /// must never render as calm.
     var neverRun = false
 
+    /// Waiting on a person rather than on a plant. Absent from older services,
+    /// so it defaults empty rather than failing the whole digest.
+    var openQuestions: [OpenQuestion] = []
+
     enum CodingKeys: String, CodingKey {
         case date
         case entries
         case checked
         case staleSince = "stale_since"
         case neverRun = "never_run"
+        case openQuestions = "open_questions"
     }
 
     /// Nothing to do, the data behind that claim is fresh, and something has
@@ -32,8 +37,10 @@ struct Digest: Codable, Sendable, Hashable {
         entries: [DigestEntry],
         checked: Int,
         staleSince: Date? = nil,
-        neverRun: Bool = false
+        neverRun: Bool = false,
+        openQuestions: [OpenQuestion] = []
     ) {
+        self.openQuestions = openQuestions
         self.date = date
         self.entries = entries
         self.checked = checked
@@ -51,6 +58,8 @@ struct Digest: Codable, Sendable, Hashable {
         // An empty list is null on some encoders, and refusing to decode the
         // whole digest over that took the Today tab down entirely.
         entries = try container.decodeIfPresent([DigestEntry].self, forKey: .entries) ?? []
+        openQuestions = try container.decodeIfPresent(
+            [OpenQuestion].self, forKey: .openQuestions) ?? []
     }
 
     /// Drops entries the user already settled, without touching `checked`:
