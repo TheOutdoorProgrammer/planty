@@ -20,13 +20,22 @@ struct CapturedPhoto: Sendable, Equatable, Identifiable {
 enum CaptureStage: Sendable, Equatable {
     case ready
     case captured(CapturedPhoto)
-    case saving(CapturedPhoto)
-    case failed(CapturedPhoto, PlantyError)
+    case saving(CapturedPhoto, ObservationKind?)
+    case failed(CapturedPhoto, ObservationKind?, PlantyError)
 
     var photo: CapturedPhoto? {
         switch self {
         case .ready: nil
-        case .captured(let photo), .saving(let photo), .failed(let photo, _): photo
+        case .captured(let photo), .saving(let photo, _), .failed(let photo, _, _): photo
+        }
+    }
+
+    /// What the user said they did, kept across a failure so a retry records
+    /// the watering rather than just re-saving the picture.
+    var recording: ObservationKind? {
+        switch self {
+        case .ready, .captured: nil
+        case .saving(_, let kind), .failed(_, let kind, _): kind
         }
     }
 
@@ -49,6 +58,18 @@ final class CaptureStore {
     /// never be resolved silently.
     private(set) var suggestion: Plant?
 
+    /// The verdict this capture was started from, when it came from a card on
+    /// Today. Acknowledging it is what stops the service escalating, so a
+    /// capture that answers a card has to carry it all the way through.
+    var answering: UUID?
+
+    /// Set when the record was written but the verdict could not be settled,
+    /// so the card is honestly left in place rather than hidden.
+    private(set) var stillAsking = false
+
+    /// The verdict settled by the last successful save, for Today to hide.
+    private(set) var settled: UUID?
+
     private var api: any PlantyAPI
 
     init(api: any PlantyAPI, selectedPlant: Plant? = nil) {
@@ -61,6 +82,9 @@ final class CaptureStore {
         stage = .ready
         selectedPlant = nil
         note = ""
+        answering = nil
+        settled = nil
+        stillAsking = false
     }
 
     func accept(jpeg: Data) {
@@ -81,17 +105,22 @@ final class CaptureStore {
     /// Saves the photo, then the optional exception tag. The photo goes first
     /// on purpose: an orphan photo is recoverable, a lost one is not.
     func save(recording kind: ObservationKind?) async {
-        guard let photo = stage.photo, let plant = selectedPlant else { return }
-        stage = .saving(photo)
+        guard var photo = stage.photo, let plant = selectedPlant else { return }
+        stage = .saving(photo, kind)
+        stillAsking = false
 
+        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
         do {
-            let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-            let uploaded = try await api.uploadPhoto(
-                slug: plant.slug,
-                jpeg: photo.jpeg,
-                caption: trimmedNote.isEmpty ? nil : trimmedNote,
-                takenAt: photo.takenAt
-            )
+            // Skipped when a previous attempt already got the photo up, so a
+            // half-failed save does not leave two copies in the story.
+            if photo.uploaded == nil {
+                photo.uploaded = try await api.uploadPhoto(
+                    slug: plant.slug,
+                    jpeg: photo.jpeg,
+                    caption: trimmedNote.isEmpty ? nil : trimmedNote,
+                    takenAt: photo.takenAt
+                )
+            }
             if let kind {
                 _ = try await api.addObservation(
                     slug: plant.slug,
@@ -101,21 +130,43 @@ final class CaptureStore {
                     )
                 )
             }
-            var saved = photo
-            saved.uploaded = uploaded
-            stage = .ready
-            note = ""
-            toast = "Photo added to \(plant.commonName)'s story."
         } catch {
-            stage = .failed(photo, PlantyError.from(error))
+            stage = .failed(photo, kind, PlantyError.from(error))
+            return
         }
+
+        // Doing the thing the card asked for is what settles it. Without this
+        // the card survives the whole flow and the service keeps escalating.
+        if let verdict = answering, kind != nil {
+            do {
+                try await api.acknowledge(verdictID: verdict)
+                settled = verdict
+            } catch {
+                stillAsking = true
+            }
+        }
+
+        stage = .ready
+        note = ""
+        answering = nil
+        toast = savedMessage(plant: plant, kind: kind)
     }
 
-    func retrySave(recording kind: ObservationKind?) async {
-        guard case .failed(let photo, _) = stage else { return }
+    private func savedMessage(plant: Plant, kind: ObservationKind?) -> String {
+        if stillAsking {
+            return "Saved, but Planty may ask again."
+        }
+        guard let kind else { return "Photo added to \(plant.commonName)'s story." }
+        return "\(kind.label) recorded for \(plant.commonName)."
+    }
+
+    func retrySave() async {
+        guard case .failed(let photo, let kind, _) = stage else { return }
         stage = .captured(photo)
         await save(recording: kind)
     }
+
+    func clearSettled() { settled = nil }
 
     func clearToast() { toast = nil }
 }

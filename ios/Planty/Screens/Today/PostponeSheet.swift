@@ -36,47 +36,131 @@ struct PostponeSheet: View {
     }
 }
 
-/// One tap, no typing. "I already handled it" still has to say what happened,
-/// because the record is what future diagnoses read.
+/// What happened, and whether that finishes the job. Only doing the thing may
+/// silence a card: "Note" used to sit in this list, and one tap on a water card
+/// filed an empty note, acknowledged the verdict and hid a thirsty plant.
 struct HandledSheet: View {
     let entry: DigestEntry
-    let record: (ObservationKind) -> Void
+    let record: (ObservationKind, String) -> Void
+    let noteOnly: (String) -> Void
 
-    private var options: [ObservationKind] {
+    @State private var detail = ""
+    @State private var writing: ObservationKind?
+    @FocusState private var detailFocused: Bool
+
+    /// Only what genuinely completes this verdict. A note never does.
+    private var completions: [ObservationKind] {
         switch entry.verdict.action {
-        case .water: [.watered, .note]
-        case .harvest: [.harvested, .note]
-        case .check, .urgent: [.symptom, .moved, .note]
-        case .none, .unknown: [.note]
+        case .water: [.watered]
+        case .harvest: [.harvested]
+        case .check, .urgent: [.symptom, .moved, .watered]
+        case .none, .unknown: []
         }
+    }
+
+    /// Kinds worth describing. "Symptom noted" with no words is a record that
+    /// tells the next diagnosis nothing at all.
+    private func wantsWords(_ kind: ObservationKind) -> Bool {
+        kind == .symptom || kind == .note
     }
 
     var body: some View {
         NavigationStack {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("What did you do?")
-                    .font(.title3.weight(.bold))
-                Text("One tap is enough. No note required.")
-                    .font(.subheadline)
-                    .foregroundStyle(PlantyColor.secondaryText)
-
-                ForEach(options, id: \.self) { kind in
-                    Button {
-                        record(kind)
-                    } label: {
-                        Label(kind.label, systemImage: kind.symbol)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if let writing {
+                        detailEntry(for: writing)
+                    } else {
+                        chooser
                     }
-                    .buttonStyle(SecondaryButtonStyle())
                 }
-
-                Spacer(minLength: 0)
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(20)
-            .frame(maxWidth: .infinity, alignment: .leading)
             .plantyPage()
             .navigationTitle(entry.plant.commonName)
             .navigationBarTitleDisplayMode(.inline)
         }
-        .presentationDetents([.medium])
+        .presentationDetents([.medium, .large])
+    }
+
+    private var chooser: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("What did you do?")
+                .font(.title3.weight(.bold))
+            Text("This marks the task done. Planty will stop asking.")
+                .font(.subheadline)
+                .foregroundStyle(PlantyColor.secondaryText)
+
+            ForEach(completions, id: \.self) { kind in
+                Button {
+                    if wantsWords(kind) {
+                        writing = kind
+                        detailFocused = true
+                    } else {
+                        record(kind, "")
+                    }
+                } label: {
+                    Label(kind.label, systemImage: kind.symbol)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+
+            Divider().overlay(PlantyColor.quietDecoration)
+
+            // Deliberately below the line and worded as not-done: writing
+            // something down leaves the task exactly where it was.
+            Text("Not done yet?")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(PlantyColor.secondaryText)
+            Button {
+                writing = .note
+                detailFocused = true
+            } label: {
+                Label("Just leave a note", systemImage: "text.alignleft")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            Text("The card stays until the job is actually done.")
+                .font(.caption)
+                .foregroundStyle(PlantyColor.secondaryText)
+        }
+    }
+
+    private func detailEntry(for kind: ObservationKind) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(kind == .note ? "What is worth remembering?" : "What did you see?")
+                .font(.title3.weight(.bold))
+
+            TextField("A sentence is plenty", text: $detail, axis: .vertical)
+                .lineLimit(3...6)
+                .focused($detailFocused)
+                .padding(12)
+                .background(PlantyColor.surface, in: RoundedRectangle(cornerRadius: 14))
+
+            Button(kind == .note ? "Save the note" : "Record it") {
+                let text = detail.trimmingCharacters(in: .whitespacesAndNewlines)
+                if kind == .note {
+                    noteOnly(text)
+                } else {
+                    record(kind, text)
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle(color: PlantyColor.green))
+            .disabled(detail.trimmingCharacters(in: .whitespaces).isEmpty)
+
+            Button("Back") {
+                writing = nil
+                detail = ""
+            }
+            .buttonStyle(SecondaryButtonStyle())
+
+            if kind == .note {
+                Text("This does not mark anything done.")
+                    .font(.caption)
+                    .foregroundStyle(PlantyColor.secondaryText)
+            }
+        }
     }
 }

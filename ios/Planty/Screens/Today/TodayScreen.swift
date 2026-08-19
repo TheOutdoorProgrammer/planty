@@ -28,6 +28,11 @@ struct TodayScreen: View {
             .refreshable { await store.load() }
             .task { await store.load() }
             .task { await session.updates.check() }
+            .onChange(of: session.capture.settled) { _, verdict in
+                guard let verdict else { return }
+                store.settled(verdict)
+                session.capture.clearSettled()
+            }
             .sheet(item: $postponing) { entry in
                 PostponeSheet(entry: entry) { interval in
                     store.postpone(entry, by: interval)
@@ -38,9 +43,33 @@ struct TodayScreen: View {
                 }
             }
             .sheet(item: $completing) { entry in
-                HandledSheet(entry: entry) { kind in
-                    Task { await store.complete(entry, kind: kind) }
+                HandledSheet(entry: entry) { kind, note in
+                    Task { await store.complete(entry, kind: kind, note: note) }
                     completing = nil
+                } noteOnly: { text in
+                    Task { await store.addNote(entry, text: text) }
+                    completing = nil
+                }
+            }
+            .alert(
+                "That did not save.",
+                isPresented: Binding(
+                    get: { store.actionError != nil },
+                    set: { if !$0 { store.clearActionError() } }
+                ),
+                presenting: store.actionError
+            ) { _ in
+                Button("OK") { store.clearActionError() }
+            } message: { failure in
+                Text(failure.errorDescription ?? "Try again in a moment.")
+            }
+            .overlay(alignment: .bottom) {
+                if let noted = store.noted {
+                    SaveToast(message: "Noted on \(noted).")
+                        .task {
+                            try? await Task.sleep(for: .seconds(2))
+                            store.clearNoted()
+                        }
                 }
             }
         }

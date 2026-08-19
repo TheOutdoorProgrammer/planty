@@ -64,9 +64,11 @@ struct SnapScreen: View {
             readyState
         case .captured, .saving:
             capturedState
-        case .failed(_, let error):
+        case .failed(_, _, let error):
+            // Retries whatever the user said they did, rather than saving the
+            // photo alone and silently dropping the watering.
             SaveFailedCard(error: error) {
-                Task { await store.save(recording: nil) }
+                Task { await store.retrySave() }
             } discard: {
                 isConfirmingDiscard = true
             }
@@ -132,6 +134,9 @@ struct SnapScreen: View {
     private func prepare() async {
         if let context = session.snapContext {
             store.selectedPlant = context.plant
+            // Carried through the whole capture: settling it is what stops the
+            // card coming back after the job was actually done.
+            store.answering = context.verdictID
             session.snapContext = nil
         }
         if session.library.plants.isEmpty {

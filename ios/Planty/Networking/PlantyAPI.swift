@@ -23,6 +23,15 @@ protocol PlantyAPI: Sendable {
     /// what is already known, and any pictures are offered rather than sent.
     func ask(slug: String, question: PlantQuestion) async throws -> PlantAnswer
 
+    /// Create a plant from a photograph: identified, recorded, and the picture
+    /// kept as the first frame of its story.
+    func createPlantFromPhoto(_ request: PlantFromPhoto) async throws -> PlantFromPhotoResult
+
+    func linkSensor(_ link: NewSensorLink) async throws -> SensorLink
+
+    /// Ask what killed a plant. Only answerable once it is recorded dead.
+    func postmortem(slug: String) async throws -> Postmortem
+
     func reminders(slug: String) async throws -> [Reminder]
     func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder
     func deleteReminder(slug: String, kind: ObservationKind) async throws
@@ -90,8 +99,16 @@ struct PlantPatch: Codable, Sendable, Hashable {
     var steward: String?
     var lightExposure: LightExposure?
     var minTempF: Double?
+    var wateringMethod: WateringMethod?
+    var accessibility: PlantAccessibility?
+    var haArea: String?
+    var potSizeIn: Double?
+    var potMaterial: String?
+    var hasDrainage: Bool?
 
     init() {}
+
+    var isEmpty: Bool { self == PlantPatch() }
 
     enum CodingKeys: String, CodingKey {
         case commonName = "common_name"
@@ -101,5 +118,48 @@ struct PlantPatch: Codable, Sendable, Hashable {
         case steward
         case lightExposure = "light_exposure"
         case minTempF = "min_temp_f"
+        case wateringMethod = "watering_method"
+        case accessibility
+        case haArea = "ha_area"
+        case potSizeIn = "pot_size_in"
+        case potMaterial = "pot_material"
+        case hasDrainage = "has_drainage"
+    }
+}
+
+/// POST /v1/plants/from-photo. The photograph names the plant, creates it, and
+/// stays as the first frame of its timeline.
+struct PlantFromPhoto: Sendable {
+    var jpeg: Data
+    var metadata: CaptureMetadata
+
+    /// Overrides. A given name wins outright: somebody holding the plant knows
+    /// better than a model holding a picture of it.
+    var commonName: String?
+    var location: String?
+    var steward: String?
+}
+
+/// What came back: the plant, and what else the model considered.
+struct PlantFromPhotoResult: Sendable {
+    let plant: Plant
+    let candidates: [IdentificationCandidate]
+    let photoError: String?
+}
+
+/// POST /v1/sensors. Links a Home Assistant entity to a plant, or to a zone
+/// when plantID is nil. Calibration comes after, and until it does the link
+/// reports without being allowed to drive anything.
+struct NewSensorLink: Codable, Sendable, Hashable {
+    var plantID: UUID?
+    var zone: String?
+    var haEntityID: String
+    var role: SensorRole
+
+    enum CodingKeys: String, CodingKey {
+        case plantID = "plant_id"
+        case zone
+        case haEntityID = "ha_entity_id"
+        case role
     }
 }

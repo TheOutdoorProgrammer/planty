@@ -57,6 +57,12 @@ private final class HangingAPI: PlantyAPI, @unchecked Sendable {
         throw PlantyError.notFound
     }
     func deleteReminder(slug: String, kind: ObservationKind) async throws {}
+    func createPlantFromPhoto(_ ask: PlantFromPhoto) async throws -> PlantFromPhotoResult {
+        try await Task.sleep(for: .seconds(60))
+        throw PlantyError.notFound
+    }
+    func linkSensor(_ link: NewSensorLink) async throws -> SensorLink { throw PlantyError.notFound }
+    func postmortem(slug: String) async throws -> Postmortem { throw PlantyError.notFound }
     func health() async throws {}
 }
 

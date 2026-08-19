@@ -9,6 +9,7 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     private var _digest: Digest = .fixture()
     private var _plants: [Plant] = [.fixture()]
     private var _failure: PlantyError?
+    private var _failAcknowledge = false
     private var _acknowledged: [UUID] = []
     private var _observations: [(String, NewObservation)] = []
 
@@ -25,6 +26,13 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     var failure: PlantyError? {
         get { lock.withLock { _failure } }
         set { lock.withLock { _failure = newValue } }
+    }
+
+    /// Acknowledging can fail on its own: the observation writes, the verdict
+    /// does not settle, and the service keeps chasing.
+    var failAcknowledge: Bool {
+        get { lock.withLock { _failAcknowledge } }
+        set { lock.withLock { _failAcknowledge = newValue } }
     }
 
     var acknowledged: [UUID] { lock.withLock { _acknowledged } }
@@ -113,6 +121,7 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
 
     func acknowledge(verdictID: UUID) async throws {
         try check()
+        if failAcknowledge { throw PlantyError.timedOut }
         lock.withLock { _acknowledged.append(verdictID) }
     }
 
@@ -190,6 +199,39 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     func deleteReminder(slug: String, kind: ObservationKind) async throws {
         try check()
         lock.withLock { _reminders.removeAll { $0.kind == kind } }
+    }
+
+    func createPlantFromPhoto(_ ask: PlantFromPhoto) async throws -> PlantFromPhotoResult {
+        try check()
+        return PlantFromPhotoResult(
+            plant: .fixture(commonName: ask.commonName ?? "Stub"),
+            candidates: [],
+            photoError: nil
+        )
+    }
+
+    func linkSensor(_ link: NewSensorLink) async throws -> SensorLink {
+        try check()
+        return SensorLink(
+            id: UUID(),
+            plantID: link.plantID,
+            zone: link.zone,
+            haEntityID: link.haEntityID,
+            role: link.role,
+            createdAt: Date()
+        )
+    }
+
+    func postmortem(slug: String) async throws -> Postmortem {
+        try check()
+        return Postmortem(
+            id: UUID(),
+            plantID: UUID(),
+            likelyCause: "overwatering",
+            narrative: "It stayed wet for weeks.",
+            lesson: "Let the top inch dry first.",
+            createdAt: Date()
+        )
     }
 
     func health() async throws {
@@ -321,12 +363,13 @@ struct CaptureStoreTests {
         store.accept(jpeg: Data([0xFF, 0xD8]))
         await store.save(recording: .watered)
 
-        guard case .failed(let photo, let error) = store.stage else {
+        guard case .failed(let photo, let kind, let error) = store.stage else {
             Issue.record("a failed upload must not discard the image")
             return
         }
         #expect(photo.jpeg == Data([0xFF, 0xD8]))
         #expect(error == .offline)
+        #expect(kind == .watered, "a retry would have saved the photo and dropped the watering")
     }
 
     @Test("A successful save uploads the photo, then the exception tag")

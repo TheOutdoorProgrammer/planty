@@ -65,6 +65,50 @@ struct PlantyClient: PlantyAPI {
                        body: question, patience: Patience.model)
     }
 
+    /// Naming, creating and keeping the photograph are one call, so a first
+    /// plant cannot end up half-made with its picture thrown away.
+    func createPlantFromPhoto(_ ask: PlantFromPhoto) async throws -> PlantFromPhotoResult {
+        var query: [URLQueryItem] = []
+        if let capturedAt = ask.metadata.capturedAt {
+            query.append(URLQueryItem(name: "taken_at", value: PlantyDateFormat.string(from: capturedAt)))
+        }
+        if let latitude = ask.metadata.latitude, let longitude = ask.metadata.longitude {
+            query.append(URLQueryItem(name: "lat", value: String(latitude)))
+            query.append(URLQueryItem(name: "lon", value: String(longitude)))
+        }
+        for (name, value) in [
+            ("common_name", ask.commonName), ("location", ask.location), ("steward", ask.steward),
+        ] {
+            if let value, !value.isEmpty { query.append(URLQueryItem(name: name, value: value)) }
+        }
+
+        var body = MultipartBody()
+        body.appendFile(name: "photo", filename: "subject.jpg", contentType: "image/jpeg", data: ask.jpeg)
+
+        var request = try makeRequest("POST", "/v1/plants/from-photo", query: query,
+                                      patience: Patience.model)
+        request.setValue(body.contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = body.finished()
+
+        let response: PlantFromPhotoResponse = try decode(
+            PlantFromPhotoResponse.self, from: try await perform(request, patient: true)
+        )
+        return PlantFromPhotoResult(
+            plant: response.plant,
+            candidates: response.candidates ?? [],
+            photoError: response.photoError
+        )
+    }
+
+    func linkSensor(_ link: NewSensorLink) async throws -> SensorLink {
+        try await send("POST", "/v1/sensors", body: link)
+    }
+
+    func postmortem(slug: String) async throws -> Postmortem {
+        try await send("POST", "/v1/plants/\(escaped(slug))/postmortem",
+                       body: EmptyBody(), patience: Patience.model)
+    }
+
     func reminders(slug: String) async throws -> [Reminder] {
         let response: ReminderListResponse = try await get("/v1/plants/\(escaped(slug))/reminders")
         return response.reminders

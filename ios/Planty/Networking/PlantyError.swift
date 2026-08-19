@@ -17,10 +17,15 @@ enum PlantyError: Error, Sendable, Equatable {
     /// recognised by matching a localised string.
     case cancelled
 
+    /// The record was written but the acknowledgement was not, so the service
+    /// is still chasing this. Its own case because the honest thing to say is
+    /// neither "saved" nor "failed".
+    case stillAsking
+
     /// True when retrying might work and nothing is wrong with the plants.
     var isTransient: Bool {
         switch self {
-        case .offline, .timedOut, .transport, .cancelled: true
+        case .offline, .timedOut, .transport, .cancelled, .stillAsking: true
         case .server(let status, _): status >= 500
         default: false
         }
@@ -48,6 +53,8 @@ extension PlantyError: LocalizedError {
             detail
         case .cancelled:
             "Interrupted."
+        case .stillAsking:
+            "Recorded, but Planty could not stop the reminder. It may ask again."
         }
     }
 
