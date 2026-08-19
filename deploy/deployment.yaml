@@ -75,10 +75,15 @@ spec:
               # thing that decides this number rather than the Go service.
               memory: 1Gi
       volumes:
+        # Bounded on purpose. An emptyDir with no limit can fill the node it
+        # sits on, and conversations accumulate here one session file at a
+        # time. Past the limit the pod is evicted rather than the host.
         - name: claude-home
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 2Gi
         - name: scratch
-          emptyDir: {}
+          emptyDir:
+            sizeLimit: 1Gi
 ---
 apiVersion: v1
 kind: Service

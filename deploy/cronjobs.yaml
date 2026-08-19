@@ -84,10 +84,13 @@ spec:
                 limits:
                   memory: 1Gi
           volumes:
+            # Bounded so a runaway job is evicted rather than filling the node.
             - name: claude-home
-              emptyDir: {}
+              emptyDir:
+                sizeLimit: 1Gi
             - name: scratch
-              emptyDir: {}
+              emptyDir:
+                sizeLimit: 1Gi
 ---
 # Chase unacknowledged verdicts. Waking hours only; the ladder caps at three.
 apiVersion: batch/v1

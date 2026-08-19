@@ -219,6 +219,13 @@ The reply carries `looked_at` so you can tell whether it did.
 Asked "when did I last water this", it answers from the log in about seven seconds and reports looking at nothing; asked what colour the leaves are, it opens the photo and takes twice as long.
 Only the CLI backend can genuinely offer: through the API an image block sent is an image block read and paid for, so that path names the photographs instead and says it has not seen them.
 
+**A follow-up resumes rather than re-reads.** `conversation_id` is the model session's id as well as the conversation's, so the second question in a thread sends only itself: the record and every earlier turn stay where they already are.
+Measured over four turns against a plant with sixty observations, billed input per turn was `3110, 3133, 3156, 3177` replaying and `3104, 10, 10, 10` resuming.
+Replaying is marginally cheaper for a two-turn exchange and breaks even at three; past that resuming is roughly half the cost per turn, and the gap widens because replaying grows with the conversation and resuming does not.
+
+Sessions live in the service's own scratch space, which does not survive a restart, so a conversation can outlive the session it was using.
+A resume that finds nothing falls back to replaying the transcript: slower, still correct, and invisible from the app.
+
 **Reminders are two fields because misting is not watering.** `every_days` says how often a day qualifies and `at_hours` says when on that day, so a mushroom kit is `{every_days: 1, at_hours: [8, 20]}` and a pothos is `{every_days: 10, at_hours: [8]}`.
 An interval expressed only in days cannot say the first one, and misting twice a day is the common case rather than the exotic one.
 Omit both and you get daily at 08:00, matching the digest.
