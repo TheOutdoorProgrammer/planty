@@ -42,6 +42,7 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     private var _asked: [(String, PlantQuestion)] = []
     private var _reminders: [Reminder] = []
     private var _notes: [PlantNote] = []
+    private var _detailVerdict: Verdict?
     private var _scratchAsks: [ScratchQuestion] = []
     private var _created: [String] = []
     private var _uploads: [(String, Data)] = []
@@ -69,6 +70,12 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
         set { lock.withLock { _notes = newValue } }
     }
 
+    /// What GET /v1/plants/{slug} reports as the plant's open verdict.
+    var detailVerdict: Verdict? {
+        get { lock.withLock { _detailVerdict } }
+        set { lock.withLock { _detailVerdict = newValue } }
+    }
+
     private func check() throws {
         if let failure { throw failure }
     }
@@ -88,7 +95,7 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
         guard let plant = plantList.first(where: { $0.slug == slug }) else {
             throw PlantyError.notFound
         }
-        return PlantDetail(plant: plant)
+        return PlantDetail(plant: plant, verdict: detailVerdict)
     }
 
     func createPlant(_ draft: NewPlant) async throws -> Plant {

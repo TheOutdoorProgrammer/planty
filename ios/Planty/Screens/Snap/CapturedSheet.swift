@@ -41,6 +41,10 @@ struct CapturedSheet: View {
 
             Button("Watered by hand") { record(.watered) }
                 .buttonStyle(PrimaryButtonStyle(color: PlantyColor.cyan))
+            // Beside watering rather than below the fold: a mushroom kit is
+            // misted twice a day and never watered at all.
+            Button("Misted") { record(.misted) }
+                .buttonStyle(SecondaryButtonStyle())
             Button("Repotted") { record(.repotted) }
                 .buttonStyle(SecondaryButtonStyle())
             Button("Something looks off", action: lookOff)

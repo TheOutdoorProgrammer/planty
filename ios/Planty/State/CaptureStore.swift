@@ -137,7 +137,7 @@ final class CaptureStore {
 
         // Doing the thing the card asked for is what settles it. Without this
         // the card survives the whole flow and the service keeps escalating.
-        if let verdict = answering, kind != nil {
+        if kind != nil, let verdict = await verdictToSettle(for: plant) {
             do {
                 try await api.acknowledge(verdictID: verdict)
                 settled = verdict
@@ -150,6 +150,17 @@ final class CaptureStore {
         note = ""
         answering = nil
         toast = savedMessage(plant: plant, kind: kind)
+    }
+
+    /// Which verdict this capture answers. Looked up rather than threaded
+    /// through every screen: the plant page passed nothing, so watering from
+    /// there left the plant still asking to be watered.
+    private func verdictToSettle(for plant: Plant) async -> UUID? {
+        if let answering { return answering }
+
+        guard let verdict = try? await api.plant(slug: plant.slug).verdict else { return nil }
+        guard verdict.needsAction, !verdict.isAcknowledged else { return nil }
+        return verdict.id
     }
 
     private func savedMessage(plant: Plant, kind: ObservationKind?) -> String {

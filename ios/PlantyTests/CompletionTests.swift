@@ -165,3 +165,88 @@ struct PhotoFirstTests {
         #expect(await store.createPlant(named: "Ghost", metadata: CaptureMetadata()) == nil)
     }
 }
+
+/// Starting from the plant page carries no verdict id, so the acknowledgement
+/// has to be found rather than passed. It was passed, the plant page passed
+/// nothing, and watering a thirsty plant left it still asking.
+@Suite("Doing the job from anywhere")
+struct SettleFromAnywhereTests {
+    @Test("Recording care settles the plant's open verdict with no card behind it")
+    @MainActor
+    func settlesWithoutBeingTold() async {
+        let api = FakeAPI()
+        let plant = Plant.fixture()
+        let verdict = Verdict.fixture(action: .water, plantID: plant.id)
+        api.detailVerdict = verdict
+
+        let capture = CaptureStore(api: api, selectedPlant: plant)
+        capture.accept(jpeg: Data("photo".utf8))
+        await capture.save(recording: .watered)
+
+        #expect(api.acknowledged == [verdict.id], "the plant is still being asked to be watered")
+        #expect(capture.settled == verdict.id)
+    }
+
+    @Test("Misting counts as doing the job")
+    @MainActor
+    func mistingSettlesToo() async {
+        let api = FakeAPI()
+        let plant = Plant.fixture()
+        let verdict = Verdict.fixture(action: .water, plantID: plant.id)
+        api.detailVerdict = verdict
+
+        let capture = CaptureStore(api: api, selectedPlant: plant)
+        capture.accept(jpeg: Data("photo".utf8))
+        await capture.save(recording: .misted)
+
+        #expect(api.observations.first?.1.kind == .misted)
+        #expect(api.acknowledged == [verdict.id])
+    }
+
+    /// A photo with no claim attached is still just looking at a plant.
+    @Test("A photo alone settles nothing, even with a verdict open")
+    @MainActor
+    func aPhotoAloneStillSettlesNothing() async {
+        let api = FakeAPI()
+        let plant = Plant.fixture()
+        api.detailVerdict = Verdict.fixture(action: .water, plantID: plant.id)
+
+        let capture = CaptureStore(api: api, selectedPlant: plant)
+        capture.accept(jpeg: Data("photo".utf8))
+        await capture.save(recording: nil)
+
+        #expect(api.acknowledged.isEmpty)
+    }
+
+    /// A verdict already settled must not be acknowledged twice.
+    @Test("An already settled verdict is left alone")
+    @MainActor
+    func settledVerdictsAreLeftAlone() async {
+        let api = FakeAPI()
+        let plant = Plant.fixture()
+        api.detailVerdict = Verdict.fixture(
+            action: .water, plantID: plant.id, acknowledgedAt: Date()
+        )
+
+        let capture = CaptureStore(api: api, selectedPlant: plant)
+        capture.accept(jpeg: Data("photo".utf8))
+        await capture.save(recording: .watered)
+
+        #expect(api.acknowledged.isEmpty)
+    }
+
+    /// "Nothing needs doing" is not a job, so there is nothing to settle.
+    @Test("A calm plant has nothing to settle")
+    @MainActor
+    func calmPlantsSettleNothing() async {
+        let api = FakeAPI()
+        let plant = Plant.fixture()
+        api.detailVerdict = Verdict.fixture(action: .none, plantID: plant.id)
+
+        let capture = CaptureStore(api: api, selectedPlant: plant)
+        capture.accept(jpeg: Data("photo".utf8))
+        await capture.save(recording: .watered)
+
+        #expect(api.acknowledged.isEmpty)
+    }
+}
