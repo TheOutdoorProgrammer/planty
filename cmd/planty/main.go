@@ -31,6 +31,7 @@ const usage = `planty <command>
   cold     check tonight's forecast, both bringing in and putting back out
   away     pre-departure watering pass, or the briefing on return
   chase    chase verdicts nobody acknowledged, one rung up the ladder
+  remind   send the chores that are owed: watering, misting, feeding
   thirst   report which plants the probes call dry, and water nothing
   water    run the LetPot line and verify it, only when asked by hand
   autopsy  work out what killed a plant: planty autopsy <slug>
@@ -100,6 +101,14 @@ func run(log *slog.Logger) error {
 		return job.Away{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
 	case "chase":
 		return job.Escalate{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
+	case "remind":
+		sent, err := job.Remind{
+			Store: db, HA: homeAssistant(), Log: log, Notifier: notifier(),
+		}.Run(ctx)
+		if err == nil {
+			log.Info("reminders sent", "count", sent)
+		}
+		return err
 	case "thirst":
 		return job.Thirst{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
 	case "water":

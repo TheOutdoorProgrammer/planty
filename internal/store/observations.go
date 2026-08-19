@@ -62,11 +62,18 @@ func (s *Store) Observations(ctx context.Context, plantID uuid.UUID, limit int) 
 
 // LastWatered returns when a plant was last watered by any means.
 func (s *Store) LastWatered(ctx context.Context, plantID uuid.UUID) (time.Time, error) {
+	return s.LastObserved(ctx, plantID, plant.ObservedWatered)
+}
+
+// LastObserved is when something of one kind last happened to a plant, which
+// is what every reminder is measured against.
+func (s *Store) LastObserved(ctx context.Context, plantID uuid.UUID,
+	kind plant.ObservationKind) (time.Time, error) {
 	var at time.Time
 	err := s.pool.QueryRow(ctx, `
 		SELECT occurred_at FROM observations
-		WHERE plant_id = $1 AND kind = 'watered'
-		ORDER BY occurred_at DESC LIMIT 1`, plantID).Scan(&at)
+		WHERE plant_id = $1 AND kind = $2
+		ORDER BY occurred_at DESC LIMIT 1`, plantID, kind).Scan(&at)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return time.Time{}, ErrNotFound
 	}

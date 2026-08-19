@@ -627,3 +627,107 @@ func TestListFiltersNarrowTheGarden(t *testing.T) {
 		}
 	}
 }
+
+func TestReminderRoundTripsThroughTheAPI(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{"common_name": unique("Blue oyster kit")})
+
+	rec, out := do(t, h, http.MethodPut, "/v1/plants/"+slug+"/reminders", map[string]any{
+		"kind": "misted", "every_days": 1, "at_hours": []int{20, 8}, "note": "surface looks dry",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("set reminder: got %d, body %s", rec.Code, rec.Body.String())
+	}
+	hours, _ := out["at_hours"].([]any)
+	if len(hours) != 2 || hours[0].(float64) != 8 {
+		t.Errorf("hours came back %v, want a sorted [8 20]", out["at_hours"])
+	}
+	if out["active"] != true {
+		t.Error("a reminder somebody just set came back switched off")
+	}
+
+	rec, out = do(t, h, http.MethodGet, "/v1/plants/"+slug+"/reminders", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list: got %d", rec.Code)
+	}
+	listed, _ := out["reminders"].([]any)
+	if len(listed) != 1 {
+		t.Fatalf("listed %d reminders, want 1", len(listed))
+	}
+	// Nothing has ever been misted, so the app must be told it is owed.
+	first, _ := listed[0].(map[string]any)
+	if first["due"] != true {
+		t.Error("a kit nobody has ever misted is not reported as due")
+	}
+
+	rec, _ = do(t, h, http.MethodDelete, "/v1/plants/"+slug+"/reminders/misted", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("delete: got %d", rec.Code)
+	}
+	rec, _ = do(t, h, http.MethodDelete, "/v1/plants/"+slug+"/reminders/misted", nil)
+	if rec.Code != http.StatusNotFound {
+		t.Errorf("deleting a gone reminder got %d, want 404", rec.Code)
+	}
+}
+
+// A reminder about a symptom is not a chore, and an impossible schedule is a
+// typo. Both are the caller's fault and neither is a 500.
+func TestUnschedulableRemindersAreRejected(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{"common_name": unique("Reminder reject")})
+
+	for _, body := range []map[string]any{
+		{"kind": "symptom", "every_days": 1},
+		{"kind": "watered", "every_days": -1, "at_hours": []int{8}},
+		{"kind": "watered", "every_days": 400, "at_hours": []int{8}},
+		{"kind": "watered", "every_days": 1, "at_hours": []int{25}},
+	} {
+		rec, _ := do(t, h, http.MethodPut, "/v1/plants/"+slug+"/reminders", body)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("%v got %d, want 400", body, rec.Code)
+		}
+	}
+}
+
+// An omitted schedule is the common case from a phone: "remind me to water
+// this" means daily at the digest hour, not a validation error.
+func TestAnOmittedScheduleMeansDailyAtTheUsualHour(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{"common_name": unique("Bare reminder")})
+
+	rec, out := do(t, h, http.MethodPut, "/v1/plants/"+slug+"/reminders",
+		map[string]any{"kind": "watered"})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("got %d, body %s", rec.Code, rec.Body.String())
+	}
+	if out["every_days"] != float64(1) {
+		t.Errorf("every_days defaulted to %v, want 1", out["every_days"])
+	}
+	hours, _ := out["at_hours"].([]any)
+	if len(hours) != 1 || hours[0].(float64) != float64(plant.DefaultReminderHour) {
+		t.Errorf("hours defaulted to %v", out["at_hours"])
+	}
+}
+
+// Misting is not watering: a probe never sees it, so it needs its own record.
+func TestMistingIsRecordable(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{"common_name": unique("Misted kit")})
+
+	rec, _ := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/observations", map[string]any{
+		"kind": "misted", "body": "surface was dry", "source": "app",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("record misting: got %d, body %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestAutopsyIsUnavailableWithoutAJudge(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{"common_name": unique("Autopsy subject")})
+
+	rec, _ := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/postmortem", nil)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("got %d, want 503 when nothing can answer", rec.Code)
+	}
+}

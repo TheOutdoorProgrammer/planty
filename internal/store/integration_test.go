@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -423,6 +424,128 @@ func TestFreeSlugRefusesANameWithNothingInIt(t *testing.T) {
 
 	if _, err := s.FreeSlug(ctx, "  !!!  "); err == nil {
 		t.Error("a name with no usable characters produced a slug")
+	}
+}
+
+func TestRemindersRoundTripTheirSchedule(t *testing.T) {
+	s, ctx := testStore(t)
+	kit := newPlant(t, s, ctx, "Blue oyster kit")
+
+	saved, err := s.SaveReminder(ctx, plant.Reminder{
+		PlantID: kit.ID, Kind: plant.ObservedMisted,
+		EveryDays: 1, AtHours: []int{20, 8, 8}, Active: true, Note: "surface looks dry",
+	})
+	if err != nil {
+		t.Fatalf("save reminder: %v", err)
+	}
+	if len(saved.AtHours) != 2 || saved.AtHours[0] != 8 || saved.AtHours[1] != 20 {
+		t.Errorf("hours stored as %v, want a sorted deduped [8 20]", saved.AtHours)
+	}
+
+	// One per kind per plant: two misting schedules for one kit is a typo.
+	again, err := s.SaveReminder(ctx, plant.Reminder{
+		PlantID: kit.ID, Kind: plant.ObservedMisted,
+		EveryDays: 1, AtHours: []int{6, 12, 18}, Active: true,
+	})
+	if err != nil {
+		t.Fatalf("replace reminder: %v", err)
+	}
+	if again.ID != saved.ID {
+		t.Error("saving the same kind twice made a second reminder")
+	}
+
+	listed, err := s.Reminders(ctx, kit.ID)
+	if err != nil {
+		t.Fatalf("list reminders: %v", err)
+	}
+	if len(listed) != 1 {
+		t.Fatalf("listed %d reminders, want 1", len(listed))
+	}
+	if len(listed[0].AtHours) != 3 {
+		t.Errorf("the replacement schedule did not stick: %v", listed[0].AtHours)
+	}
+
+	if err := s.DeleteReminder(ctx, kit.ID, plant.ObservedMisted); err != nil {
+		t.Fatalf("delete reminder: %v", err)
+	}
+	if err := s.DeleteReminder(ctx, kit.ID, plant.ObservedMisted); !errors.Is(err, ErrNotFound) {
+		t.Errorf("deleting a gone reminder returned %v", err)
+	}
+}
+
+// The reminder job needs the plant and the last real action in one pass, and
+// the lateral join that fetches them is exactly the kind of SQL that compiles
+// as a string and fails on a server.
+func TestActiveRemindersCarryTheLastTimeItWasDone(t *testing.T) {
+	s, ctx := testStore(t)
+	kit := newPlant(t, s, ctx, "Reminder subject")
+
+	misted := time.Now().UTC().Add(-30 * time.Minute)
+	if _, err := s.AddObservation(ctx, plant.Observation{
+		PlantID: kit.ID, Kind: plant.ObservedMisted,
+		OccurredAt: misted, Source: plant.SourceApp,
+	}); err != nil {
+		t.Fatalf("record misting: %v", err)
+	}
+	// A different kind must not satisfy a misting reminder.
+	if _, err := s.AddObservation(ctx, plant.Observation{
+		PlantID: kit.ID, Kind: plant.ObservedWatered,
+		OccurredAt: time.Now().UTC(), Source: plant.SourceApp,
+	}); err != nil {
+		t.Fatalf("record watering: %v", err)
+	}
+
+	if _, err := s.SaveReminder(ctx, plant.Reminder{
+		PlantID: kit.ID, Kind: plant.ObservedMisted,
+		EveryDays: 1, AtHours: []int{8, 20}, Active: true,
+	}); err != nil {
+		t.Fatalf("save reminder: %v", err)
+	}
+
+	due, err := s.ActiveReminders(ctx)
+	if err != nil {
+		t.Fatalf("active reminders: %v", err)
+	}
+
+	var found *DueReminder
+	for i := range due {
+		if due[i].Plant.ID == kit.ID {
+			found = &due[i]
+		}
+	}
+	if found == nil {
+		t.Fatal("the reminder never came back")
+	}
+	if found.Plant.CommonName != "Reminder subject" {
+		t.Errorf("carried plant %q", found.Plant.CommonName)
+	}
+	if found.LastDone == nil {
+		t.Fatal("no last-done time, so nothing can decide whether it is owed")
+	}
+	if delta := found.LastDone.Sub(misted); delta > time.Second || delta < -time.Second {
+		t.Errorf("last done is %s, want the misting at %s", found.LastDone, misted)
+	}
+}
+
+func TestAnInactiveReminderIsNotCollected(t *testing.T) {
+	s, ctx := testStore(t)
+	p := newPlant(t, s, ctx, "Switched off")
+
+	if _, err := s.SaveReminder(ctx, plant.Reminder{
+		PlantID: p.ID, Kind: plant.ObservedWatered,
+		EveryDays: 3, AtHours: []int{8}, Active: false,
+	}); err != nil {
+		t.Fatalf("save reminder: %v", err)
+	}
+
+	due, err := s.ActiveReminders(ctx)
+	if err != nil {
+		t.Fatalf("active reminders: %v", err)
+	}
+	for _, d := range due {
+		if d.Plant.ID == p.ID {
+			t.Error("a switched-off reminder was collected")
+		}
 	}
 }
 

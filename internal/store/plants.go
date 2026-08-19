@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -41,30 +40,13 @@ func plantColumnsFor(alias string) string {
 
 func scanPlant(row pgx.Row) (plant.Plant, error) {
 	var p plant.Plant
-	var light *string
-	var acquired *time.Time
-	var profile []byte
+	var ps plantScan
 
-	err := row.Scan(
-		&p.ID, &p.Slug, &p.CommonName, &p.BotanicalName, &p.Variety,
-		&p.Domain, &p.Steward, &p.Status,
-		&p.Location, &p.HAArea,
-		&p.Accessibility, &p.WateringMethod, &p.LetPotDripper,
-		&p.PotSizeIn, &p.PotMaterial, &p.HasDrainage, &p.SoilMix,
-		&light, &p.MinTempF, &profile,
-		&acquired, &p.ArchivedAt, &p.ShelteredAt, &p.CreatedAt, &p.UpdatedAt,
-	)
-	if err != nil {
+	if err := row.Scan(ps.targets(&p)...); err != nil {
 		return plant.Plant{}, classify(err)
 	}
-	if light != nil {
-		p.LightExposure = plant.LightExposure(*light)
-	}
-	p.AcquiredAt = acquired
-	if len(profile) > 0 {
-		if err := json.Unmarshal(profile, &p.CareProfile); err != nil {
-			return plant.Plant{}, fmt.Errorf("care_profile for %s: %w", p.Slug, err)
-		}
+	if err := ps.finish(&p); err != nil {
+		return plant.Plant{}, fmt.Errorf("care_profile for %s: %w", p.Slug, err)
 	}
 	return p, nil
 }

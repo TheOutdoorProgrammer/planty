@@ -51,6 +51,7 @@ Scheduled work, one command each, wired as CronJobs in `deploy/`:
 | `planty daily` | 08:00 | Judge every plant, sweep for autopsies, send one digest |
 | `planty away` | 08:30 | Pre-departure watering pass, or the briefing on return |
 | `planty cold` | 15:00 | Tonight's forecast: what comes in, and what can go back out |
+| `planty remind` | hourly | The chores nothing measures: misting, feeding, hand watering |
 | `planty autopsy <slug>` | on demand | Work out what killed a plant |
 
 ## Who pays for the judgment

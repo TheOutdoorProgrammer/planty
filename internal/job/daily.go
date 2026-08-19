@@ -34,7 +34,7 @@ func (d Daily) Run(ctx context.Context) error {
 	// once a day rather than per plant, and never as an error, because the
 	// cold watch and the watering line are unaffected.
 	if d.Judge == nil {
-		d.Log.Warn("no judgment: ANTHROPIC_API_KEY is unset",
+		d.Log.Warn("no judgment: no model backend is configured",
 			"plants", len(plants), "still_running", "cold watch, watering, escalation")
 		return nil
 	}

@@ -241,3 +241,41 @@ spec:
                 readOnlyRootFilesystem: true
                 capabilities:
                   drop: ["ALL"]
+---
+# The chores nothing else notices. Hourly because a mushroom kit misted at eight
+# and again at eight is two separate reminders, and a daily job sends only one.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: planty-remind
+  namespace: planty
+spec:
+  schedule: "0 * * * *"
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+          containers:
+            - name: remind
+              image: ghcr.io/theoutdoorprogrammer/planty:latest
+              args: ["remind"]
+              envFrom:
+                - configMapRef:
+                    name: planty-config
+                - secretRef:
+                    name: planty-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]

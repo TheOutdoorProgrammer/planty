@@ -2,12 +2,14 @@ package api
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/google/uuid"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/job"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
@@ -54,6 +56,24 @@ func (s *Server) listPostmortems(w http.ResponseWriter, r *http.Request) {
 		"postmortems": records,
 		"count":       len(records),
 	})
+}
+
+// autopsy asks what killed one plant, now. The daily sweep writes these
+// unprompted, but a death somebody wants explained should not need a shell.
+func (s *Server) autopsy(w http.ResponseWriter, r *http.Request) {
+	if s.judge == nil {
+		s.fail(w, http.StatusServiceUnavailable,
+			errors.New("an autopsy needs a judge, and none is configured"))
+		return
+	}
+
+	record, err := job.Postmortem{Store: s.store, Judge: s.judge, Log: s.log}.
+		Run(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		s.fail(w, http.StatusBadGateway, err)
+		return
+	}
+	s.ok(w, http.StatusCreated, record)
 }
 
 func (s *Server) listSensors(w http.ResponseWriter, r *http.Request) {

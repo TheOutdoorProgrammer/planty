@@ -56,10 +56,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/plants/{slug}/timeline", s.timeline)
 	mux.HandleFunc("POST /v1/plants/{slug}/diagnosis", s.diagnose)
 
+	mux.HandleFunc("GET /v1/plants/{slug}/reminders", s.listReminders)
+	mux.HandleFunc("PUT /v1/plants/{slug}/reminders", s.setReminder)
+	mux.HandleFunc("DELETE /v1/plants/{slug}/reminders/{kind}", s.deleteReminder)
+
 	mux.HandleFunc("POST /v1/identify", s.identify)
 	mux.HandleFunc("POST /v1/plants/from-photo", s.plantFromPhoto)
 
 	mux.HandleFunc("GET /v1/postmortems", s.listPostmortems)
+	mux.HandleFunc("POST /v1/plants/{slug}/postmortem", s.autopsy)
 
 	mux.HandleFunc("GET /v1/today", s.today)
 	mux.HandleFunc("POST /v1/verdicts/{id}/ack", s.ackVerdict)

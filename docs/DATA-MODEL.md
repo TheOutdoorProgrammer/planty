@@ -165,11 +165,16 @@ PATCH  /v1/plants/{slug}          sparse update; omitted fields are left alone
 DELETE /v1/plants/{slug}          archive, never a hard delete; ?status=dead records why
 
 GET    /v1/plants/{slug}/observations   history, newest first
-POST   /v1/plants/{slug}/observations   log watered, repotted, fertilized, pruned, moved, symptom, note, died
+POST   /v1/plants/{slug}/observations   log watered, misted, repotted, fertilized, pruned, moved, symptom, note, died
 POST   /v1/plants/{slug}/harvests       log a harvest, with quantity and unit
 POST   /v1/plants/{slug}/photos         upload; raw bytes or multipart, both accepted
 GET    /v1/plants/{slug}/timeline       photos oldest first, with short-lived links
 POST   /v1/plants/{slug}/diagnosis      read the photo timeline and report what changed
+POST   /v1/plants/{slug}/postmortem     ask what killed it, now, rather than waiting for the sweep
+
+GET    /v1/plants/{slug}/reminders      what is set, and what is owed right now
+PUT    /v1/plants/{slug}/reminders      set or replace one kind; {kind, every_days, at_hours, active, note}
+DELETE /v1/plants/{slug}/reminders/{kind}  stop reminding about that one
 
 POST   /v1/identify              name a plant from one photo; ?taken_at=&lat=&lon= narrow it
 
@@ -203,6 +208,14 @@ It answers `{plant, candidates, photo}` so the app can show what else was consid
 
 Owning three pothos is ordinary and slugs are unique, so the second one becomes `golden-pothos-2`.
 If the photograph fails to store the plant still exists, and the reply carries `photo_error` rather than unwinding a record you can see was created.
+
+**Reminders are two fields because misting is not watering.** `every_days` says how often a day qualifies and `at_hours` says when on that day, so a mushroom kit is `{every_days: 1, at_hours: [8, 20]}` and a pothos is `{every_days: 10, at_hours: [8]}`.
+An interval expressed only in days cannot say the first one, and misting twice a day is the common case rather than the exotic one.
+Omit both and you get daily at 08:00, matching the digest.
+
+**A reminder is measured against observations, never against itself.** Due is computed from the last time that kind was actually recorded, so a notification nobody acted on stays due instead of quietly rescheduling itself.
+`last_sent_at` exists only to stop the hourly job sending the same slot twice, and the morning misting does not suppress the evening one.
+The cadence counts whole days from the day it was done, so watering at 08:30 does not push an 08:00 slot into tomorrow and turn a weekly chore into an eight-day one.
 
 **The cold warning has to be answerable.** Without `/v1/shelter` the afternoon warning repeats forever and no plant ever becomes eligible to go back out, so the notification itself asks you to reply. `{"all":true}` is the honest default: the real interaction happens at dusk with an armful of pots, not with a list of slugs.
 
