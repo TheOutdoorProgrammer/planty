@@ -26,6 +26,8 @@
 	<string>Planty compares photos of a plant over time to spot changes that soil and room sensors cannot see.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Pick an existing photo instead of opening the camera. Planty also reads the original photo's date and location, which narrow down what species a plant is. Decline and identification still works, just with less to go on.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Save a plant's photo to your own library, to keep it or send it to somebody.</string>
 	<key>FledgeBaseURL</key>
 	<string>$(FLEDGE_BASE_URL)</string>
 	<key>PlantyBaseURL</key>

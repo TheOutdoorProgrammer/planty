@@ -10,6 +10,12 @@ struct StoryEvent: Sendable, Hashable, Identifiable {
     let symbol: String
     let photo: Photo?
     let careState: CareState?
+
+    /// "Watered at 10:19" beats "Watered" when the question is whether you
+    /// already did it this morning.
+    var timeLabel: String {
+        occurredAt.formatted(date: .omitted, time: .shortened)
+    }
 }
 
 /// A day in the plant's life. Photos anchor time; the narrative bridges them.

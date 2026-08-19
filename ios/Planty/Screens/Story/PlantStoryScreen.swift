@@ -15,6 +15,7 @@ struct PlantStoryScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+                PlantFactsCard(plant: store.plant)
                 currentState
                 if let toxicity = store.toxicity {
                     PlantToxicitySection(plant: store.plant, toxicity: toxicity)
@@ -76,6 +77,8 @@ struct PlantStoryScreen: View {
                 let failure = await store.saveEdits(patch)
                 if failure == nil { session.library.apply(store.plant) }
                 return failure
+            } setSheltered: { indoors in
+                await store.setSheltered(indoors)
             }
         }
         .sheet(isPresented: $isLoggingCare) {
@@ -178,7 +181,6 @@ struct PlantStoryScreen: View {
             if !store.plant.status.isRetired {
                 careActions
             }
-            shelterControl
         }
     }
 
@@ -212,30 +214,6 @@ struct PlantStoryScreen: View {
         store.plant.domain == .edibleIndoor || store.plant.domain == .edibleOutdoor
     }
 
-    /// Only a plant with a cold threshold was ever asked to come in. The row
-    /// states where it is now and offers the other side, because the warning
-    /// repeats until somebody says it was answered.
-    @ViewBuilder
-    private var shelterControl: some View {
-        if store.plant.canShelter {
-            HStack(spacing: 12) {
-                Label(
-                    store.plant.isSheltered ? "Indoors for the cold" : "Outside",
-                    systemImage: store.plant.isSheltered ? "house.fill" : "sun.max.fill"
-                )
-                .font(.caption)
-                .foregroundStyle(PlantyColor.secondaryText)
-
-                Spacer()
-
-                Button(store.plant.isSheltered ? "Back outside" : "Brought indoors") {
-                    Task { await store.setSheltered(!store.plant.isSheltered) }
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(PlantyColor.green)
-            }
-        }
-    }
 
     private var comparison: PhotoComparison {
         PhotoComparison(store.timeline.photos)
@@ -388,9 +366,15 @@ struct ChapterRow: View {
 
             ForEach(chapter.events) { event in
                 if event.photo == nil {
-                    Label(event.title, systemImage: event.symbol)
-                        .font(.footnote)
-                        .foregroundStyle(event.careState?.color ?? PlantyColor.secondaryText)
+                    HStack(spacing: 6) {
+                        Label(event.title, systemImage: event.symbol)
+                            .font(.footnote)
+                            .foregroundStyle(event.careState?.color ?? PlantyColor.secondaryText)
+                        Text(event.timeLabel)
+                            .font(.caption2)
+                            .foregroundStyle(PlantyColor.secondaryText)
+                        Spacer(minLength: 0)
+                    }
                 }
             }
         }

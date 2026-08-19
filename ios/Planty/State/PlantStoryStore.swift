@@ -63,13 +63,17 @@ final class PlantStoryStore {
     /// Answers the cold warning from the phone it arrived on. The local state
     /// moves straight away, so the button does not keep offering what was just
     /// done while the next load is still in flight.
-    func setSheltered(_ indoors: Bool) async {
+    @discardableResult
+    func setSheltered(_ indoors: Bool) async -> PlantyError? {
         do {
             _ = try await api.shelter(slugs: [plant.slug], indoors: indoors)
             plant.shelteredAt = indoors ? clock() : nil
             error = nil
+            return nil
         } catch {
-            self.error = PlantyError.from(error)
+            let failure = PlantyError.from(error)
+            self.error = failure
+            return failure
         }
     }
 

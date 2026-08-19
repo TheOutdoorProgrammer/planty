@@ -18,6 +18,10 @@ struct PlantEditForm {
     var potMaterial: String
     var drainage: DrainageChoice
 
+    /// Not part of the patch: shelter is its own endpoint, since it is a fact
+    /// about tonight rather than about the plant.
+    var sheltered: Bool
+
     enum DrainageChoice: Hashable {
         case unrecorded
         case drains
@@ -48,6 +52,7 @@ struct PlantEditForm {
         accessibility = plant.accessibility
         potSizeText = Self.text(plant.potSizeIn)
         potMaterial = plant.potMaterial ?? ""
+        sheltered = plant.isSheltered
         drainage = switch plant.hasDrainage {
         case true?: .drains
         case false?: .sealed
@@ -149,15 +154,24 @@ struct EditPlantSheet: View {
     let plant: Plant
     let save: (PlantPatch) async -> PlantyError?
 
+    /// Separate because shelter has its own endpoint, and moving it here is
+    /// what stopped it being tapped by accident on the plant's own page.
+    let setSheltered: (Bool) async -> PlantyError?
+
     @Environment(\.dismiss) private var dismiss
     @State private var form: PlantEditForm
     @State private var error: PlantyError?
     @State private var validation: String?
     @State private var isSaving = false
 
-    init(plant: Plant, save: @escaping (PlantPatch) async -> PlantyError?) {
+    init(
+        plant: Plant,
+        save: @escaping (PlantPatch) async -> PlantyError?,
+        setSheltered: @escaping (Bool) async -> PlantyError? = { _ in nil }
+    ) {
         self.plant = plant
         self.save = save
+        self.setSheltered = setSheltered
         _form = State(initialValue: PlantEditForm(plant: plant))
     }
 
@@ -227,6 +241,20 @@ struct EditPlantSheet: View {
                     Text("Below the cold limit, Planty asks for this plant to be brought indoors.")
                 }
 
+                if plant.canShelter {
+                    Section {
+                        Toggle("Indoors right now", isOn: $form.sheltered)
+                    } header: {
+                        Text("Where it is")
+                    } footer: {
+                        Text("""
+                            Only for a plant that lives outside and was carried \
+                            in ahead of a cold night. Planty stops asking while \
+                            this is on, and says when it can go back out.
+                            """)
+                    }
+                }
+
                 Section("Watering and reach") {
                     Picker("Watering", selection: $form.wateringMethod) {
                         ForEach(wateringOptions, id: \.self) { Text($0.label).tag($0) }
@@ -278,17 +306,33 @@ struct EditPlantSheet: View {
 
     private func submit() async {
         validation = nil
-        switch form.patch(against: plant) {
-        case .failure(let issue):
-            validation = issue.message
-        case .success(let patch) where patch.isEmpty:
-            dismiss()
-        case .success(let patch):
-            isSaving = true
-            defer { isSaving = false }
-            error = await save(patch)
-            if error == nil { dismiss() }
+        guard case .success(let patch) = form.patch(against: plant) else {
+            if case .failure(let issue) = form.patch(against: plant) {
+                validation = issue.message
+            }
+            return
         }
+
+        let shelterChanged = form.sheltered != plant.isSheltered
+        if patch.isEmpty, !shelterChanged {
+            dismiss()
+            return
+        }
+
+        isSaving = true
+        defer { isSaving = false }
+
+        if !patch.isEmpty {
+            error = await save(patch)
+            if error != nil { return }
+        }
+        // Its own endpoint, so a failure here must not read as the edit having
+        // failed when the edit already landed.
+        if shelterChanged {
+            error = await setSheltered(form.sheltered)
+            if error != nil { return }
+        }
+        dismiss()
     }
 
     // Unknown never appears as a choice; it only stays visible when it is what
