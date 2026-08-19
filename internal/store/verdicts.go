@@ -22,7 +22,28 @@ func (s *Store) SaveVerdict(ctx context.Context, v plant.Verdict) (plant.Verdict
 		v.ForDate = time.Now().UTC()
 	}
 
-	row := s.pool.QueryRow(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return plant.Verdict{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// The plant row serialises concurrent judgments for the same plant.
+	// Superseding first also satisfies the database's one-open-verdict invariant
+	// when a new day is inserted rather than upserted.
+	var locked int
+	if err := tx.QueryRow(ctx, `SELECT 1 FROM plants WHERE id = $1 FOR UPDATE`, v.PlantID).
+		Scan(&locked); err != nil {
+		return plant.Verdict{}, err
+	}
+	if _, err := tx.Exec(ctx, `
+		UPDATE verdicts
+		SET acknowledged_at = coalesce(acknowledged_at, now())
+		WHERE plant_id = $1`, v.PlantID); err != nil {
+		return plant.Verdict{}, err
+	}
+
+	row := tx.QueryRow(ctx, `
 		INSERT INTO verdicts (plant_id, for_date, action, reasoning, confidence, evidence)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (plant_id, for_date) DO UPDATE
@@ -34,7 +55,14 @@ func (s *Store) SaveVerdict(ctx context.Context, v plant.Verdict) (plant.Verdict
 		          evidence, created_at, acknowledged_at`,
 		v.PlantID, v.ForDate, v.Action, v.Reasoning, v.Confidence, evidence)
 
-	return scanVerdict(row)
+	saved, err := scanVerdict(row)
+	if err != nil {
+		return plant.Verdict{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return plant.Verdict{}, err
+	}
+	return saved, nil
 }
 
 func scanVerdict(row pgx.Row) (plant.Verdict, error) {

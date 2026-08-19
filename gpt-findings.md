@@ -34,9 +34,10 @@ An item is checked only after the implementation, regression test, commit, and p
   `internal/job/water.go:185-207` writes `ObservedWatered` before verification and still writes it when verification has no reading.
   That resets last-watered state, suppresses reminders, and feeds false evidence into later judgments for the exact clogged-dripper case Planty exists to catch.
 
-- [ ] **PNT-005 — Historical open verdicts remain actionable after newer judgments supersede them.**
+- [x] **PNT-005 — Historical open verdicts remain actionable after newer judgments supersede them.**
   `internal/store/verdicts.go:25-35` creates a row per day, while digest and escalation queries select every unacknowledged actionable row at `internal/store/verdicts.go:106-116` and `internal/store/escalate.go:15-28`.
   Yesterday's water instruction can remain visible and escalating after today's judgment says none or something different.
+  Fixed by transactionally superseding prior verdicts, serializing concurrent judgments per plant, and enforcing one open verdict per plant with a partial unique index documented in ADR 0004.
 
 - [ ] **PNT-006 — A partially failed daily run can look fresh, complete, and all clear.**
   `internal/job/daily.go:42-70` tolerates any partial success, while `Digest` reports every live plant as checked and derives freshness from the global newest verdict at `internal/store/verdicts.go:88-103`.

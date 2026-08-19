@@ -111,6 +111,41 @@ func TestAcknowledgedVerdictsLeaveTheDigest(t *testing.T) {
 	}
 }
 
+func TestANewerVerdictSupersedesTheOldInstruction(t *testing.T) {
+	s, ctx := testStore(t)
+	p := newPlant(t, s, ctx, "Superseded subject")
+	old, err := s.SaveVerdict(ctx, plant.Verdict{
+		PlantID: p.ID, ForDate: time.Now().Add(-24 * time.Hour),
+		Action: plant.ActionWater, Reasoning: "was dry",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	latest, err := s.SaveVerdict(ctx, plant.Verdict{
+		PlantID: p.ID, ForDate: time.Now(),
+		Action: plant.ActionNone, Reasoning: "fine now",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if old.ID == latest.ID {
+		t.Fatal("different judgment days unexpectedly shared a row")
+	}
+
+	digest, err := s.Digest(ctx, plant.StaleAfter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range digest.Entries {
+		if entry.Plant.ID == p.ID {
+			t.Fatal("the superseded watering instruction remained actionable")
+		}
+	}
+	if err := s.AckVerdict(ctx, old.ID); err != nil {
+		t.Fatal("the superseded verdict was not retained as history")
+	}
+}
+
 // The constraint exists so bad data cannot enter through the app or an agent.
 func TestDatabaseRejectsDripperOnHandWateredPlant(t *testing.T) {
 	s, ctx := testStore(t)
