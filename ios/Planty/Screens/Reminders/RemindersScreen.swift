@@ -9,20 +9,24 @@ struct RemindersScreen: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                if store.reminders.isEmpty && !store.isLoading {
-                    empty
-                }
-                ForEach(store.reminders) { reminder in
-                    ReminderCard(
-                        reminder: reminder,
-                        done: { Task { await store.markDone(reminder) } },
-                        toggle: { active in Task { await store.setActive(reminder, to: active) } },
-                        edit: { editing = ReminderDraft(existing: reminder) },
-                        remove: { Task { await store.delete(reminder) } }
-                    )
-                }
-                if !store.addable.isEmpty {
-                    addMenu
+                if !store.hasLoaded {
+                    loading
+                } else {
+                    if store.reminders.isEmpty {
+                        empty
+                    }
+                    ForEach(store.reminders) { reminder in
+                        ReminderCard(
+                            reminder: reminder,
+                            done: { Task { await store.markDone(reminder) } },
+                            toggle: { active in Task { await store.setActive(reminder, to: active) } },
+                            edit: { editing = ReminderDraft(existing: reminder) },
+                            remove: { Task { await store.delete(reminder) } }
+                        )
+                    }
+                    if !store.addable.isEmpty {
+                        addMenu
+                    }
                 }
                 if let error = store.error {
                     StateMessage(
@@ -46,9 +50,22 @@ struct RemindersScreen: View {
         .task { await store.load() }
         .sheet(item: $editing) { draft in
             ReminderSheet(draft: draft) { saved in
-                Task { await store.save(saved) }
+                await store.save(saved)
             }
         }
+    }
+
+    /// Before the first answer, silence would read as "nothing is tracked",
+    /// which is exactly the empty state's claim.
+    private var loading: some View {
+        HStack(spacing: 12) {
+            ProgressView()
+            Text("Asking what is being tracked…")
+                .font(.subheadline)
+                .foregroundStyle(PlantyColor.secondaryText)
+        }
+        .frame(maxWidth: .infinity)
+        .plantyCard(padding: 16)
     }
 
     private var empty: some View {
@@ -87,6 +104,8 @@ struct ReminderCard: View {
     let edit: () -> Void
     let remove: () -> Void
 
+    @State private var isConfirmingRemoval = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -121,20 +140,46 @@ struct ReminderCard: View {
             }
 
             HStack(spacing: 10) {
+                // The store refuses too, but a live button on a paused reminder
+                // is an invitation to forge the observation it guards against.
                 Button("I did it", action: done)
                     .buttonStyle(PrimaryButtonStyle())
+                    .disabled(!reminder.active)
+                    .accessibilityLabel("I did it: \(reminder.kind.instruction)")
+                    .accessibilityHint(
+                        reminder.active
+                            ? "Records that you did it just now."
+                            : "Paused. Resume the reminder before recording."
+                    )
                 Button(reminder.active ? "Pause" : "Resume") { toggle(!reminder.active) }
                     .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityLabel(
+                        "\(reminder.active ? "Pause" : "Resume") reminder: \(reminder.kind.instruction)"
+                    )
             }
 
-            Button("Remove", role: .destructive, action: remove)
-                .font(.caption)
+            HStack(spacing: 10) {
+                Button("Edit", action: edit)
+                    .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityLabel("Edit reminder: \(reminder.kind.instruction)")
+                Button("Remove", role: .destructive) { isConfirmingRemoval = true }
+                    .buttonStyle(DestructiveButtonStyle())
+                    .accessibilityLabel("Remove reminder: \(reminder.kind.instruction)")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .plantyCard(padding: 16)
         .opacity(reminder.active ? 1 : 0.55)
-        .contentShape(Rectangle())
-        .onTapGesture(perform: edit)
+        .confirmationDialog(
+            "Stop reminding you to \(reminder.kind.instruction.lowercased())?",
+            isPresented: $isConfirmingRemoval,
+            titleVisibility: .visible
+        ) {
+            Button("Remove", role: .destructive, action: remove)
+            Button("Keep it", role: .cancel) {}
+        } message: {
+            Text("Planty stops asking. Everything already logged stays.")
+        }
     }
 
     private var lastLine: String {
@@ -142,5 +187,26 @@ struct ReminderCard: View {
         let days = Calendar.current.dateComponents([.day], from: lastDone, to: Date()).day ?? 0
         if days <= 0 { return "Last done today" }
         return days == 1 ? "Last done yesterday" : "Last done \(days) days ago"
+    }
+}
+
+/// SecondaryButtonStyle's geometry in destructive colour. Belongs next to the
+/// styles it mirrors in DesignSystem; parked here because this change was
+/// scoped away from that directory.
+struct DestructiveButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.headline)
+            .foregroundStyle(PlantyColor.red)
+            .frame(maxWidth: .infinity, minHeight: 50)
+            .padding(.horizontal, 16)
+            .background(
+                PlantyColor.surface.opacity(configuration.isPressed ? 0.7 : 1),
+                in: Capsule()
+            )
+            .overlay {
+                Capsule().stroke(PlantyColor.red.opacity(0.5), lineWidth: 1)
+            }
+            .contentShape(Capsule())
     }
 }

@@ -40,7 +40,10 @@ struct SettingsScreen: View {
                 .autocorrectionDisabled()
             SecureField("Bearer token", text: $token)
 
-            Button("Save and test") { Task { await saveAndTest() } }
+            Button(probe == .checking ? "Testing…" : "Test and save") {
+                Task { await testAndSave() }
+            }
+            .disabled(probe == .checking)
             probeRow
         } header: {
             Text("Planty service")
@@ -105,7 +108,6 @@ struct SettingsScreen: View {
             // which turned a stale install into an hour of chasing a fixed bug.
             LabeledContent("Version", value: Self.buildVersion)
             LabeledContent("Mascot", value: "A lavender seal, overwatering")
-            LabeledContent("Diagnosis", value: "Connected")
         }
     }
 

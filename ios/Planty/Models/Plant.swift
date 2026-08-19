@@ -175,3 +175,15 @@ struct CareProfile: Codable, Sendable, Hashable {
         case firstFrostExpected = "first_frost_expected"
     }
 }
+
+extension Plant {
+    /// Only the list endpoint sends a photo URL, so a copy that arrived from
+    /// any other call must not blank the picture already on screen.
+    func keepingPhoto(from previous: Plant) -> Plant {
+        guard photoURL == nil else { return self }
+        var kept = self
+        kept.photoURL = previous.photoURL
+        kept.photoTakenAt = previous.photoTakenAt
+        return kept
+    }
+}

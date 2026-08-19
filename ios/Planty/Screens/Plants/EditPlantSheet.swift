@@ -339,26 +339,4 @@ extension String {
     var cleaned: String { trimmingCharacters(in: .whitespacesAndNewlines) }
 }
 
-private extension PlantStatus {
-    var editLabel: String {
-        switch self {
-        case .alive: "Alive"
-        case .struggling: "Struggling"
-        case .dormant: "Dormant"
-        case .dead: "Dead"
-        case .gone: "Gone"
-        case .unknown: "Unrecorded"
-        }
-    }
-}
 
-private extension PlantAccessibility {
-    var editLabel: String {
-        switch self {
-        case .easy: "Easy to reach"
-        case .awkward: "Awkward"
-        case .hard: "Hard to reach"
-        case .unknown: "Unrecorded"
-        }
-    }
-}
