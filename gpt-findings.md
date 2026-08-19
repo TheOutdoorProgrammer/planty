@@ -152,10 +152,13 @@ An item is checked only after the implementation, regression test, commit, and p
 - [ ] **PNT-029 — iOS does not have the server and agent's advertised powers.**
   `PlantyAPI` lacks away planning, cold-watch query, full question list/create, postmortem history, toxicity editing, and harvest history.
   This directly contradicts the README claim that the app and plugin have the same powers.
+  The Garden tab now exposes away planning, cold watch, the full question workflow, harvest history, and postmortem lessons.
+  Toxicity editing remains before this finding can close.
 
-- [ ] **PNT-030 — Questions after the fourth are unreachable in iOS.**
+- [x] **PNT-030 — Questions after the fourth are unreachable in iOS.**
   `OpenQuestionsCard` renders only `prefix(4)` and displays the remaining count as inert text.
   There is no full queue screen or `GET /v1/questions` client method.
+  Fixed with the Garden question queue, which lists open, answered, and dropped questions and supports creating and answering them.
 
 - [ ] **PNT-031 — Archived plants cannot be inspected or restored in iOS.**
   The client models `include_archived`, but `PlantsStore` always loads live plants and there is no archive surface.

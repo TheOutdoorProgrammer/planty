@@ -48,6 +48,10 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     private var _scratchAsks: [ScratchQuestion] = []
     private var _created: [String] = []
     private var _uploads: [(String, Data)] = []
+    private var _questions: [OpenQuestion]?
+    private var _postmortems: [Postmortem] = []
+    private var _harvests: [Harvest] = []
+    private var _createdQuestions: [NewOpenQuestion] = []
 
     var answer: PlantAnswer {
         get { lock.withLock { _answer } }
@@ -61,6 +65,23 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     /// promises to create nothing can be held to it.
     var created: [String] { lock.withLock { _created } }
     var uploads: [(String, Data)] { lock.withLock { _uploads } }
+
+    var questionList: [OpenQuestion] {
+        get { lock.withLock { _questions ?? _digest.openQuestions } }
+        set { lock.withLock { _questions = newValue } }
+    }
+
+    var postmortemList: [Postmortem] {
+        get { lock.withLock { _postmortems } }
+        set { lock.withLock { _postmortems = newValue } }
+    }
+
+    var harvestList: [Harvest] {
+        get { lock.withLock { _harvests } }
+        set { lock.withLock { _harvests = newValue } }
+    }
+
+    var createdQuestions: [NewOpenQuestion] { lock.withLock { _createdQuestions } }
 
     var reminderList: [Reminder] {
         get { lock.withLock { _reminders } }
@@ -223,7 +244,14 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
 
     func answerQuestion(id: UUID, answer: String) async throws {
         try check()
-        lock.withLock { _answered.append((id, answer)) }
+        lock.withLock {
+            _answered.append((id, answer))
+            if let index = _questions?.firstIndex(where: { $0.id == id }) {
+                _questions?[index].answer = answer
+                _questions?[index].status = .answered
+                _questions?[index].answeredAt = Date()
+            }
+        }
     }
     func householdNotes() async throws -> [PlantNote] {
         try check()
@@ -329,22 +357,22 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
 
     func postmortems() async throws -> [Postmortem] {
         try check()
-        return []
+        return postmortemList
     }
 
     func harvests(slug: String?) async throws -> [Harvest] {
         try check()
-        return []
+        return harvestList
     }
 
     func questions(status: QuestionStatus) async throws -> [OpenQuestion] {
         try check()
-        return digest.openQuestions
+        return questionList.filter { ($0.status ?? .open) == status }
     }
 
     func createQuestion(_ draft: NewOpenQuestion) async throws -> OpenQuestion {
         try check()
-        return OpenQuestion(
+        let created = OpenQuestion(
             id: UUID(),
             plantID: draft.plantID,
             askedOf: draft.askedOf ?? Plant.stewardSelf,
@@ -353,6 +381,12 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
             createdAt: Date(),
             status: .open
         )
+        lock.withLock {
+            _createdQuestions.append(draft)
+            if _questions == nil { _questions = _digest.openQuestions }
+            _questions?.insert(created, at: 0)
+        }
+        return created
     }
 
     func planAway(_ draft: NewAwayPeriod) async throws -> AwayPeriod {

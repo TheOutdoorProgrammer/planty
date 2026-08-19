@@ -76,7 +76,7 @@ struct OpenQuestionsCard: View {
 }
 
 /// Records what the person said, in their words rather than a summary.
-private struct AnswerSheet: View {
+struct AnswerSheet: View {
     let question: OpenQuestion
     let save: (String) async -> PlantyError?
 

@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Three tabs, Snap in the middle. Diagnosis is deliberately not one of them:
+/// Four tabs, with Snap kept prominent. Diagnosis is deliberately not one of them:
 /// it only makes sense with a plant and a photo already in hand.
 struct RootTabView: View {
     @Environment(AppSession.self) private var session
@@ -17,6 +17,9 @@ struct RootTabView: View {
             }
             Tab("Plants", systemImage: "leaf.fill", value: AppTab.plants) {
                 PlantsLibraryScreen()
+            }
+            Tab("Garden", systemImage: "sparkles", value: AppTab.garden) {
+                GardenScreen()
             }
         }
         .tint(PlantyColor.pink)

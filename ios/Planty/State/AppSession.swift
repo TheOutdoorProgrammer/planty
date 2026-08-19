@@ -5,6 +5,7 @@ enum AppTab: String, Hashable, Sendable {
     case today
     case snap
     case plants
+    case garden
 }
 
 /// A plant carried into Snap, so "I'm here" opens capture already knowing what
@@ -29,6 +30,7 @@ final class AppSession {
     let today: TodayStore
     let library: PlantsStore
     let capture: CaptureStore
+    let garden: GardenStore
     private(set) var identification: IdentificationStore
     let updates: UpdateStore
 
@@ -51,6 +53,7 @@ final class AppSession {
         today = TodayStore(api: client, isConfigured: resolved.isConfigured)
         library = PlantsStore(api: client, isConfigured: resolved.isConfigured)
         capture = CaptureStore(api: client)
+        garden = GardenStore(api: client, isConfigured: resolved.isConfigured)
         identification = IdentificationStore(
             pipeline: Self.pipeline(client: client, configured: resolved.isConfigured)
         )
@@ -86,6 +89,7 @@ final class AppSession {
         today.replace(api: client, isConfigured: configuration.isConfigured)
         library.replace(api: client, isConfigured: configuration.isConfigured)
         capture.replace(api: client)
+        garden.replace(api: client, isConfigured: configuration.isConfigured)
         identification = IdentificationStore(
             pipeline: Self.pipeline(client: client, configured: configuration.isConfigured)
         )
