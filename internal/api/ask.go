@@ -87,6 +87,7 @@ func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 		"confidence":           answer.Confidence,
 		"looked_at":            answer.LookedAt,
 		"suggested_follow_ups": answer.Suggestions,
+		"steps":                answer.Steps,
 	})
 }
 
@@ -164,8 +165,10 @@ func (s *Server) attach(ctx context.Context, conversation uuid.UUID, encoded str
 		return nil, nil, err
 	}
 
+	// The id travels with it, because attaching it to a plant later is a
+	// command the model has to name it in.
 	shown = append(shown, judge.Offer{
-		Label: "just sent, the subject of this question",
+		Label: fmt.Sprintf("just sent, the subject of this question (photo id %s)", saved.ID),
 		Media: media, Bytes: raw,
 	})
 	return shown, &saved.ID, nil

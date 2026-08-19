@@ -41,6 +41,22 @@ func (s *Store) SavePhoto(ctx context.Context, p plant.Photo) (plant.Photo, erro
 	return out, err
 }
 
+// AttachPhoto gives an unowned photograph to a plant. Refuses to steal one
+// already filed elsewhere, since a picture moving plants silently is how a
+// timeline stops being evidence of anything.
+func (s *Store) AttachPhoto(ctx context.Context, photoID, plantID uuid.UUID, caption string) error {
+	tag, err := s.pool.Exec(ctx, `
+		UPDATE photos SET plant_id = $2, caption = coalesce(nullif($3,''), caption)
+		WHERE id = $1 AND (plant_id IS NULL OR plant_id = $2)`, photoID, plantID, caption)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("%w: no such photograph, or it already belongs to another plant", plant.ErrInvalid)
+	}
+	return nil
+}
+
 // Photo returns one image by id, whether or not it belongs to a plant.
 func (s *Store) Photo(ctx context.Context, id uuid.UUID) (plant.Photo, error) {
 	row := s.pool.QueryRow(ctx, `

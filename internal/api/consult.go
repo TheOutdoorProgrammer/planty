@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -79,7 +80,7 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 		}
 		attached = &shot.ID
 		offered = append(offered, judge.Offer{
-			Label: "just taken, in answer to what you asked for",
+			Label: fmt.Sprintf("just taken, in answer to what you asked for (photo id %s)", shot.ID),
 			Media: media, Bytes: raw,
 		})
 	}
@@ -110,6 +111,7 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 		"confidence":           answer.Confidence,
 		"looked_at":            answer.LookedAt,
 		"suggested_follow_ups": answer.Suggestions,
+		"steps":                answer.Steps,
 	})
 }
 
