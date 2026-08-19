@@ -176,3 +176,32 @@ func TestLightExposureNamesTheChoices(t *testing.T) {
 		t.Errorf("medium is valid: %v %v", l, err)
 	}
 }
+
+// An unquoted multi-word value used to set the flag to its first word and drop
+// the rest silently, renaming a plant to something nobody asked for. A model
+// constructing a command line gets this wrong, so it has to be loud.
+func TestAStrayWordIsRefusedRatherThanDropped(t *testing.T) {
+	for _, args := range [][]string{
+		{"update", "--plant", "golden-pothos", "--name", "Big", "Pothos"},
+		{"log", "--plant", "golden-pothos", "--kind", "note", "--note", "looked", "droopy"},
+		{"create", "--name", "Blue", "Oyster"},
+	} {
+		_, err := runVerb(t, Deps{}, args...)
+		if err == nil || !strings.Contains(err.Error(), "double quotes") {
+			t.Errorf("%v: want a refusal naming the loose words, got %v", args, err)
+		}
+	}
+}
+
+// A properly quoted value still works, or the guard above has broken the verb
+// it was meant to protect.
+func TestAQuotedValueSurvives(t *testing.T) {
+	set := newFlags("update")
+	name := set.String("name", "", "")
+	if err := parse(set, []string{"--name", "Big Pothos"}); err != nil {
+		t.Fatalf("a quoted value was refused: %v", err)
+	}
+	if *name != "Big Pothos" {
+		t.Errorf("name is %q", *name)
+	}
+}

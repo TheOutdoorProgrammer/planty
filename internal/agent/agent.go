@@ -254,7 +254,7 @@ func (d Deps) logObservation(ctx context.Context, out io.Writer, args []string) 
 	kind := set.String("kind", "", "what was done")
 	note := set.String("note", "", "anything worth remembering")
 	when := set.String("when", "", "when it happened; empty means now")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 
@@ -295,7 +295,7 @@ func (d Deps) setReminder(ctx context.Context, out io.Writer, args []string) err
 	everyDays := set.Int("every-days", 1, "how often a day qualifies")
 	at := set.String("at", "", "hours of the day, comma separated")
 	note := set.String("note", "", "anything worth remembering")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 
@@ -327,7 +327,7 @@ func (d Deps) forgetReminder(ctx context.Context, out io.Writer, args []string) 
 	set := newFlags("forget")
 	slug := set.String("plant", "", "the plant's slug")
 	kind := set.String("kind", "", "which reminder to drop")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 
@@ -351,6 +351,21 @@ func newFlags(verb string) *flag.FlagSet {
 	set := flag.NewFlagSet(verb, flag.ContinueOnError)
 	set.SetOutput(io.Discard)
 	return set
+}
+
+// parse reads the flags and refuses leftovers. Without this, an unquoted
+// `--name Big Pothos` sets the name to "Big" and drops "Pothos" on the floor,
+// which renames a plant to something nobody asked for and says it worked.
+func parse(set *flag.FlagSet, args []string) error {
+	if err := set.Parse(args); err != nil {
+		return err
+	}
+	if extra := set.Args(); len(extra) > 0 {
+		return fmt.Errorf(
+			"%q is not attached to a flag; put a value with spaces in double quotes",
+			strings.Join(extra, " "))
+	}
+	return nil
 }
 
 // given says which flags were actually passed, which is how a sparse update

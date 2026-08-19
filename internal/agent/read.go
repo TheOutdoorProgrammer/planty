@@ -23,7 +23,7 @@ func (d Deps) plants(ctx context.Context, out io.Writer, args []string) error {
 	status := set.String("status", "", "alive, struggling, dormant, dead or gone")
 	watering := set.String("watering", "", "letpot or hand")
 	archived := set.Bool("archived", false, "include archived plants")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 
@@ -60,7 +60,7 @@ func (d Deps) plants(ctx context.Context, out io.Writer, args []string) error {
 func (d Deps) show(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("show")
 	slug := set.String("plant", "", "the plant's slug")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	p, err := d.lookUp(ctx, *slug)
@@ -228,7 +228,7 @@ func (d Deps) observations(ctx context.Context, out io.Writer, args []string) er
 	set := newFlags("observations")
 	slug := set.String("plant", "", "the plant's slug")
 	limit := set.Int("limit", 20, "how many to show")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	p, err := d.lookUp(ctx, *slug)
@@ -261,7 +261,7 @@ func (d Deps) observations(ctx context.Context, out io.Writer, args []string) er
 func (d Deps) reminders(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("reminders")
 	slug := set.String("plant", "", "the plant's slug")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	p, err := d.lookUp(ctx, *slug)
@@ -282,7 +282,7 @@ func (d Deps) reminders(ctx context.Context, out io.Writer, args []string) error
 func (d Deps) sensors(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("sensors")
 	slug := set.String("plant", "", "narrow to one plant's probes")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 
@@ -371,7 +371,7 @@ func (d Deps) questions(ctx context.Context, out io.Writer, args []string) error
 	set := newFlags("questions")
 	of := set.String("of", "", "only questions for this person")
 	all := set.Bool("all", false, "include answered and dropped questions")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 
@@ -412,7 +412,7 @@ func (d Deps) questions(ctx context.Context, out io.Writer, args []string) error
 func (d Deps) coldwatch(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("coldwatch")
 	low := set.Float64("low", 0, "tonight's forecast low, Fahrenheit")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	if !given(set)["low"] {

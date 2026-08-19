@@ -33,7 +33,7 @@ func (d Deps) create(ctx context.Context, out io.Writer, args []string) error {
 	minTemp := set.Float64("min-temp", 0, "protect below this, Fahrenheit")
 	acquired := set.String("acquired", "", "when it arrived")
 	notes := set.String("notes", "", "care notes worth keeping")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	if *name == "" {
@@ -136,7 +136,7 @@ func (d Deps) update(ctx context.Context, out io.Writer, args []string) error {
 	soil := set.String("soil", "", "the soil mix")
 	minTemp := set.Float64("min-temp", 0, "protect below this, Fahrenheit")
 	notes := set.String("notes", "", "care notes; replaces the existing notes")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 
@@ -294,7 +294,7 @@ func (d Deps) archive(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("archive")
 	slug := set.String("plant", "", "the plant's slug")
 	status := set.String("status", string(plant.StatusGone), "dead or gone")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 
@@ -326,7 +326,7 @@ func (d Deps) harvest(ctx context.Context, out io.Writer, args []string) error {
 	unit := set.String("unit", "", "fruit, g, oz, ...")
 	note := set.String("note", "", "anything worth remembering")
 	when := set.String("when", "", "when it happened; empty means now")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 
@@ -392,7 +392,7 @@ func (d Deps) moveInOrOut(ctx context.Context, out io.Writer, args []string, ind
 	set := newFlags(verb)
 	list := set.String("plant", "", "comma-separated slugs")
 	all := set.Bool("all", false, "every plant it applies to")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 
@@ -455,7 +455,7 @@ func (d Deps) link(ctx context.Context, out io.Writer, args []string) error {
 	zone := set.String("zone", "", "or the zone it serves")
 	entity := set.String("entity", "", "the Home Assistant entity id")
 	role := set.String("role", "", "soil_moisture, ambient_temp, ambient_humidity or illuminance")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	if *slug != "" && *zone != "" {
@@ -495,7 +495,7 @@ func (d Deps) calibrate(ctx context.Context, out io.Writer, args []string) error
 	role := set.String("role", "", "needed only when one entity holds several roles")
 	dry := set.Float64("dry", 0, "the raw reading in bone dry soil")
 	wet := set.Float64("wet", 0, "the raw reading just after saturating")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	if *entity == "" {
@@ -540,7 +540,7 @@ func (d Deps) calibrate(ctx context.Context, out io.Writer, args []string) error
 func (d Deps) ack(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("ack")
 	slug := set.String("plant", "", "the plant's slug")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	p, err := d.lookUp(ctx, *slug)
@@ -575,7 +575,7 @@ func (d Deps) ask(ctx context.Context, out io.Writer, args []string) error {
 	question := set.String("question", "", "what only the owner can settle")
 	why := set.String("why", "", "why it matters")
 	of := set.String("of", "", "who to ask; defaults to the plant's steward")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	if *question == "" {
@@ -603,7 +603,7 @@ func (d Deps) answer(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("answer")
 	id := set.String("question", "", "the question's id, from planty agent questions")
 	text := set.String("answer", "", "what the owner said")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	if *text == "" {
@@ -632,7 +632,7 @@ func (d Deps) away(ctx context.Context, out io.Writer, args []string) error {
 	contact := set.String("contact", "", "who can act meanwhile")
 	notify := set.String("notify", "", "how to reach them, a notify service")
 	note := set.String("note", "", "anything worth remembering")
-	if err := set.Parse(args); err != nil {
+	if err := parse(set, args); err != nil {
 		return err
 	}
 	if *from == "" || *until == "" {
