@@ -11,7 +11,7 @@ struct RemoteDiagnosisService: DiagnosisService {
     let configuration: PlantyConfiguration
     let session: URLSession
 
-    init(configuration: PlantyConfiguration, session: URLSession = .plantyDefault) {
+    init(configuration: PlantyConfiguration, session: URLSession = .plantyPatient) {
         self.configuration = configuration
         self.session = session
     }

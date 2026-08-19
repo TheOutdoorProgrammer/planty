@@ -6,9 +6,20 @@ struct PlantyClient: PlantyAPI {
     let configuration: PlantyConfiguration
     let session: URLSession
 
-    init(configuration: PlantyConfiguration, session: URLSession = .plantyDefault) {
+    /// The session used for anything waiting on a model. Injected alongside the
+    /// ordinary one so a test can drive both through the same stub.
+    let patientSession: URLSession
+
+    init(
+        configuration: PlantyConfiguration,
+        session: URLSession = .plantyDefault,
+        patientSession: URLSession? = nil
+    ) {
         self.configuration = configuration
         self.session = session
+        self.patientSession = patientSession ?? (session === URLSession.plantyDefault
+            ? .plantyPatient
+            : session)
     }
 
     func today() async throws -> Digest {
@@ -120,7 +131,7 @@ struct PlantyClient: PlantyAPI {
         request.httpBody = body.finished()
 
         let response: IdentifyResponse = try decode(
-            IdentifyResponse.self, from: try await perform(request)
+            IdentifyResponse.self, from: try await perform(request, patient: true)
         )
         return response.candidates
     }
@@ -161,7 +172,7 @@ private extension PlantyClient {
         var request = try makeRequest(method, path, patience: patience)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try PlantyCoders.encoder().encode(body)
-        return try decode(T.self, from: try await perform(request))
+        return try decode(T.self, from: try await perform(request, patient: patience > Patience.ordinary))
     }
 
     func makeRequest(
@@ -191,11 +202,11 @@ private extension PlantyClient {
         return request
     }
 
-    func perform(_ request: URLRequest) async throws -> Data {
+    func perform(_ request: URLRequest, patient: Bool = false) async throws -> Data {
         let data: Data
         let response: URLResponse
         do {
-            (data, response) = try await session.data(for: request)
+            (data, response) = try await (patient ? patientSession : session).data(for: request)
         } catch {
             throw PlantyError.from(error)
         }
@@ -237,8 +248,19 @@ extension URLSession {
     /// never a screen that keeps implying it is about to reassure you.
     static let plantyDefault: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 15
+        config.timeoutIntervalForRequest = Patience.ordinary
         config.timeoutIntervalForResource = 60
+        config.waitsForConnectivity = false
+        return URLSession(configuration: config)
+    }()
+
+    /// For calls that wait on a model. Its own session because
+    /// `timeoutIntervalForResource` belongs to the session and caps the whole
+    /// load, so raising a request's timeout past it achieves nothing.
+    static let plantyPatient: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForRequest = Patience.model
+        config.timeoutIntervalForResource = Patience.model + 60
         config.waitsForConnectivity = false
         return URLSession(configuration: config)
     }()
