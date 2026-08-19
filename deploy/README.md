@@ -41,14 +41,17 @@ The CLI writes state on every run, which is why the deployment and the daily Cro
 Photo links are signed for `PLANTY_S3_PUBLIC_ENDPOINT`, not for the endpoint the pod dials.
 Leave it unset and the app is handed URLs on a cluster DNS name it cannot resolve, which looks exactly like photographs failing to upload.
 
-## No ingress, deliberately
+## LAN only, deliberately
 
-There is **no IngressRoute and no external DNS entry here**, and that is not an oversight.
-The service has no authentication, and while the plant data is dull, the pod holds a long-lived Home Assistant token and a credential that can spend a Claude subscription.
-It stays reachable only from inside the cluster and the LAN.
+There is no IngressRoute in this directory, but the deployed cluster has one: `planty.stout.zone`, alongside the manifests in the Flux repo.
+Its DNS record is public and resolves to a private address, so the name works on the LAN and nowhere else.
 
-The iOS app reaches it over the LAN.
-If that ever needs to change, put real authentication in front of it first.
+That distinction matters because the service has **no authentication**, and while the plant data is dull, the pod holds a long-lived Home Assistant token and a credential that can spend a Claude subscription.
+Anything that makes this reachable from outside has to add real auth in the same commit.
+
+`PLANTY_S3_PUBLIC_ENDPOINT` has to be reachable from wherever the app is, and no further.
+`s3.stout.zone` resolves to the same private address as `planty.stout.zone`, so photographs load exactly where the app already works.
+Pointing it at a genuinely public bucket would hand out presigned URLs to a plant photo timeline from a house.
 
 ## Order of operations
 
