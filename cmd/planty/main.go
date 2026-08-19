@@ -83,6 +83,12 @@ func run(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
+	// A model reads the agent's output verbatim and shows it to whoever asked,
+	// so it must not open with the migration runner clearing its throat.
+	if os.Args[1] == "agent" {
+		store.SilenceMigrations()
+	}
+
 	db, err := store.Open(ctx, dsn)
 	if err != nil {
 		return err

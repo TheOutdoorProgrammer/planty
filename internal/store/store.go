@@ -46,6 +46,20 @@ const migrationLock = 8_150_413
 // across processes; this serialises within one.
 var migrating sync.Mutex
 
+// SilenceMigrations stops goose narrating itself. Every command migrates on
+// start, so a command whose output a model reads otherwise begins with
+// "goose: no migrations to run" every single time.
+func SilenceMigrations() { goose.SetLogger(quietLogger{}) }
+
+// quietLogger drops what goose prints. Fatalf still ends the process, because
+// swallowing a failed migration would be much worse than a noisy one.
+type quietLogger struct{}
+
+func (quietLogger) Printf(string, ...any) {}
+func (quietLogger) Fatalf(format string, v ...any) {
+	panic(fmt.Sprintf(format, v...))
+}
+
 // Migrate applies pending migrations, serialised: every command migrates on
 // start, so a deployment and a CronJob landing together would otherwise race.
 func (s *Store) Migrate(ctx context.Context) error {
