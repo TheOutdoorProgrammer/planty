@@ -222,6 +222,10 @@ func (s *Server) archivePlant(w http.ResponseWriter, r *http.Request) {
 	if status == "" {
 		status = plant.StatusGone
 	}
+	if err := status.ValidateArchive(); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
 	if err := s.store.ArchivePlant(r.Context(), r.PathValue("slug"), status); err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return

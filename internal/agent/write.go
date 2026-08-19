@@ -303,8 +303,8 @@ func (d Deps) archive(ctx context.Context, out io.Writer, args []string) error {
 		return err
 	}
 	final := plant.Status(*status)
-	if final != plant.StatusDead && final != plant.StatusGone {
-		return fmt.Errorf("archiving records dead or gone, not %q", *status)
+	if err := final.ValidateArchive(); err != nil {
+		return err
 	}
 
 	err = d.Store.ArchivePlant(ctx, p.Slug, final)

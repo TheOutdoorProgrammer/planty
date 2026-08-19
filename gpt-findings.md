@@ -75,9 +75,10 @@ An item is checked only after the implementation, regression test, commit, and p
   Creation calls `Plant.Valid`, but `internal/store/update.go:39-132` writes patch fields directly.
   Empty names can persist, and invalid enums become misleading 500s because SQLSTATE class 22 is not classified as caller error.
 
-- [ ] **PNT-014 — Archive accepts contradictory and invalid statuses.**
+- [x] **PNT-014 — Archive accepts contradictory and invalid statuses.**
   `internal/api/plants.go:218-229` accepts any query status, unlike the agent CLI's `dead|gone` restriction.
   `DELETE ...?status=alive` creates an archived plant that still claims to be alive, while unknown enums can surface as 500.
+  Fixed with one domain validator shared by HTTP, agent CLI, and store boundaries, plus unit and Postgres-backed regression tests.
 
 - [ ] **PNT-015 — Verification reads only the first soil probe.**
   Watering considers every calibrated soil link and lets the driest drive the line, but `internal/job/ingest.go:75-88` returns after the first soil link.

@@ -33,6 +33,14 @@ const (
 	StatusGone       Status = "gone"
 )
 
+// ValidateArchive rejects states that contradict an archived record.
+func (s Status) ValidateArchive() error {
+	if s != StatusDead && s != StatusGone {
+		return invalid("archiving records dead or gone, not %q", s)
+	}
+	return nil
+}
+
 // WateringMethod decides whether Planty can act, or only report.
 type WateringMethod string
 

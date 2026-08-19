@@ -218,6 +218,9 @@ func (s *Store) ColdWatch(ctx context.Context, forecastLowF float64) ([]plant.Pl
 
 // ArchivePlant retires a plant without destroying its history.
 func (s *Store) ArchivePlant(ctx context.Context, slug string, status plant.Status) error {
+	if err := status.ValidateArchive(); err != nil {
+		return err
+	}
 	tag, err := s.pool.Exec(ctx, `
 		UPDATE plants
 		SET archived_at = now(), status = $2, updated_at = now()

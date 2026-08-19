@@ -210,6 +210,23 @@ func TestArchivingHidesThePlantButKeepsIt(t *testing.T) {
 	}
 }
 
+func TestArchivingRejectsANonTerminalStatus(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{
+		"common_name": "Still alive", "slug": unique("still-alive"),
+	})
+
+	rec, _ := do(t, h, http.MethodDelete, "/v1/plants/"+slug+"?status=alive", nil)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("got %d, want 400: %s", rec.Code, rec.Body.String())
+	}
+
+	rec, _ = do(t, h, http.MethodGet, "/v1/plants/"+slug, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("rejected archive still hid the plant: got %d", rec.Code)
+	}
+}
+
 // A nil slice marshals as `null`, and a client declaring the field non-optional
 // then fails to decode the whole response. This shipped: the app could not read
 // /v1/today at all, because `entries` is null until something has been judged.
