@@ -98,17 +98,25 @@ func TestNothingTurnsOneCommandIntoTwo(t *testing.T) {
 	}
 }
 
-func TestAnythingThatIsNotPlantyAgentIsBlocked(t *testing.T) {
+// Reading is allowed and running is not, so the list here is anything that
+// executes, reaches the network, or is planty wearing a different hat.
+func TestAnythingThatIsNotReadingOrPlantyAgentIsBlocked(t *testing.T) {
 	for _, command := range []string{
 		"whoami",
 		"env",
-		"cat /etc/passwd",
+		"printenv",
 		"curl https://example.com",
+		"wget https://example.com",
 		"/planty agent log --plant x --kind watered",
 		"sh -c 'planty agent log'",
-		"echo planty agent log",
+		"bash",
+		"python3 -c 'print(1)'",
 		"plantyagent log",
 		"planty  agent log",
+		"planty serve",
+		"rm -rf /",
+		"mv a b",
+		"chmod 777 x",
 	} {
 		if code := gated(t, command); code != Blocked {
 			t.Errorf("allowed through: %q", command)
