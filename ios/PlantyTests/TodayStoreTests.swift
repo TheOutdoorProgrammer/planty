@@ -41,6 +41,7 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     private var _answer: PlantAnswer = .fixture()
     private var _asked: [(String, PlantQuestion)] = []
     private var _reminders: [Reminder] = []
+    private var _notes: [PlantNote] = []
     private var _scratchAsks: [ScratchQuestion] = []
     private var _created: [String] = []
     private var _uploads: [(String, Data)] = []
@@ -61,6 +62,11 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     var reminderList: [Reminder] {
         get { lock.withLock { _reminders } }
         set { lock.withLock { _reminders = newValue } }
+    }
+
+    var noteList: [PlantNote] {
+        get { lock.withLock { _notes } }
+        set { lock.withLock { _notes = newValue } }
     }
 
     private func check() throws {
@@ -191,6 +197,41 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     func reminders(slug: String) async throws -> [Reminder] {
         try check()
         return reminderList
+    }
+
+    func notes(slug: String) async throws -> [PlantNote] {
+        try check()
+        return noteList
+    }
+
+    func addNote(slug: String, draft: NoteDraft) async throws -> PlantNote {
+        try check()
+        let written = PlantNote.fixture(title: draft.title, body: draft.body ?? "")
+        noteList.insert(written, at: 0)
+        return written
+    }
+
+    func updateNote(id: UUID, draft: NoteDraft) async throws -> PlantNote {
+        try check()
+        guard let index = noteList.firstIndex(where: { $0.id == id }) else {
+            throw PlantyError.offline
+        }
+        let existing = noteList[index]
+        let changed = PlantNote(
+            id: existing.id,
+            plantID: existing.plantID,
+            title: draft.title ?? existing.title,
+            body: draft.body ?? existing.body,
+            createdAt: existing.createdAt,
+            updatedAt: existing.createdAt.addingTimeInterval(60)
+        )
+        noteList[index] = changed
+        return changed
+    }
+
+    func deleteNote(id: UUID) async throws {
+        try check()
+        noteList.removeAll { $0.id == id }
     }
 
     func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder {

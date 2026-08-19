@@ -141,6 +141,15 @@ final class RecordingAPI: PlantyAPI, @unchecked Sendable {
     func linkSensor(_ link: NewSensorLink) async throws -> SensorLink { throw PlantyError.notFound }
     func reminders(slug: String) async throws -> [Reminder] { throw PlantyError.notFound }
 
+    func notes(slug: String) async throws -> [PlantNote] { [] }
+    func addNote(slug: String, draft: NoteDraft) async throws -> PlantNote {
+        throw PlantyError.notFound
+    }
+    func updateNote(id: UUID, draft: NoteDraft) async throws -> PlantNote {
+        throw PlantyError.notFound
+    }
+    func deleteNote(id: UUID) async throws { throw PlantyError.notFound }
+
     func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder {
         throw PlantyError.notFound
     }

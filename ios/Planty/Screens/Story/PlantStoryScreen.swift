@@ -142,6 +142,14 @@ struct PlantStoryScreen: View {
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(SecondaryButtonStyle())
+
+            NavigationLink {
+                NotesScreen(store: session.notesStore(for: store.plant))
+            } label: {
+                Label("Notes", systemImage: "note.text")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryButtonStyle())
         }
     }
 

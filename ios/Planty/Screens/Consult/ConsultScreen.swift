@@ -135,9 +135,16 @@ struct ConsultScreen: View {
                     .font(.caption)
                     .foregroundStyle(PlantyColor.secondaryText)
             }
+
+            if let answer = message.answer, !answer.steps.isEmpty {
+                Divider().overlay(PlantyColor.quietDecoration)
+                StepsDisclosure(steps: answer.steps)
+            }
         }
         .plantyCard(padding: 14)
-        .accessibilityElement(children: .combine)
+        // Not .combine: the trace below is interactive, and combining would
+        // flatten its buttons into the answer text and make them unreachable.
+        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder

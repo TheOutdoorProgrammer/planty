@@ -182,3 +182,23 @@ extension Reminder {
         )
     }
 }
+
+extension PlantNote {
+    static func fixture(
+        id: UUID = UUID(),
+        plantID: UUID = UUID(),
+        title: String? = nil,
+        body: String = "the cat keeps chewing this one",
+        createdAt: Date = Date(timeIntervalSince1970: 1_760_000_000),
+        updatedAt: Date? = nil
+    ) -> PlantNote {
+        PlantNote(
+            id: id,
+            plantID: plantID,
+            title: title,
+            body: body,
+            createdAt: createdAt,
+            updatedAt: updatedAt ?? createdAt
+        )
+    }
+}

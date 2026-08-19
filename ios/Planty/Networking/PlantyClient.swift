@@ -113,6 +113,23 @@ struct PlantyClient: PlantyAPI {
                        body: EmptyBody(), patience: Patience.model)
     }
 
+    func notes(slug: String) async throws -> [PlantNote] {
+        let response: NoteListResponse = try await get("/v1/plants/\(escaped(slug))/notes")
+        return response.notes
+    }
+
+    func addNote(slug: String, draft: NoteDraft) async throws -> PlantNote {
+        try await send("POST", "/v1/plants/\(escaped(slug))/notes", body: draft)
+    }
+
+    func updateNote(id: UUID, draft: NoteDraft) async throws -> PlantNote {
+        try await send("PATCH", "/v1/notes/\(id.uuidString)", body: draft)
+    }
+
+    func deleteNote(id: UUID) async throws {
+        _ = try await perform(try makeRequest("DELETE", "/v1/notes/\(id.uuidString)"))
+    }
+
     func reminders(slug: String) async throws -> [Reminder] {
         let response: ReminderListResponse = try await get("/v1/plants/\(escaped(slug))/reminders")
         return response.reminders

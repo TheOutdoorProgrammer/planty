@@ -57,6 +57,21 @@ private final class HangingAPI: PlantyAPI, @unchecked Sendable {
         try await Task.sleep(for: .seconds(60))
         return []
     }
+    func notes(slug: String) async throws -> [PlantNote] {
+        try await Task.sleep(for: .seconds(60))
+        return []
+    }
+    func addNote(slug: String, draft: NoteDraft) async throws -> PlantNote {
+        try await Task.sleep(for: .seconds(60))
+        throw PlantyError.offline
+    }
+    func updateNote(id: UUID, draft: NoteDraft) async throws -> PlantNote {
+        try await Task.sleep(for: .seconds(60))
+        throw PlantyError.offline
+    }
+    func deleteNote(id: UUID) async throws {
+        try await Task.sleep(for: .seconds(60))
+    }
     func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder {
         throw PlantyError.notFound
     }

@@ -36,6 +36,11 @@ protocol PlantyAPI: Sendable {
     /// Ask what killed a plant. Only answerable once it is recorded dead.
     func postmortem(slug: String) async throws -> Postmortem
 
+    func notes(slug: String) async throws -> [PlantNote]
+    func addNote(slug: String, draft: NoteDraft) async throws -> PlantNote
+    func updateNote(id: UUID, draft: NoteDraft) async throws -> PlantNote
+    func deleteNote(id: UUID) async throws
+
     func reminders(slug: String) async throws -> [Reminder]
     func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder
     func deleteReminder(slug: String, kind: ObservationKind) async throws

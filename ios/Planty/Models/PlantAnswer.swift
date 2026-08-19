@@ -14,6 +14,10 @@ struct PlantAnswer: Codable, Sendable, Hashable, Identifiable {
     let lookedAt: String?
     let suggestedFollowUps: [String]
 
+    /// What it did to reach the answer: commands run, pages fetched, thinking
+    /// in between. Absent on older answers, which is why it defaults empty.
+    let steps: [AnswerStep]
+
     enum CodingKeys: String, CodingKey {
         case id
         case conversationID = "conversation_id"
@@ -21,6 +25,36 @@ struct PlantAnswer: Codable, Sendable, Hashable, Identifiable {
         case confidence
         case lookedAt = "looked_at"
         case suggestedFollowUps = "suggested_follow_ups"
+        case steps
+    }
+
+    init(
+        id: UUID,
+        conversationID: UUID,
+        reply: String,
+        confidence: Double,
+        lookedAt: String?,
+        suggestedFollowUps: [String],
+        steps: [AnswerStep] = []
+    ) {
+        self.id = id
+        self.conversationID = conversationID
+        self.reply = reply
+        self.confidence = confidence
+        self.lookedAt = lookedAt
+        self.suggestedFollowUps = suggestedFollowUps
+        self.steps = steps
+    }
+
+    init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        id = try box.decode(UUID.self, forKey: .id)
+        conversationID = try box.decode(UUID.self, forKey: .conversationID)
+        reply = try box.decode(String.self, forKey: .reply)
+        confidence = try box.decodeIfPresent(Double.self, forKey: .confidence) ?? 0
+        lookedAt = try box.decodeIfPresent(String.self, forKey: .lookedAt)
+        suggestedFollowUps = try box.decodeIfPresent([String].self, forKey: .suggestedFollowUps) ?? []
+        steps = try box.decodeIfPresent([AnswerStep].self, forKey: .steps) ?? []
     }
 
     var didOpenAPhotograph: Bool {

@@ -134,6 +134,10 @@ final class AppSession {
         RemindersStore(api: api, plant: plant)
     }
 
+    func notesStore(for plant: Plant) -> NotesStore {
+        NotesStore(api: api, slug: plant.slug)
+    }
+
     /// Sends the user to Snap with the plant locked in, which is the whole of
     /// what "I'm here" does.
     func beginCapture(for entry: DigestEntry) {
