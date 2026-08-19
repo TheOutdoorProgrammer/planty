@@ -118,6 +118,8 @@ struct ConsultScreen: View {
         }
     }
 
+    /// Offers the question back rather than only an apology: retyping what you
+    /// just said is the worst possible response to a failure.
     private func askError(_ error: PlantyError) -> some View {
         StateMessage(
             title: "Planty could not answer that.",
@@ -125,8 +127,20 @@ struct ConsultScreen: View {
             accent: PlantyColor.orange,
             icon: "exclamationmark.triangle.fill"
         ) {
-            Button("Dismiss") { store.clearError() }
-                .buttonStyle(SecondaryButtonStyle())
+            VStack(spacing: 8) {
+                if store.failed != nil {
+                    Button("Ask again") {
+                        Task { await store.retry() }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+
+                    Button("Edit the question") { store.recoverDraft() }
+                        .buttonStyle(SecondaryButtonStyle())
+                } else {
+                    Button("Dismiss") { store.clearError() }
+                        .buttonStyle(SecondaryButtonStyle())
+                }
+            }
         }
     }
 

@@ -110,3 +110,62 @@ struct ConsultStoreTests {
         #expect(store.error == nil)
     }
 }
+
+/// Retyping what you just said is the worst possible response to a failure,
+/// and the composer is cleared the moment a question is sent.
+@Suite("Recovering a failed question")
+struct ConsultRecoveryTests {
+    @Test("A failed question can be asked again without retyping it")
+    @MainActor
+    func retryReusesTheQuestion() async {
+        let api = FakeAPI()
+        api.failure = .offline
+        let store = ConsultStore(api: api, plant: .fixture())
+
+        store.composer = "is this too wet?"
+        await store.send()
+
+        #expect(store.failed == "is this too wet?")
+        #expect(store.messages.count == 1, "the unanswered question is still on screen")
+
+        api.failure = nil
+        await store.retry()
+
+        #expect(store.error == nil)
+        #expect(store.failed == nil)
+        // The fake only records what it answered, so one entry means the retry
+        // carried the original words rather than an empty string.
+        #expect(api.asked.map(\.1.message) == ["is this too wet?"])
+        #expect(store.messages.count == 2, "the dangling question was left behind")
+    }
+
+    @Test("The words come back to the composer to be edited")
+    @MainActor
+    func draftIsRecoverable() async {
+        let api = FakeAPI()
+        api.failure = .offline
+        let store = ConsultStore(api: api, plant: .fixture())
+
+        store.composer = "why are the leaves curling"
+        await store.send()
+        store.recoverDraft()
+
+        #expect(store.composer == "why are the leaves curling")
+        #expect(store.messages.isEmpty)
+        #expect(store.error == nil)
+    }
+
+    /// Tapping a suggestion while something is half-typed must not eat it.
+    @Test("A suggestion does not destroy a half-typed question")
+    @MainActor
+    func suggestionsKeepTheDraftOnFailure() async {
+        let api = FakeAPI()
+        api.failure = .offline
+        let store = ConsultStore(api: api, plant: .fixture())
+
+        store.composer = "half a thought"
+        await store.send("Does this need water?")
+
+        #expect(store.composer == "half a thought")
+    }
+}

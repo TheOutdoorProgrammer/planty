@@ -21,6 +21,10 @@ final class ConsultStore {
     private(set) var isThinking = false
     private(set) var error: PlantyError?
 
+    /// The question that did not get an answer, kept so it can be retried or
+    /// handed back rather than retyped from memory.
+    private(set) var failed: String?
+
     let plant: Plant
     var composer = ""
 
@@ -55,10 +59,32 @@ final class ConsultStore {
         await ask(text)
     }
 
+    /// A suggestion never destroys a half-typed question: tapping one while
+    /// something is in the box is an accident waiting to lose it.
     func send(_ prompt: String) async {
         guard !isThinking else { return }
+        let draft = composer
         composer = ""
         await ask(prompt)
+        if failed != nil { composer = draft }
+    }
+
+    /// Puts the question back in the box so it can be sent again without
+    /// retyping. Clears the dangling bubble that has no answer under it.
+    func retry() async {
+        guard let text = failed else { return }
+        failed = nil
+        if case .user = messages.last?.speaker { messages.removeLast() }
+        await ask(text)
+    }
+
+    /// Drops the failed attempt and hands the words back to the composer.
+    func recoverDraft() {
+        guard let text = failed else { return }
+        if case .user = messages.last?.speaker { messages.removeLast() }
+        composer = text
+        failed = nil
+        error = nil
     }
 
     private func ask(_ text: String) async {
@@ -73,6 +99,7 @@ final class ConsultStore {
                 question: PlantQuestion(message: text, conversationID: conversationID)
             )
             conversationID = answer.conversationID
+            failed = nil
             messages.append(
                 ConsultMessage(speaker: .planty, text: answer.reply, answer: answer)
             )
@@ -81,6 +108,7 @@ final class ConsultStore {
             // reply that has not arrived, so the failure is said out loud.
             guard !PlantyError.isCancellation(error) else { return }
             self.error = PlantyError.from(error)
+            failed = text
         }
     }
 
