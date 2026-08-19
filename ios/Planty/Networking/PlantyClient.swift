@@ -113,6 +113,34 @@ struct PlantyClient: PlantyAPI {
                        body: EmptyBody(), patience: Patience.model)
     }
 
+    func postmortems() async throws -> [Postmortem] {
+        let response: PostmortemListResponse = try await get("/v1/postmortems")
+        return response.postmortems
+    }
+
+    func questions(status: QuestionStatus) async throws -> [OpenQuestion] {
+        let response: QuestionListResponse = try await get(
+            "/v1/questions",
+            query: [URLQueryItem(name: "status", value: status.rawValue)]
+        )
+        return response.questions
+    }
+
+    func createQuestion(_ draft: NewOpenQuestion) async throws -> OpenQuestion {
+        try await send("POST", "/v1/questions", body: draft)
+    }
+
+    func planAway(_ draft: NewAwayPeriod) async throws -> AwayPeriod {
+        try await send("POST", "/v1/away", body: draft)
+    }
+
+    func coldWatch(forecastLowF: Double) async throws -> ColdWatch {
+        try await get(
+            "/v1/cold-watch",
+            query: [URLQueryItem(name: "forecast_low_f", value: String(forecastLowF))]
+        )
+    }
+
     func notes(slug: String) async throws -> [PlantNote] {
         let response: NoteListResponse = try await get("/v1/plants/\(escaped(slug))/notes")
         return response.notes
@@ -185,6 +213,12 @@ struct PlantyClient: PlantyAPI {
 
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest {
         try await send("POST", "/v1/plants/\(escaped(slug))/harvests", body: harvest)
+    }
+
+    func harvests(slug: String? = nil) async throws -> [Harvest] {
+        let path = slug.map { "/v1/plants/\(escaped($0))/harvests" } ?? "/v1/harvests"
+        let response: HarvestListResponse = try await get(path)
+        return response.harvests
     }
 
     func health() async throws {

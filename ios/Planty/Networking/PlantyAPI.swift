@@ -15,6 +15,7 @@ protocol PlantyAPI: Sendable {
     func acknowledge(verdictID: UUID) async throws
     func sensors() async throws -> [SensorLink]
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest
+    func harvests(slug: String?) async throws -> [Harvest]
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink
     func shelter(slugs: [String], indoors: Bool) async throws -> Int
     func identify(jpeg: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate]
@@ -35,6 +36,12 @@ protocol PlantyAPI: Sendable {
 
     /// Ask what killed a plant. Only answerable once it is recorded dead.
     func postmortem(slug: String) async throws -> Postmortem
+    func postmortems() async throws -> [Postmortem]
+
+    func questions(status: QuestionStatus) async throws -> [OpenQuestion]
+    func createQuestion(_ draft: NewOpenQuestion) async throws -> OpenQuestion
+    func planAway(_ draft: NewAwayPeriod) async throws -> AwayPeriod
+    func coldWatch(forecastLowF: Double) async throws -> ColdWatch
 
     func notes(slug: String) async throws -> [PlantNote]
     func answerQuestion(id: UUID, answer: String) async throws
@@ -117,6 +124,7 @@ struct PlantPatch: Codable, Sendable, Hashable {
     var potSizeIn: Double?
     var potMaterial: String?
     var hasDrainage: Bool?
+    var toxicity: Toxicity?
 
     init() {}
 
@@ -136,6 +144,7 @@ struct PlantPatch: Codable, Sendable, Hashable {
         case potSizeIn = "pot_size_in"
         case potMaterial = "pot_material"
         case hasDrainage = "has_drainage"
+        case toxicity
     }
 }
 

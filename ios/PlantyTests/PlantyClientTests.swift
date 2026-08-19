@@ -160,6 +160,107 @@ struct PlantyClientTests {
         #expect(saved.unit == "fruit")
     }
 
+    @Test("Garden-wide and per-plant harvest history use their documented routes")
+    func readsHarvestHistory() async throws {
+        let historyJSON = """
+            {"harvests":[{
+              "slug":"mona",
+              "common_name":"Mona",
+              "id":"\(UUID().uuidString)",
+              "plant_id":"\(UUID().uuidString)",
+              "occurred_at":"2026-08-18T09:00:00Z",
+              "quantity":4,
+              "unit":"fruit",
+              "created_at":"2026-08-18T09:00:01Z"
+            }],"count":1}
+            """
+        StubTransport.respond(json: historyJSON)
+        let all = try await StubTransport.client().harvests(slug: nil)
+        var request = try #require(StubResponder.shared.requests.first)
+        #expect(request.url?.path == "/v1/harvests")
+        #expect(all.first?.commonName == "Mona")
+
+        StubTransport.respond(json: historyJSON)
+        _ = try await StubTransport.client().harvests(slug: "mona")
+        request = try #require(StubResponder.shared.requests.first)
+        #expect(request.url?.path == "/v1/plants/mona/harvests")
+    }
+
+    @Test("Questions can be listed and queued from iOS")
+    func questionQueueRoutes() async throws {
+        let id = UUID()
+        let questionJSON = """
+            {
+              "id":"\(id.uuidString)",
+              "asked_of":"Maya",
+              "question":"Is the porch covered?",
+              "created_at":"2026-08-18T09:00:00Z",
+              "status":"open"
+            }
+            """
+        StubTransport.respond(json: "{\"questions\":[\(questionJSON)],\"count\":1}")
+        let questions = try await StubTransport.client().questions(status: .open)
+        var request = try #require(StubResponder.shared.requests.first)
+        #expect(request.url?.path == "/v1/questions")
+        #expect(request.url?.query == "status=open")
+        #expect(questions.first?.askedOf == "Maya")
+
+        StubTransport.respond(status: 201, json: questionJSON)
+        _ = try await StubTransport.client().createQuestion(
+            NewOpenQuestion(askedOf: "Maya", question: "Is the porch covered?")
+        )
+        request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/questions")
+    }
+
+    @Test("Away planning, cold watch and postmortem history are reachable")
+    func gardenPlanningRoutes() async throws {
+        let awayJSON = """
+            {
+              "id":"\(UUID().uuidString)",
+              "starts_at":"2026-08-20T09:00:00Z",
+              "ends_at":"2026-08-25T09:00:00Z",
+              "backup_contact":"Maya",
+              "created_at":"2026-08-18T09:00:00Z"
+            }
+            """
+        StubTransport.respond(status: 201, json: awayJSON)
+        _ = try await StubTransport.client().planAway(NewAwayPeriod(
+            startsAt: .reference,
+            endsAt: .reference.addingTimeInterval(86_400),
+            backupContact: "Maya"
+        ))
+        var request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/away")
+
+        StubTransport.respond(json: "{\"forecast_low_f\":42,\"plants\":[],\"count\":0}")
+        let watch = try await StubTransport.client().coldWatch(forecastLowF: 42)
+        request = try #require(StubResponder.shared.requests.first)
+        #expect(request.url?.path == "/v1/cold-watch")
+        #expect(request.url?.query == "forecast_low_f=42.0")
+        #expect(watch.forecastLowF == 42)
+
+        let postmortemJSON = """
+            {"postmortems":[{
+              "slug":"lost-fern",
+              "common_name":"Lost fern",
+              "id":"\(UUID().uuidString)",
+              "plant_id":"\(UUID().uuidString)",
+              "likely_cause":"root rot",
+              "narrative":"The soil stayed wet.",
+              "evidence":{},
+              "created_at":"2026-08-18T09:00:00Z"
+            }],"count":1}
+            """
+        StubTransport.respond(json: postmortemJSON)
+        let records = try await StubTransport.client().postmortems()
+        request = try #require(StubResponder.shared.requests.first)
+        #expect(request.url?.path == "/v1/postmortems")
+        #expect(records.first?.commonName == "Lost fern")
+    }
+
     @Test("Calibration is a PATCH against the link, carrying both baselines")
     func calibratesASensor() async throws {
         let id = UUID()

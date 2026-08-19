@@ -42,6 +42,10 @@ private final class HangingAPI: PlantyAPI, @unchecked Sendable {
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest {
         throw PlantyError.notFound
     }
+    func harvests(slug: String?) async throws -> [Harvest] {
+        try await Task.sleep(for: .seconds(60))
+        return []
+    }
     func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo {
         throw PlantyError.notFound
     }
@@ -64,6 +68,23 @@ private final class HangingAPI: PlantyAPI, @unchecked Sendable {
 
     func answerQuestion(id: UUID, answer: String) async throws {
         try await Task.sleep(for: .seconds(60))
+    }
+    func postmortems() async throws -> [Postmortem] {
+        try await Task.sleep(for: .seconds(60))
+        return []
+    }
+    func questions(status: QuestionStatus) async throws -> [OpenQuestion] {
+        try await Task.sleep(for: .seconds(60))
+        return []
+    }
+    func createQuestion(_ draft: NewOpenQuestion) async throws -> OpenQuestion {
+        throw PlantyError.notFound
+    }
+    func planAway(_ draft: NewAwayPeriod) async throws -> AwayPeriod {
+        throw PlantyError.notFound
+    }
+    func coldWatch(forecastLowF: Double) async throws -> ColdWatch {
+        throw PlantyError.notFound
     }
     func householdNotes() async throws -> [PlantNote] {
         try await Task.sleep(for: .seconds(60))

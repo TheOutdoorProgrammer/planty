@@ -327,6 +327,52 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
         )
     }
 
+    func postmortems() async throws -> [Postmortem] {
+        try check()
+        return []
+    }
+
+    func harvests(slug: String?) async throws -> [Harvest] {
+        try check()
+        return []
+    }
+
+    func questions(status: QuestionStatus) async throws -> [OpenQuestion] {
+        try check()
+        return digest.openQuestions
+    }
+
+    func createQuestion(_ draft: NewOpenQuestion) async throws -> OpenQuestion {
+        try check()
+        return OpenQuestion(
+            id: UUID(),
+            plantID: draft.plantID,
+            askedOf: draft.askedOf ?? Plant.stewardSelf,
+            question: draft.question,
+            why: draft.why,
+            createdAt: Date(),
+            status: .open
+        )
+    }
+
+    func planAway(_ draft: NewAwayPeriod) async throws -> AwayPeriod {
+        try check()
+        return AwayPeriod(
+            id: UUID(),
+            startsAt: draft.startsAt,
+            endsAt: draft.endsAt,
+            backupContact: draft.backupContact,
+            backupNotify: draft.backupNotify,
+            note: draft.note,
+            createdAt: Date()
+        )
+    }
+
+    func coldWatch(forecastLowF: Double) async throws -> ColdWatch {
+        try check()
+        return ColdWatch(forecastLowF: forecastLowF, plants: plantList)
+    }
+
     func health() async throws {
         try check()
     }

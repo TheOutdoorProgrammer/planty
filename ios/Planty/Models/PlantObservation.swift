@@ -63,6 +63,8 @@ struct NewObservation: Codable, Sendable, Hashable {
 
 /// Kept out of the observation log: yield per season has to aggregate.
 struct Harvest: Codable, Sendable, Hashable, Identifiable {
+    var slug: String? = nil
+    var commonName: String? = nil
     let id: UUID
     let plantID: UUID
     let occurredAt: Date
@@ -73,6 +75,8 @@ struct Harvest: Codable, Sendable, Hashable, Identifiable {
 
     enum CodingKeys: String, CodingKey {
         case id
+        case slug
+        case commonName = "common_name"
         case plantID = "plant_id"
         case occurredAt = "occurred_at"
         case quantity
@@ -80,6 +84,11 @@ struct Harvest: Codable, Sendable, Hashable, Identifiable {
         case notes
         case createdAt = "created_at"
     }
+}
+
+struct HarvestListResponse: Decodable, Sendable {
+    let harvests: [Harvest]
+    var count: Int?
 }
 
 /// The plant comes from the path Planty is posted to, so it is deliberately

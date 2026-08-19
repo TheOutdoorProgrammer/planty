@@ -164,6 +164,19 @@ final class RecordingAPI: PlantyAPI, @unchecked Sendable {
         throw PlantyError.notFound
     }
 
+    func harvests(slug: String?) async throws -> [Harvest] { [] }
+    func postmortems() async throws -> [Postmortem] { [] }
+    func questions(status: QuestionStatus) async throws -> [OpenQuestion] { [] }
+    func createQuestion(_ draft: NewOpenQuestion) async throws -> OpenQuestion {
+        throw PlantyError.notFound
+    }
+    func planAway(_ draft: NewAwayPeriod) async throws -> AwayPeriod {
+        throw PlantyError.notFound
+    }
+    func coldWatch(forecastLowF: Double) async throws -> ColdWatch {
+        throw PlantyError.notFound
+    }
+
     func health() async throws { throw PlantyError.notFound }
 }
 
