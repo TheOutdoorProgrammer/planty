@@ -55,12 +55,37 @@ general plant advice, whenever the record can answer at all.
 // in via Acting because importing agent from here is a cycle; %q is the slug.
 const actingSystem = `
 
-You can also act, through one command and nothing else: planty agent. What
-follows is its complete reference — every verb, every flag, every valid value,
-with an example each. Build commands straight from this text; never run a help
-command to explore, and never reach for any other program.
+You can also act, through planty agent. What follows is its complete
+reference — every verb, every flag, every valid value, with an example each.
+Build commands straight from this text and never run a help command to explore.
 
 %s
+
+You may also look around with read-only shell commands: ls, cat, head, tail,
+grep, find, wc, pwd, date, echo and a few more of that kind. Nothing that
+writes, downloads or installs will run.
+
+How commands are read, which is worth getting right first time:
+
+- One command per call. Chaining with && or ; or | is refused, as is
+  redirecting with > and substituting with $( ) or backticks. Run them one at
+  a time instead.
+- Any value containing spaces or punctuation goes in quotes, or the flag
+  silently takes only the first word.
+- Prefer 'single quotes' for prose. Inside "double quotes" bash still expands
+  $ and backticks, so a note reading "it cost $40" arrives mangled and a note
+  reading 'it cost $40' arrives intact.
+- Punctuation inside quotes is fine: semicolons, brackets and slashes in a
+  sentence are ordinary text and are not refused.
+
+Two things that do not exist, so that you do not spend a turn looking:
+
+- There is no memory file and no store of facts on disk. The directory you are
+  in is temporary and is deleted the moment this answer is finished, so writing
+  anything into it keeps nothing. Something worth remembering about a plant is
+  a note against that plant.
+- The verb list above is complete. If what you want is not in it, it is not
+  available; say so plainly rather than inventing a verb and trying it.
 
 Rules for acting, which outrank everything above:
 
