@@ -39,6 +39,18 @@ Two independent layers, because the first is a string match on a command line an
 
 Verified live against a fake `planty` that logs what it was asked to do: the model recorded a watering, refused `touch`, and refused a chained command in its own words. No probe file was ever created.
 
+### Reading the web
+
+The same allowlist mechanism grants five sites and nothing else: NC State's plant toolbox, the ASPCA's toxicity list, UC's pest notes, Ohio State Extension, and Penn State Extension.
+Between them they cover species care, pest and disease identification, whether a plant will hurt a cat, Ohio timing, and mushrooms.
+
+Every candidate was fetched with the same fetcher the service uses before being trusted, which is what removed the Missouri Botanical Garden: its plant finder redirects across hosts, and the fetcher does not follow that, so the rule would have looked right and stranded every lookup.
+The ASPCA entry is `www.aspca.org` for the same reason.
+
+An empty list means no web tools at all, rather than web access with no restriction, and there is a test holding that distinction.
+Verified by telling the model to fetch an off-list host with nothing in the prompt discouraging it: the attempt was denied and recorded, while an allowlisted host fetched normally.
+The prompt naming the sites is a convenience; the rule is the boundary.
+
 ### Consequences
 
 Good:

@@ -96,6 +96,9 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 	system := consultSystem
 	if j.acting != nil {
 		system += fmt.Sprintf(actingSystem, j.acting.Usage, h.Plant.Slug)
+		if j.acting.Sources != "" {
+			system += "\n\n" + j.acting.Sources
+		}
 	}
 
 	turns := []Turn{ask(text(record(h, ongoing)))}

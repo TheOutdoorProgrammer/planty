@@ -3,6 +3,7 @@ package agent
 import (
 	"bytes"
 	"io"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -143,5 +144,27 @@ func TestTheRefusalSaysWhy(t *testing.T) {
 	}
 	if !strings.Contains(explained.String(), "planty gate") {
 		t.Errorf("the refusal does not say who refused: %q", explained.String())
+	}
+}
+
+// The prompt tells the model where to read; the rules are what stop it. A
+// list that only lives in prose is a suggestion, so both have to name the same
+// hosts and the rules have to be the thing that actually holds.
+func TestTheTrustedSourcesAreNamedInBothPlaces(t *testing.T) {
+	if len(Trusted) == 0 {
+		t.Fatal("no trusted hosts, which turns the web off entirely")
+	}
+	for _, host := range Trusted {
+		if !strings.Contains(Sources, host) {
+			t.Errorf("%s is allowlisted but the model is never told what it is for", host)
+		}
+		if strings.HasPrefix(host, "http") || strings.Contains(host, "/") {
+			t.Errorf("%q is a URL, not a hostname; a WebFetch rule takes a bare host", host)
+		}
+	}
+	// aspca.org redirects across hosts to www, and the fetcher will not follow
+	// that, so the bare apex would silently never work.
+	if strings.Contains(Sources, "aspca") && !slices.Contains(Trusted, "www.aspca.org") {
+		t.Error("the ASPCA host must be www., or every fetch of it stops at a redirect")
 	}
 }

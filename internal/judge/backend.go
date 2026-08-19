@@ -56,6 +56,10 @@ type Acting struct {
 	// and the difference is the whole internet.
 	Trusted []string
 
+	// Sources tells the model what those hostnames are for. Passed in beside
+	// them so a rule and its explanation cannot drift apart.
+	Sources string
+
 	// Usage is that command's own help, handed to the model so the two cannot
 	// drift. Passed in rather than imported: the package that defines these
 	// verbs reaches the store, and the store reaches back here.

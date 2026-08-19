@@ -218,7 +218,12 @@ func acting() *judge.Acting {
 	if err != nil {
 		return nil
 	}
-	return &judge.Acting{Binary: binary, Usage: agent.Usage}
+	return &judge.Acting{
+		Binary:  binary,
+		Usage:   agent.Usage,
+		Trusted: agent.Trusted,
+		Sources: agent.Sources,
+	}
 }
 
 // backendName says which way judgments are being bought, which is the first
