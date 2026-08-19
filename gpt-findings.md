@@ -146,14 +146,13 @@ An item is checked only after the implementation, regression test, commit, and p
   There is no domain or database validation for positive finite quantity, a non-empty unit, plausible timestamps, or applicable plant domains, and no correction path exists.
 
 - [ ] **PNT-028 — Away periods cannot be viewed, changed, or cancelled.**
-  HTTP and agent CLI expose create only, iOS exposes nothing, and overlap behavior is undefined.
+  HTTP, agent CLI, and iOS expose create only, and overlap behavior is undefined.
   A typo in dates or backup contact is permanent and the user cannot confirm what is active.
 
-- [ ] **PNT-029 — iOS does not have the server and agent's advertised powers.**
+- [x] **PNT-029 — iOS does not have the server and agent's advertised powers.**
   `PlantyAPI` lacks away planning, cold-watch query, full question list/create, postmortem history, toxicity editing, and harvest history.
   This directly contradicts the README claim that the app and plugin have the same powers.
-  The Garden tab now exposes away planning, cold watch, the full question workflow, harvest history, and postmortem lessons.
-  Toxicity editing remains before this finding can close.
+  Fixed with a Garden tab for away planning, cold watch, the complete question workflow, harvest history, and postmortem lessons, plus a validated toxicity editor on each plant's story.
 
 - [x] **PNT-030 — Questions after the fourth are unreachable in iOS.**
   `OpenQuestionsCard` renders only `prefix(4)` and displays the remaining count as inert text.

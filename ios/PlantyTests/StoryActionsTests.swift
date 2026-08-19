@@ -259,6 +259,27 @@ struct StoryActionsTests {
         #expect(store.plant.photoURL == plant.photoURL)
     }
 
+    @Test("A toxicity edit replaces a detail envelope that was already loaded")
+    @MainActor
+    func toxicityEditReplacesLoadedDetail() async {
+        let api = RecordingAPI()
+        var original = Plant.fixture(slug: "mona")
+        original.toxicity = Toxicity(cats: .unknown, dogs: .unknown, people: .unknown)
+        api.plantReturned = original
+        let store = PlantStoryStore(api: api, plant: original)
+        await store.load()
+
+        var updated = original
+        updated.toxicity = Toxicity(cats: .severe, dogs: .mild, people: .mild, basis: .source)
+        api.plantReturned = updated
+        var patch = PlantPatch()
+        patch.toxicity = updated.toxicity
+
+        _ = await store.saveEdits(patch)
+
+        #expect(store.toxicity?.cats == .severe)
+    }
+
     @Test("Recorded care lands at the top of the story, note and all")
     @MainActor
     func recordInsertsTheObservation() async {

@@ -6,6 +6,7 @@ struct PlantStoryScreen: View {
     @State var store: PlantStoryStore
     @Environment(AppSession.self) private var session
     @State private var isEditing = false
+    @State private var isEditingToxicity = false
     @State private var isLoggingCare = false
     @State private var isHarvesting = false
     @State private var isConfirmingDeath = false
@@ -59,6 +60,11 @@ struct PlantStoryScreen: View {
                     } label: {
                         Label("Edit plant", systemImage: "pencil")
                     }
+                    Button {
+                        isEditingToxicity = true
+                    } label: {
+                        Label("Edit toxicity", systemImage: "cross.case")
+                    }
                     if !store.plant.status.isRetired {
                         Button(role: .destructive) {
                             isConfirmingDeath = true
@@ -79,6 +85,15 @@ struct PlantStoryScreen: View {
                 return failure
             } setSheltered: { indoors in
                 await store.setSheltered(indoors)
+            }
+        }
+        .sheet(isPresented: $isEditingToxicity) {
+            ToxicityEditSheet(plant: store.plant, toxicity: store.toxicity) { toxicity in
+                var patch = PlantPatch()
+                patch.toxicity = toxicity
+                let failure = await store.saveEdits(patch)
+                if failure == nil { session.library.apply(store.plant) }
+                return failure
             }
         }
         .sheet(isPresented: $isLoggingCare) {

@@ -230,3 +230,12 @@ struct ActionFace: View {
         .accessibilityLabel(title)
     }
 }
+
+extension String {
+    var cleaned: String { trimmingCharacters(in: .whitespacesAndNewlines) }
+
+    var nilIfBlank: String? {
+        let trimmed = cleaned
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}

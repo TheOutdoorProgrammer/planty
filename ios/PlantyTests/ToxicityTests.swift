@@ -148,6 +148,46 @@ struct ToxicityTests {
 
         #expect(plant.toxicity == nil)
     }
+
+    @Test("A new edit cannot turn an unchecked record into an unsourced claim")
+    func editRequiresBasis() {
+        var form = ToxicityEditForm(plant: .fixture(), toxicity: nil)
+        form.cats = .safe
+
+        #expect(form.toxicity() == .failure(.missingBasis))
+    }
+
+    @Test("An urgent edit names the toxic principle")
+    func urgentEditRequiresPrinciple() {
+        var form = ToxicityEditForm(plant: .fixture(), toxicity: nil)
+        form.cats = .severe
+        form.basis = .source
+
+        #expect(form.toxicity() == .failure(.missingPrinciple))
+    }
+
+    @Test("The edit form emits server enums in stable order and stamps the check")
+    func editBuildsCompleteRecord() throws {
+        let checkedAt = Date.reference
+        var plant = Plant.fixture()
+        plant.botanicalName = "Lilium longiflorum"
+        var form = ToxicityEditForm(plant: plant, toxicity: nil)
+        form.cats = .severe
+        form.dogs = .mild
+        form.people = .mild
+        form.basis = .source
+        form.principle = " unidentified nephrotoxin "
+        form.parts = ["flower", "all"]
+        form.routes = ["skin", "eaten"]
+
+        let built = try form.toxicity(checkedAt: checkedAt).get()
+
+        #expect(built.identifiedAs == plant.botanicalName)
+        #expect(built.principle == "unidentified nephrotoxin")
+        #expect(built.parts == ["all", "flower"])
+        #expect(built.routes == ["eaten", "skin"])
+        #expect(built.checkedAt == checkedAt)
+    }
 }
 
 extension ToxicityTests {

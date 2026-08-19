@@ -117,6 +117,7 @@ final class PlantStoryStore {
         do {
             let updated = try await api.updatePlant(slug: plant.slug, patch: patch)
             plant = updated.keepingPhoto(from: plant)
+            detail?.toxicity = plant.toxicity
             return nil
         } catch {
             return PlantyError.from(error)

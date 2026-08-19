@@ -379,8 +379,4 @@ struct EditPlantSheet: View {
     }
 }
 
-extension String {
-    var cleaned: String { trimmingCharacters(in: .whitespacesAndNewlines) }
-}
-
 
