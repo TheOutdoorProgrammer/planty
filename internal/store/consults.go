@@ -10,59 +10,8 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 )
 
-// DiagnosisTurn is one exchange, kept so a follow-up can refer to the answer
-// before it.
-type DiagnosisTurn struct {
-	ID             uuid.UUID       `json:"id"`
-	PlantID        uuid.UUID       `json:"plant_id"`
-	ConversationID uuid.UUID       `json:"conversation_id"`
-	Asked          string          `json:"asked"`
-	Reply          judge.Diagnosis `json:"reply"`
-	PhotoID        *uuid.UUID      `json:"photo_id,omitempty"`
-	CreatedAt      time.Time       `json:"created_at"`
-}
-
-// SaveDiagnosisTurn records one exchange.
-func (s *Store) SaveDiagnosisTurn(ctx context.Context, t DiagnosisTurn) (DiagnosisTurn, error) {
-	reply, err := json.Marshal(t.Reply)
-	if err != nil {
-		return DiagnosisTurn{}, err
-	}
-
-	saved, err := s.saveTurn(ctx, kindDiagnosis, turn{
-		PlantID:        t.PlantID,
-		ConversationID: t.ConversationID,
-		Asked:          t.Asked,
-		Reply:          reply,
-		PhotoID:        t.PhotoID,
-	})
-	if err != nil {
-		return DiagnosisTurn{}, err
-	}
-	return asDiagnosis(saved)
-}
-
-// DiagnosisConversation returns a conversation's turns, oldest first.
-func (s *Store) DiagnosisConversation(ctx context.Context,
-	conversationID uuid.UUID) ([]DiagnosisTurn, error) {
-	turns, err := s.conversation(ctx, kindDiagnosis, conversationID)
-	if err != nil {
-		return nil, err
-	}
-
-	out := make([]DiagnosisTurn, 0, len(turns))
-	for _, t := range turns {
-		decoded, err := asDiagnosis(t)
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, decoded)
-	}
-	return out, nil
-}
-
-// ConsultTurn is one exchange in a conversation about a plant's record rather
-// than about its photographs.
+// ConsultTurn is one exchange in a conversation, whether about a plant's
+// record, a photograph of it, or something nobody owns.
 type ConsultTurn struct {
 	ID             uuid.UUID    `json:"id"`
 	PlantID        uuid.UUID    `json:"plant_id"`
@@ -112,19 +61,6 @@ func (s *Store) Consultation(ctx context.Context,
 			return nil, err
 		}
 		out = append(out, decoded)
-	}
-	return out, nil
-}
-
-func asDiagnosis(t turn) (DiagnosisTurn, error) {
-	out := DiagnosisTurn{
-		ID: t.ID, PlantID: t.PlantID, ConversationID: t.ConversationID,
-		Asked: t.Asked, PhotoID: t.PhotoID, CreatedAt: t.CreatedAt,
-	}
-	if len(t.Reply) > 0 {
-		if err := json.Unmarshal(t.Reply, &out.Reply); err != nil {
-			return DiagnosisTurn{}, err
-		}
 	}
 	return out, nil
 }

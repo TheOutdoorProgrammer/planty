@@ -28,10 +28,10 @@ struct SnapScreen: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: SnapRoute.self) { route in
                 switch route {
-                case .diagnosis(let plant, let photo):
-                    DiagnosisScreen(store: session.diagnosisStore(plant: plant, photo: photo))
+                case .aboutPlant(let plant, let photo):
+                    ConsultScreen(store: session.photoConsultStore(plant: plant, photo: photo.jpeg))
                 case .justAsk(let photo):
-                    ConsultScreen(store: session.scratchConsultStore(photo: photo.jpeg))
+                    ConsultScreen(store: session.photoConsultStore(plant: nil, photo: photo.jpeg))
                 }
             }
             .overlay(alignment: .top) { toast }
@@ -199,15 +199,16 @@ struct SnapScreen: View {
             isPickingPlant = true
             return
         }
-        route.append(.diagnosis(plant: plant, photo: photo))
+        route.append(.aboutPlant(plant: plant, photo: photo))
     }
 }
 
+/// Both cases open the same chat. The difference is only whether a plant is
+/// behind it, which decides whether the photo joins a story.
 enum SnapRoute: Hashable {
-    case diagnosis(plant: Plant, photo: CapturedPhoto)
+    case aboutPlant(plant: Plant, photo: CapturedPhoto)
 
-    /// A chat about the picture with no plant behind it. Nothing is created,
-    /// so the photo stays on the capture screen exactly as it was.
+    /// Nothing is created, so the photo stays on the capture screen as it was.
     case justAsk(photo: CapturedPhoto)
 }
 

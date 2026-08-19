@@ -8,12 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// A plant has two kinds of conversation and they share a table: both are an
-// ordered list of question and reply against one plant.
-const (
-	kindDiagnosis = "diagnosis"
-	kindConsult   = "consult"
-)
+// There is one kind of conversation now. The column stays because rows written
+// by the separate photograph diagnosis still carry "diagnosis", and rewriting
+// history to tidy a discriminator would be worse than keeping it.
+const kindConsult = "consult"
 
 const turnColumns = `id, plant_id, conversation_id, asked, reply, photo_id, created_at`
 

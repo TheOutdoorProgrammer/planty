@@ -25,7 +25,6 @@ final class AppSession {
 
     private(set) var configuration: PlantyConfiguration
     private(set) var api: any PlantyAPI
-    private(set) var diagnosis: any DiagnosisService
 
     let today: TodayStore
     let library: PlantsStore
@@ -40,7 +39,6 @@ final class AppSession {
         defaults: UserDefaults = .standard,
         tokens: any TokenStoring = KeychainTokenStore(),
         api: (any PlantyAPI)? = nil,
-        diagnosis: (any DiagnosisService)? = nil
     ) {
         self.defaults = defaults
         self.tokens = tokens
@@ -49,7 +47,6 @@ final class AppSession {
         configuration = resolved
         let client = api ?? PlantyClient(configuration: resolved)
         self.api = client
-        self.diagnosis = diagnosis ?? RemoteDiagnosisService(configuration: resolved)
 
         today = TodayStore(api: client, isConfigured: resolved.isConfigured)
         library = PlantsStore(api: client, isConfigured: resolved.isConfigured)
@@ -86,7 +83,6 @@ final class AppSession {
         let client = PlantyClient(configuration: configuration)
         api = client
 
-        diagnosis = RemoteDiagnosisService(configuration: configuration)
         today.replace(api: client, isConfigured: configuration.isConfigured)
         library.replace(api: client, isConfigured: configuration.isConfigured)
         capture.replace(api: client)
@@ -112,22 +108,21 @@ final class AppSession {
         PlantStoryStore(api: api, plant: plant)
     }
 
-    func diagnosisStore(plant: Plant, photo: CapturedPhoto?) -> DiagnosisStore {
-        DiagnosisStore(service: diagnosis, api: api, plant: plant, photo: photo) { [capture] _ in
-            await capture.upload()?.id
-        }
-    }
-
     /// `asking` is sent the moment the screen opens, for entry points that
     /// already know the question and would only make the user retype it.
     func consultStore(for plant: Plant, asking question: String? = nil) -> ConsultStore {
         ConsultStore(api: api, plant: plant, pending: question)
     }
 
-    /// A chat about a photograph with no plant behind it. Nothing is created
-    /// and no timeline is touched, which is the entire point of it.
-    func scratchConsultStore(photo: Data?) -> ConsultStore {
-        ConsultStore(api: api, plant: nil, attachment: photo)
+    /// A chat about a photograph. With a plant it joins that plant's story;
+    /// with none it creates nothing and touches no timeline.
+    func photoConsultStore(plant: Plant?, photo: Data?) -> ConsultStore {
+        ConsultStore(
+            api: api,
+            plant: plant,
+            attachment: photo,
+            pending: plant == nil ? nil : "Here is a photo I just took. What do you see?"
+        )
     }
 
     func remindersStore(for plant: Plant) -> RemindersStore {

@@ -427,8 +427,18 @@ func TestPhotoRoutesDegradeWithoutStorage(t *testing.T) {
 		t.Errorf("upload without storage: got %d, want 503", rec.Code)
 	}
 
-	if rec, _ := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/diagnosis", nil); rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("diagnosis without storage: got %d, want 503", rec.Code)
+	// Both chats report unavailable rather than failing oddly, and the watering
+	// line carries on regardless: that separation is the point of the test.
+	for _, path := range []string{"/v1/plants/" + slug + "/ask", "/v1/ask"} {
+		body := strings.NewReader(`{"message":"anything"}`)
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, path, body)
+		req.Header.Set("Content-Type", "application/json")
+		h.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusServiceUnavailable {
+			t.Errorf("%s without a judge: got %d, want 503", path, rec.Code)
+		}
 	}
 }
 

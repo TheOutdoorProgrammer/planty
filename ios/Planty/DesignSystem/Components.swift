@@ -181,3 +181,26 @@ struct DestructiveButtonStyle: ButtonStyle {
             .contentShape(Capsule())
     }
 }
+
+/// Progress is only claimed when it is true; no rotating fake status phrases.
+struct ThinkingRow: View {
+    let stageLine: String?
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ProgressView().tint(PlantyColor.cyan)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Looking closer…")
+                    .font(.subheadline.weight(.semibold))
+                if let stageLine {
+                    Text(stageLine)
+                        .font(.caption)
+                        .foregroundStyle(PlantyColor.secondaryText)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .plantyCard(padding: 14)
+        .accessibilityElement(children: .combine)
+    }
+}
