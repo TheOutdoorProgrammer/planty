@@ -312,3 +312,23 @@ func TestThePromptIsNotSwallowedByTheToolList(t *testing.T) {
 		t.Skip("the text-only path no longer ends in a list flag")
 	}
 }
+
+// Bypassing permissions to read a staged photograph hands away every check the
+// process has, in a pod holding a token that can operate a water pump.
+func TestReadingAPhotographDoesNotBypassPermissions(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+
+	args, err := backend.arguments(Request{
+		Turns: []Turn{ask(picture("image/jpeg", []byte("x")))},
+	}, false)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+
+	if slices.Contains(args, "bypassPermissions") {
+		t.Errorf("permissions were bypassed to read a file: %v", args)
+	}
+	if got := valueOf(args, "--tools"); got != "Read" {
+		t.Errorf("tools are %q, want Read alone", got)
+	}
+}

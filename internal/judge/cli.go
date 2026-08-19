@@ -150,8 +150,9 @@ func (b *cliBackend) arguments(req Request, resuming bool) ([]string, error) {
 		return append(args, "--tools", ""), nil
 	}
 	// Images cannot ride inline on a CLI prompt, so they are files the model
-	// has to open, and Read is the only tool it gets to do it with.
-	return append(args, "--tools", "Read", "--permission-mode", "bypassPermissions"), nil
+	// opens, and Read is the only tool it gets. Reading needs no permission
+	// mode: bypassing every check to obtain it would buy nothing.
+	return append(args, "--tools", "Read"), nil
 }
 
 // environment strips the ambient session so a judgment run from a developer's
