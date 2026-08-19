@@ -2,9 +2,13 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"os"
 	"strings"
+
+	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
 // Blocked is the exit code a PreToolUse hook uses to stop a tool call. It is
@@ -156,4 +160,27 @@ func name(r rune) string {
 		return "a backslash"
 	}
 	return string(r)
+}
+
+// LiveChat is set on the command only while a person is on the other end of a
+// conversation. It is set per call rather than on the process, so a scheduled
+// job cannot inherit it.
+const LiveChat = "PLANTY_CHAT"
+
+// notWhileTalking refuses to queue a question for somebody who is already
+// reading the reply.
+//
+// A queued question is for a steward who is not here: the friend whose plants
+// these are. Asked of the person in the conversation it goes into a table
+// nobody opens, which is exactly what happened — ten of them.
+func notWhileTalking(of string) error {
+	if os.Getenv(LiveChat) == "" {
+		return nil
+	}
+	if of != "" && of != plant.StewardSelf {
+		return nil
+	}
+	return errors.New("there is a person reading this reply right now, so ask them in it. " +
+		"The ask verb is for a question aimed at somebody who is not here, " +
+		"named with --of")
 }

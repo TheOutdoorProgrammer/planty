@@ -85,7 +85,7 @@ func (b *cliBackend) run(ctx context.Context, req Request, resuming bool) (Outco
 	cmd := exec.CommandContext(ctx, b.binary, append(args, "--", prompt)...)
 	cmd.Dir = dir
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	cmd.Env = environment()
+	cmd.Env = environment(req.Live)
 
 	if err := cmd.Run(); err != nil {
 		complaint := strings.TrimSpace(stderr.String())
@@ -151,12 +151,10 @@ func (b *cliBackend) arguments(req Request, resuming bool) ([]string, error) {
 		args = append(args, "--effort", string(req.Effort))
 	}
 
-	tools := make([]string, 0, 2)
 	// Images cannot ride inline on a CLI prompt, so they are files the model
-	// opens, and Read is the only tool it needs to do it.
-	if req.images() > 0 || len(req.Offered) > 0 {
-		tools = append(tools, "Read")
-	}
+	// opens. Granted unconditionally rather than only when one is offered:
+	// reading a file it can already `cat` was an arbitrary difference.
+	tools := []string{"Read"}
 	if req.Acting != nil {
 		tools = append(tools, "Bash")
 		tools = append(tools, webTools(req.Acting)...)
@@ -201,7 +199,7 @@ func webTools(a *Acting) []string {
 
 // environment strips the ambient session so a judgment run from a developer's
 // shell behaves exactly like one run from the pod.
-func environment() []string {
+func environment(live bool) []string {
 	keep := []string{"PATH", "HOME", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"}
 
 	out := make([]string, 0, len(keep)+8)
@@ -218,6 +216,12 @@ func environment() []string {
 		if strings.HasPrefix(entry, "PLANTY_") {
 			out = append(out, entry)
 		}
+	}
+
+	// Set per call rather than on the pod, so a scheduled job cannot inherit
+	// it however the deployment is configured.
+	if live {
+		out = append(out, "PLANTY_CHAT=1")
 	}
 	return out
 }

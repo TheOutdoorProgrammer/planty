@@ -20,13 +20,22 @@ func (s *Server) today(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
+	// Questions the model queued for somebody who is not in the conversation,
+	// usually a friend whose plants these are. Without an outlet they piled up
+	// in a table nobody opened.
+	waiting, err := s.store.Questions(r.Context(), "", plant.QuestionOpen)
+	if err != nil {
+		s.log.Warn("open questions unavailable", "error", err)
+	}
+
 	s.ok(w, http.StatusOK, map[string]any{
-		"date":        digest.Date,
-		"entries":     digest.Entries,
-		"checked":     digest.Checked,
-		"stale_since": digest.StaleSince,
-		"never_run":   digest.NeverRun,
-		"all_clear":   digest.AllClear(),
+		"date":           digest.Date,
+		"entries":        digest.Entries,
+		"checked":        digest.Checked,
+		"stale_since":    digest.StaleSince,
+		"never_run":      digest.NeverRun,
+		"all_clear":      digest.AllClear(),
+		"open_questions": waiting,
 	})
 }
 

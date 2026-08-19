@@ -163,6 +163,7 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 		Schema:    schema,
 		MaxTokens: 2048,
 		Session:   &Session{ID: conversation, Resuming: len(prior) > 0},
+		Live:      true,
 		Acting:    j.acting,
 		// A conversation is answered rather than deliberated over, and a slow
 		// reply to "is this normal" is a worse answer than a quick one.

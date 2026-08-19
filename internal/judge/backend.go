@@ -67,6 +67,11 @@ type Request struct {
 	MaxTokens int64
 	Session   *Session
 	Acting    *Acting
+
+	// True when a person is on the other end right now. Reaches the command
+	// as PLANTY_CHAT, so a verb that only makes sense with nobody there can
+	// refuse rather than rely on the prompt being obeyed.
+	Live bool
 }
 
 // Acting lets the model record what it is told, rather than only answering.

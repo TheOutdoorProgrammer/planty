@@ -75,6 +75,7 @@ func (j *Judge) Ask(ctx context.Context, asked string, shown []Offer,
 		Schema:    schema,
 		MaxTokens: 2048,
 		Session:   &Session{ID: conversation, Resuming: len(prior) > 0},
+		Live:      true,
 		Effort:    EffortMedium,
 	})
 	if err != nil {

@@ -77,7 +77,9 @@ func TestPhotographsAreStagedAsFilesTheModelIsToldToOpen(t *testing.T) {
 	}
 }
 
-func TestToolsAreOffUnlessThereArePhotographs(t *testing.T) {
+// Reading is always available; acting is not. A daily verdict that could run
+// commands would be judging evidence it wrote itself.
+func TestOnlyReadingIsAvailableWithoutActing(t *testing.T) {
 	backend := newCLIBackend("claude", "claude-opus-5")
 
 	textOnly, err := backend.arguments(Request{Turns: []Turn{ask(text("hi"))}}, false)
@@ -91,11 +93,14 @@ func TestToolsAreOffUnlessThereArePhotographs(t *testing.T) {
 		t.Fatalf("arguments: %v", err)
 	}
 
-	if got := valueOf(textOnly, "--tools"); got != "" {
-		t.Errorf("a text-only judgment was handed tools: %q", got)
-	}
-	if got := valueOf(withPhoto, "--tools"); got != "Read" {
-		t.Errorf("photographs went out with tools %q, want Read", got)
+	for _, args := range [][]string{textOnly, withPhoto} {
+		tools := valueOf(args, "--tools")
+		if !strings.Contains(tools, "Read") {
+			t.Errorf("reading was not granted: --tools %q", tools)
+		}
+		if strings.Contains(tools, "Bash") || strings.Contains(tools, "Web") {
+			t.Errorf("a judgment with no Acting was handed %q", tools)
+		}
 	}
 	// Isolation, and why it is not --safe-mode, is covered below.
 	if !slices.Contains(textOnly, "--strict-mcp-config") {
@@ -412,7 +417,7 @@ func TestPlantyConfigurationReachesTheCommand(t *testing.T) {
 	t.Setenv("PLANTY_HA_TOKEN", "secret")
 	t.Setenv("SOMETHING_ELSE", "should not travel")
 
-	env := environment()
+	env := environment(false)
 
 	var sawDatabase, sawToken, sawStranger bool
 	for _, entry := range env {
@@ -491,5 +496,37 @@ func TestTrustedHostsBecomeFetchRules(t *testing.T) {
 	// The command it may run is unchanged by any of this.
 	if !slices.Contains(args, "Bash(planty agent *)") {
 		t.Error("granting the web dropped the one command it is allowed to run")
+	}
+}
+
+// A person reading the reply is the difference between "queue this question"
+// and "just ask them". The command is told which it is, per call, so a
+// scheduled job cannot inherit a chat's flag however the pod is configured.
+func TestOnlyAConversationSaysSomebodyIsThere(t *testing.T) {
+	if slices.Contains(environment(false), "PLANTY_CHAT=1") {
+		t.Error("a scheduled job was told somebody is reading")
+	}
+	if !slices.Contains(environment(true), "PLANTY_CHAT=1") {
+		t.Error("a conversation did not say somebody is reading")
+	}
+}
+
+// Reading a file it can already cat was an arbitrary difference, and the
+// photographs are read with this.
+func TestReadingIsAlwaysAvailable(t *testing.T) {
+	b := newCLIBackend("planty", "claude-opus-5")
+	args, err := b.arguments(Request{Schema: map[string]any{}}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var tools string
+	for i, arg := range args {
+		if arg == "--tools" && i+1 < len(args) {
+			tools = args[i+1]
+		}
+	}
+	if !strings.Contains(tools, "Read") {
+		t.Errorf("Read was not granted: --tools %q", tools)
 	}
 }

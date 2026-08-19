@@ -605,6 +605,9 @@ func (d Deps) ask(ctx context.Context, out io.Writer, args []string) error {
 	if *question == "" {
 		return errors.New("what is the question? pass --question")
 	}
+	if err := notWhileTalking(*of); err != nil {
+		return err
+	}
 
 	q := plant.Question{AskedOf: *of, Question: *question, Why: *why}
 	if *slug != "" {

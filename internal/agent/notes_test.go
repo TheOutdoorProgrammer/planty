@@ -155,3 +155,41 @@ func TestHouseholdNotesReachEveryPlant(t *testing.T) {
 		t.Errorf("a consultation about %s did not carry the household note", p.Slug)
 	}
 }
+
+// The queue is for somebody who is not here. Asked of the person already
+// reading the reply, it goes into a table nobody opens.
+func TestQueueingAQuestionForWhoeverIsReadingIsRefused(t *testing.T) {
+	deps, p, ctx := toxicityDeps(t)
+	t.Setenv("PLANTY_CHAT", "1")
+
+	_, err := runVerbCtx(t, ctx, deps, "ask", "--plant", p.Slug,
+		"--question", "When did you last water this?")
+	if err == nil {
+		t.Fatal("a question was queued for somebody already reading the reply")
+	}
+	if !strings.Contains(err.Error(), "ask them in it") {
+		t.Errorf("the refusal did not say what to do instead: %v", err)
+	}
+}
+
+// A question for the friend whose plants these are is exactly what the queue
+// is for, so it still works mid-conversation.
+func TestAQuestionForSomebodyAbsentIsStillQueued(t *testing.T) {
+	deps, p, ctx := toxicityDeps(t)
+	t.Setenv("PLANTY_CHAT", "1")
+
+	if _, err := runVerbCtx(t, ctx, deps, "ask", "--plant", p.Slug,
+		"--of", "Aric", "--question", "Is the front porch covered?"); err != nil {
+		t.Fatalf("a question for an absent steward was refused: %v", err)
+	}
+}
+
+// The daily job has nobody to ask, so the queue is its only channel.
+func TestTheScheduledJobMayStillQueue(t *testing.T) {
+	deps, p, ctx := toxicityDeps(t)
+
+	if _, err := runVerbCtx(t, ctx, deps, "ask", "--plant", p.Slug,
+		"--question", "Has it ever been repotted?"); err != nil {
+		t.Fatalf("a scheduled job could not queue a question: %v", err)
+	}
+}
