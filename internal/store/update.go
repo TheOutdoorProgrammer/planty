@@ -33,6 +33,7 @@ type PlantPatch struct {
 	LightExposure  *plant.LightExposure  `json:"light_exposure,omitempty"`
 	MinTempF       *float64              `json:"min_temp_f,omitempty"`
 	CareProfile    *plant.CareProfile    `json:"care_profile,omitempty"`
+	Toxicity       *plant.Toxicity       `json:"toxicity,omitempty"`
 }
 
 // UpdatePlant applies a sparse patch and returns the stored record.
@@ -106,6 +107,13 @@ func (s *Store) UpdatePlant(ctx context.Context, slug string, patch PlantPatch) 
 			return plant.Plant{}, err
 		}
 		set("care_profile", raw)
+	}
+	if patch.Toxicity != nil {
+		raw, err := marshalToxicity(*patch.Toxicity)
+		if err != nil {
+			return plant.Plant{}, err
+		}
+		set("toxicity", raw)
 	}
 
 	if len(sets) == 0 {

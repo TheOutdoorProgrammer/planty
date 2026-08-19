@@ -17,6 +17,7 @@ type plantScan struct {
 	light    *string
 	acquired *time.Time
 	profile  []byte
+	toxicity []byte
 }
 
 // targets are the destinations for plantColumnsFor, in its order.
@@ -27,7 +28,7 @@ func (ps *plantScan) targets(p *plant.Plant) []any {
 		&p.Location, &p.HAArea,
 		&p.Accessibility, &p.WateringMethod, &p.LetPotDripper,
 		&p.PotSizeIn, &p.PotMaterial, &p.HasDrainage, &p.SoilMix,
-		&ps.light, &p.MinTempF, &ps.profile,
+		&ps.light, &p.MinTempF, &ps.profile, &ps.toxicity,
 		&ps.acquired, &p.ArchivedAt, &p.ShelteredAt, &p.CreatedAt, &p.UpdatedAt,
 	}
 }
@@ -38,6 +39,18 @@ func (ps *plantScan) finish(p *plant.Plant) error {
 		p.LightExposure = plant.LightExposure(*ps.light)
 	}
 	p.AcquiredAt = ps.acquired
+	if len(ps.toxicity) > 0 {
+		if err := json.Unmarshal(ps.toxicity, &p.Toxicity); err != nil {
+			return err
+		}
+	}
+	// An absent rating reads as unknown rather than as the empty string, so
+	// nothing downstream has to decide what "" means about a cat.
+	for _, r := range []*plant.Harm{&p.Toxicity.Cats, &p.Toxicity.Dogs, &p.Toxicity.People} {
+		if *r == "" {
+			*r = plant.HarmUnknown
+		}
+	}
 	if len(ps.profile) > 0 {
 		return json.Unmarshal(ps.profile, &p.CareProfile)
 	}

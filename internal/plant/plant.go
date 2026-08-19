@@ -104,6 +104,7 @@ type Plant struct {
 	MinTempF *float64 `json:"min_temp_f,omitempty"`
 
 	CareProfile CareProfile `json:"care_profile"`
+	Toxicity    Toxicity    `json:"toxicity"`
 
 	AcquiredAt *time.Time `json:"acquired_at,omitempty"`
 	ArchivedAt *time.Time `json:"archived_at,omitempty"`

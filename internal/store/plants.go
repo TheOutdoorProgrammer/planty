@@ -33,9 +33,28 @@ func plantColumnsFor(alias string) string {
 	%[1]saccessibility, %[1]swatering_method, %[1]sletpot_dripper,
 	%[1]spot_size_in, coalesce(%[1]spot_material, ''), %[1]shas_drainage,
 	coalesce(%[1]ssoil_mix, ''),
-	%[1]slight_exposure, %[1]smin_temp_f, %[1]scare_profile,
+	%[1]slight_exposure, %[1]smin_temp_f, %[1]scare_profile, %[1]stoxicity,
 	%[1]sacquired_at, %[1]sarchived_at, %[1]ssheltered_at,
 	%[1]screated_at, %[1]supdated_at`, q)
+}
+
+// marshalToxicity validates before writing, since the CHECK constraint only
+// guards the three ratings and everything that makes them trustworthy — the
+// principle, the parts, the basis — is prose Postgres cannot police.
+func marshalToxicity(t plant.Toxicity) ([]byte, error) {
+	if err := t.Valid(); err != nil {
+		return nil, err
+	}
+	if !t.Checked() {
+		// An untouched record stays the empty document the column defaults to,
+		// so "nobody has looked" keeps one representation rather than two.
+		return []byte(`{}`), nil
+	}
+	raw, err := json.Marshal(t)
+	if err != nil {
+		return nil, fmt.Errorf("marshal toxicity: %w", err)
+	}
+	return raw, nil
 }
 
 func scanPlant(row pgx.Row) (plant.Plant, error) {
@@ -64,6 +83,10 @@ func (s *Store) CreatePlant(ctx context.Context, p plant.Plant) (plant.Plant, er
 	if err != nil {
 		return plant.Plant{}, fmt.Errorf("marshal care_profile: %w", err)
 	}
+	toxicity, err := marshalToxicity(p.Toxicity)
+	if err != nil {
+		return plant.Plant{}, err
+	}
 
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO plants (
@@ -71,13 +94,15 @@ func (s *Store) CreatePlant(ctx context.Context, p plant.Plant) (plant.Plant, er
 			domain, steward, status, location, ha_area,
 			accessibility, watering_method, letpot_dripper,
 			pot_size_in, pot_material, has_drainage, soil_mix,
-			light_exposure, min_temp_f, care_profile, acquired_at
+			light_exposure, min_temp_f, care_profile, acquired_at,
+			toxicity
 		) VALUES (
 			$1, $2, nullif($3,''), nullif($4,''),
 			$5, $6, $7, $8, nullif($9,''),
 			$10, $11, $12,
 			$13, nullif($14,''), $15, nullif($16,''),
-			nullif($17,'')::light_exposure, $18, $19, $20
+			nullif($17,'')::light_exposure, $18, $19, $20,
+			$21
 		)
 		RETURNING `+plantColumns,
 		p.Slug, p.CommonName, p.BotanicalName, p.Variety,
@@ -85,6 +110,7 @@ func (s *Store) CreatePlant(ctx context.Context, p plant.Plant) (plant.Plant, er
 		p.Accessibility, p.WateringMethod, p.LetPotDripper,
 		p.PotSizeIn, p.PotMaterial, p.HasDrainage, p.SoilMix,
 		string(p.LightExposure), p.MinTempF, profile, p.AcquiredAt,
+		toxicity,
 	)
 	return scanPlant(row)
 }
