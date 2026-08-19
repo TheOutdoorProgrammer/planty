@@ -51,6 +51,11 @@ type Acting struct {
 	// Binary is what the model may run, and the only thing it may run.
 	Binary string
 
+	// Trusted are the hostnames the model may read from. Empty means no web
+	// access at all: an allowlist of nothing is not the same as no allowlist,
+	// and the difference is the whole internet.
+	Trusted []string
+
 	// Usage is that command's own help, handed to the model so the two cannot
 	// drift. Passed in rather than imported: the package that defines these
 	// verbs reaches the store, and the store reaches back here.

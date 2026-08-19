@@ -403,3 +403,93 @@ func TestIsolationDoesNotRelyOnSafeMode(t *testing.T) {
 		t.Error("ambient MCP servers can still attach")
 	}
 }
+
+// The command the model is allowed to run is planty's own, so it needs
+// planty's own configuration. Stripping it made every agent verb report a
+// missing database, which the model relayed as a broken machine.
+func TestPlantyConfigurationReachesTheCommand(t *testing.T) {
+	t.Setenv("PLANTY_DATABASE_URL", "postgres://example")
+	t.Setenv("PLANTY_HA_TOKEN", "secret")
+	t.Setenv("SOMETHING_ELSE", "should not travel")
+
+	env := environment()
+
+	var sawDatabase, sawToken, sawStranger bool
+	for _, entry := range env {
+		switch {
+		case strings.HasPrefix(entry, "PLANTY_DATABASE_URL="):
+			sawDatabase = true
+		case strings.HasPrefix(entry, "PLANTY_HA_TOKEN="):
+			sawToken = true
+		case strings.HasPrefix(entry, "SOMETHING_ELSE="):
+			sawStranger = true
+		}
+	}
+
+	if !sawDatabase {
+		t.Error("planty agent has no database to read")
+	}
+	if !sawToken {
+		t.Error("the watering verb cannot reach Home Assistant")
+	}
+	if sawStranger {
+		t.Errorf("the ambient environment leaked into the judgment: %v", env)
+	}
+}
+
+// An allowlist of nothing is not the same as no allowlist, and the difference
+// is the whole internet.
+func TestNoTrustedHostsMeansNoWebAtAll(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+
+	args, err := backend.arguments(Request{
+		Turns:  []Turn{ask(text("hi"))},
+		Acting: &Acting{Binary: "/planty", Usage: "planty agent ..."},
+	}, false)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+
+	tools := valueOf(args, "--tools")
+	if strings.Contains(tools, "Web") {
+		t.Errorf("web tools were granted with nowhere trusted to read: %q", tools)
+	}
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "WebFetch(") || arg == "WebSearch" {
+			t.Errorf("a web rule appeared with no trusted hosts: %q", arg)
+		}
+	}
+}
+
+// Search finds the page and fetch reads it, so a host list without search is
+// nearly useless and search without the list is the open web.
+func TestTrustedHostsBecomeFetchRules(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+
+	args, err := backend.arguments(Request{
+		Turns: []Turn{ask(text("hi"))},
+		Acting: &Acting{
+			Binary:  "/planty",
+			Usage:   "planty agent ...",
+			Trusted: []string{"example.edu", "example.org"},
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+
+	if tools := valueOf(args, "--tools"); !strings.Contains(tools, "WebFetch") {
+		t.Errorf("tools are %q, want WebFetch among them", tools)
+	}
+	for _, want := range []string{
+		"WebFetch(domain:example.edu)", "WebFetch(domain:example.org)", "WebSearch",
+	} {
+		if !slices.Contains(args, want) {
+			t.Errorf("missing rule %q in %v", want, args)
+		}
+	}
+	// The command it may run is unchanged by any of this.
+	if !slices.Contains(args, "Bash(planty agent *)") {
+		t.Error("granting the web dropped the one command it is allowed to run")
+	}
+}

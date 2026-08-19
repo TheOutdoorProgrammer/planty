@@ -155,6 +155,7 @@ func (b *cliBackend) arguments(req Request, resuming bool) ([]string, error) {
 	}
 	if req.Acting != nil {
 		tools = append(tools, "Bash")
+		tools = append(tools, webTools(req.Acting)...)
 		args = append(args, acting(req.Acting)...)
 	}
 	return append(args, "--tools", strings.Join(tools, ",")), nil
@@ -168,11 +169,30 @@ func acting(a *Acting) []string {
 		`{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":%q}]}]}}`,
 		a.Binary+" gate")
 
-	return []string{
-		"--permission-mode", "dontAsk",
-		"--allowedTools", "Bash(planty agent *)",
-		"--settings", hooks,
+	allowed := []string{"Bash(planty agent *)"}
+	for _, host := range a.Trusted {
+		allowed = append(allowed, fmt.Sprintf("WebFetch(domain:%s)", host))
 	}
+	if len(a.Trusted) > 0 {
+		// Search finds the page; fetch is what reads it, and only from a host
+		// on the list. Searching without fetching is nearly useless, and
+		// fetching without the list is the whole internet.
+		allowed = append(allowed, "WebSearch")
+	}
+
+	args := []string{"--permission-mode", "dontAsk"}
+	for _, rule := range allowed {
+		args = append(args, "--allowedTools", rule)
+	}
+	return append(args, "--settings", hooks)
+}
+
+// webTools are added when the model has somewhere trusted to read.
+func webTools(a *Acting) []string {
+	if a == nil || len(a.Trusted) == 0 {
+		return nil
+	}
+	return []string{"WebSearch", "WebFetch"}
 }
 
 // environment strips the ambient session so a judgment run from a developer's
@@ -180,10 +200,19 @@ func acting(a *Acting) []string {
 func environment() []string {
 	keep := []string{"PATH", "HOME", "CLAUDE_CODE_OAUTH_TOKEN", "ANTHROPIC_API_KEY"}
 
-	out := make([]string, 0, len(keep))
+	out := make([]string, 0, len(keep)+8)
 	for _, name := range keep {
 		if value, ok := os.LookupEnv(name); ok {
 			out = append(out, name+"="+value)
+		}
+	}
+
+	// Planty's own configuration reaches the command Planty lets it run.
+	// Stripping this made `planty agent` report a missing database, which the
+	// model then relayed as an environment problem on the machine.
+	for _, entry := range os.Environ() {
+		if strings.HasPrefix(entry, "PLANTY_") {
+			out = append(out, entry)
 		}
 	}
 	return out
