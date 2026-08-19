@@ -456,13 +456,14 @@ struct CaptureStoreTests {
         store.accept(jpeg: Data([0xFF, 0xD8]))
         await store.save(recording: .watered)
 
-        guard case .failed(let photo, let kind, let error) = store.stage else {
+        guard case .failed(let photo, let action, let error) = store.stage else {
             Issue.record("a failed upload must not discard the image")
             return
         }
         #expect(photo.jpeg == Data([0xFF, 0xD8]))
         #expect(error == .offline)
-        #expect(kind == .watered, "a retry would have saved the photo and dropped the watering")
+        #expect(action == .save(.watered),
+                "a retry would have saved the photo and dropped the watering")
     }
 
     @Test("A successful save uploads the photo, then the exception tag")

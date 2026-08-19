@@ -81,7 +81,11 @@ struct SnapScreen: View {
             // Retries whatever the user said they did, rather than saving the
             // photo alone and silently dropping the watering.
             SaveFailedCard(error: error) {
-                Task { await store.retrySave() }
+                Task {
+                    if await store.retrySave() != nil {
+                        await session.library.load()
+                    }
+                }
             } discard: {
                 isConfirmingDiscard = true
             }

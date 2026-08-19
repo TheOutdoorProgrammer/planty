@@ -156,6 +156,25 @@ struct PhotoFirstTests {
         #expect(store.stage.photo?.jpeg == Data("photo".utf8), "the picture was thrown away")
     }
 
+    @Test("A failed first plant creation retries the creation")
+    @MainActor
+    func failedCreationRetries() async {
+        let api = FakeAPI()
+        api.failure = .offline
+        let store = CaptureStore(api: api)
+        let metadata = CaptureMetadata(capturedAt: .reference)
+        store.accept(jpeg: Data("photo".utf8))
+
+        #expect(await store.createPlant(named: "Blue oyster", metadata: metadata) == nil)
+        api.failure = nil
+        let made = await store.retrySave()
+
+        #expect(made?.commonName == "Blue oyster")
+        #expect(api.created == ["Blue oyster"])
+        #expect(store.selectedPlant == made)
+        #expect(store.stage == .ready)
+    }
+
     @Test("Nothing is created without a photo to create it from")
     @MainActor
     func noPhotoNoPlant() async {

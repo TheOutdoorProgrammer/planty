@@ -21,7 +21,7 @@ enum CaptureStage: Sendable, Equatable {
     case ready
     case captured(CapturedPhoto)
     case saving(CapturedPhoto, ObservationKind?)
-    case failed(CapturedPhoto, ObservationKind?, PlantyError)
+    case failed(CapturedPhoto, FailedCaptureAction, PlantyError)
 
     var photo: CapturedPhoto? {
         switch self {
@@ -35,7 +35,9 @@ enum CaptureStage: Sendable, Equatable {
     var recording: ObservationKind? {
         switch self {
         case .ready, .captured: nil
-        case .saving(_, let kind), .failed(_, let kind, _): kind
+        case .saving(_, let kind): kind
+        case .failed(_, .save(let kind), _): kind
+        case .failed(_, .create, _): nil
         }
     }
 
@@ -43,6 +45,14 @@ enum CaptureStage: Sendable, Equatable {
         if case .saving = self { return true }
         return false
     }
+}
+
+/// The write that failed, including everything needed to repeat it exactly.
+/// A first-plant creation has no selected plant, so treating every failure as
+/// a photo save made its visible retry button a no-op.
+enum FailedCaptureAction: Sendable, Equatable {
+    case save(ObservationKind?)
+    case create(name: String?, metadata: CaptureMetadata)
 }
 
 @Observable
@@ -131,7 +141,7 @@ final class CaptureStore {
                 )
             }
         } catch {
-            stage = .failed(photo, kind, PlantyError.from(error))
+            stage = .failed(photo, .save(kind), PlantyError.from(error))
             return
         }
 
@@ -171,10 +181,16 @@ final class CaptureStore {
         return "\(kind.label) recorded for \(plant.commonName)."
     }
 
-    func retrySave() async {
-        guard case .failed(let photo, let kind, _) = stage else { return }
+    func retrySave() async -> Plant? {
+        guard case .failed(let photo, let action, _) = stage else { return nil }
         stage = .captured(photo)
-        await save(recording: kind)
+        switch action {
+        case .save(let kind):
+            await save(recording: kind)
+            return nil
+        case .create(let name, let metadata):
+            return await createPlant(named: name, metadata: metadata)
+        }
     }
 
     func clearSettled() { settled = nil }
@@ -205,7 +221,11 @@ final class CaptureStore {
                 : "\(made.plant.commonName) added, but the photo was not kept."
             return made.plant
         } catch {
-            stage = .failed(photo, nil, PlantyError.from(error))
+            stage = .failed(
+                photo,
+                .create(name: name, metadata: metadata),
+                PlantyError.from(error)
+            )
             return nil
         }
     }
@@ -230,7 +250,7 @@ final class CaptureStore {
             stage = .captured(photo)
             return uploaded
         } catch {
-            stage = .failed(photo, nil, PlantyError.from(error))
+            stage = .failed(photo, .save(nil), PlantyError.from(error))
             return nil
         }
     }

@@ -9,7 +9,7 @@ An item is checked only after the implementation, regression test, commit, and p
 
 - `go test -race ./...` passes, but most Postgres-backed tests skip unless `PLANTY_TEST_DATABASE_URL` is set.
 - `go vet ./...` passes.
-- The iOS suite passes all 282 tests in 41 suites on the iPhone 17 simulator.
+- The iOS suite passed all 282 tests in 41 suites on the iPhone 17 simulator during the audit.
 - The live LAN service loads 13 plants in the simulator and the Today, unconfigured, library, and Snap states were visually inspected.
 - Default Go coverage is misleadingly thin in the risky packages: `cmd/planty` 0%, `internal/api` 2.6%, `internal/job` 11.4%, and `internal/store` 0.8% without the integration database.
 
@@ -42,9 +42,10 @@ An item is checked only after the implementation, regression test, commit, and p
   A single successful `none` result can therefore claim the entire garden was checked while every other judgment failed.
   This needs an ADR and a persisted judgment-run model with expected, succeeded, failed, and completion state.
 
-- [ ] **PNT-007 — Retrying a failed first-plant creation is a dead button.**
+- [x] **PNT-007 — Retrying a failed first-plant creation is a dead button.**
   `CaptureStore.createPlant` records a generic failed capture without the original operation at `ios/Planty/State/CaptureStore.swift:186-209`.
   The visible retry calls `retrySave`, which silently requires `selectedPlant` at `ios/Planty/State/CaptureStore.swift:107-109,174-177`; first-plant creation has none.
+  Fixed by retaining the exact failed operation and creation payload, retrying it directly, refreshing the library after success, and covering the regression in the now-283-test iOS suite.
 
 ## P1: correctness, security, and data integrity
 
