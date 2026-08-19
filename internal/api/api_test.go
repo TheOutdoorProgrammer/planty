@@ -183,6 +183,24 @@ func TestSparsePatchLeavesTheRestAlone(t *testing.T) {
 	}
 }
 
+func TestPatchRejectsAnInvalidAggregate(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{
+		"common_name": "Valid before patch", "slug": unique("invalid-patch"),
+	})
+
+	for _, patch := range []map[string]any{
+		{"common_name": "   "},
+		{"accessibility": "teleporting"},
+		{"light_exposure": "sun-shaped"},
+	} {
+		rec, _ := do(t, h, http.MethodPatch, "/v1/plants/"+slug, patch)
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("patch %v: got %d, body %s", patch, rec.Code, rec.Body.String())
+		}
+	}
+}
+
 // Archiving is how a death is recorded, so the history has to survive it.
 func TestArchivingHidesThePlantButKeepsIt(t *testing.T) {
 	h, _, _ := newServer(t)

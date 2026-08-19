@@ -6,6 +6,7 @@ package plant
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -205,10 +206,15 @@ func (p Plant) Valid() error {
 	default:
 		return invalid("unknown accessibility %q", p.Accessibility)
 	}
+	switch p.LightExposure {
+	case "", LightDirect, LightBrightIndirect, LightMedium, LightLow:
+	default:
+		return invalid("unknown light exposure %q", p.LightExposure)
+	}
 	if p.WateringMethod == WateringHand && p.LetPotDripper != nil {
 		return invalid("hand-watered plant cannot hold a LetPot dripper number")
 	}
-	if p.CommonName == "" {
+	if strings.TrimSpace(p.CommonName) == "" {
 		return invalid("common_name is required")
 	}
 	return nil

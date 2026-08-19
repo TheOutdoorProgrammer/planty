@@ -91,6 +91,32 @@ func TestValidAcceptsAMinimalPlant(t *testing.T) {
 	}
 }
 
+func TestValidRejectsValuesThatCannotRepresentAPlant(t *testing.T) {
+	valid := Plant{
+		CommonName:     "Bonsai",
+		Domain:         DomainHouseplant,
+		Status:         StatusAlive,
+		Accessibility:  AccessEasy,
+		WateringMethod: WateringHand,
+	}
+
+	blankName := valid
+	blankName.CommonName = "   "
+	invalidLight := valid
+	invalidLight.LightExposure = "sun-shaped"
+
+	for name, subject := range map[string]Plant{
+		"blank name":             blankName,
+		"unknown light exposure": invalidLight,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := subject.Valid(); err == nil {
+				t.Fatal("invalid plant was accepted")
+			}
+		})
+	}
+}
+
 func TestFractionNeedsCalibration(t *testing.T) {
 	uncalibrated := SensorLink{HAEntityID: "sensor.a", Role: RoleSoilMoisture}
 	if _, err := uncalibrated.Fraction(40); err == nil {

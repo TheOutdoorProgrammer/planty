@@ -75,9 +75,10 @@ An item is checked only after the implementation, regression test, commit, and p
   A truncated body that decoded `"all": true` first can mutate every eligible plant.
   Fixed by rejecting decode failures before inspecting any request fields, with an integration test proving a partially decoded bulk request leaves the plant outside.
 
-- [ ] **PNT-013 — Plant PATCH bypasses aggregate validation.**
+- [x] **PNT-013 — Plant PATCH bypasses aggregate validation.**
   Creation calls `Plant.Valid`, but `internal/store/update.go:39-132` writes patch fields directly.
   Empty names can persist, and invalid enums become misleading 500s because SQLSTATE class 22 is not classified as caller error.
+  Fixed by locking and loading the current plant, applying the sparse patch in memory, validating the complete result, and only then issuing the update in the same transaction.
 
 - [x] **PNT-014 — Archive accepts contradictory and invalid statuses.**
   `internal/api/plants.go:218-229` accepts any query status, unlike the agent CLI's `dead|gone` restriction.

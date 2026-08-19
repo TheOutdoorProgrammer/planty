@@ -119,17 +119,84 @@ func (s *Store) UpdatePlant(ctx context.Context, slug string, patch PlantPatch) 
 	if len(sets) == 0 {
 		return s.GetPlant(ctx, slug)
 	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return plant.Plant{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	current, err := scanPlant(tx.QueryRow(ctx, `
+		SELECT `+plantColumns+`
+		FROM plants
+		WHERE slug = $1 AND archived_at IS NULL
+		FOR UPDATE`, slug))
+	if err != nil {
+		return plant.Plant{}, err
+	}
+	patch.apply(&current)
+	if err := current.Valid(); err != nil {
+		return plant.Plant{}, err
+	}
+
 	sets = append(sets, "updated_at = now()")
 
 	args = append(args, slug)
 	query := `UPDATE plants SET ` + strings.Join(sets, ", ") +
 		fmt.Sprintf(` WHERE slug = $%d AND archived_at IS NULL RETURNING `, len(args)) + plantColumns
 
-	p, err := scanPlant(s.pool.QueryRow(ctx, query, args...))
+	p, err := scanPlant(tx.QueryRow(ctx, query, args...))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return plant.Plant{}, ErrNotFound
 	}
-	return p, err
+	if err != nil {
+		return plant.Plant{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return plant.Plant{}, err
+	}
+	return p, nil
+}
+
+func (patch PlantPatch) apply(p *plant.Plant) {
+	applyValue(&p.CommonName, patch.CommonName)
+	applyValue(&p.BotanicalName, patch.BotanicalName)
+	applyValue(&p.Variety, patch.Variety)
+	applyValue(&p.Domain, patch.Domain)
+	applyValue(&p.Steward, patch.Steward)
+	applyValue(&p.Status, patch.Status)
+	applyValue(&p.Location, patch.Location)
+	applyValue(&p.HAArea, patch.HAArea)
+	applyValue(&p.Accessibility, patch.Accessibility)
+	if patch.WateringMethod != nil {
+		p.WateringMethod = *patch.WateringMethod
+		if *patch.WateringMethod == plant.WateringHand && patch.LetPotDripper == nil {
+			p.LetPotDripper = nil
+		}
+	}
+	if patch.LetPotDripper != nil {
+		p.LetPotDripper = patch.LetPotDripper
+	}
+	if patch.PotSizeIn != nil {
+		p.PotSizeIn = patch.PotSizeIn
+	}
+	applyValue(&p.PotMaterial, patch.PotMaterial)
+	if patch.HasDrainage != nil {
+		p.HasDrainage = patch.HasDrainage
+	}
+	applyValue(&p.SoilMix, patch.SoilMix)
+	applyValue(&p.LightExposure, patch.LightExposure)
+	if patch.MinTempF != nil {
+		p.MinTempF = patch.MinTempF
+	}
+	applyValue(&p.CareProfile, patch.CareProfile)
+	applyValue(&p.Toxicity, patch.Toxicity)
+}
+
+func applyValue[T any](target *T, value *T) {
+	if value != nil {
+		*target = *value
+	}
 }
 
 // nullify maps the empty string to SQL NULL, so clearing a field and never
