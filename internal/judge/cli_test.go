@@ -97,10 +97,9 @@ func TestToolsAreOffUnlessThereArePhotographs(t *testing.T) {
 	if got := valueOf(withPhoto, "--tools"); got != "Read" {
 		t.Errorf("photographs went out with tools %q, want Read", got)
 	}
-	// A judgment that inherits the surrounding CLAUDE.md is not the judgment
-	// the system prompt in this package describes.
-	if !slices.Contains(textOnly, "--safe-mode") {
-		t.Error("--safe-mode is missing, so ambient config leaks into verdicts")
+	// Isolation, and why it is not --safe-mode, is covered below.
+	if !slices.Contains(textOnly, "--strict-mcp-config") {
+		t.Error("ambient MCP servers can attach to a verdict")
 	}
 }
 
@@ -330,5 +329,77 @@ func TestReadingAPhotographDoesNotBypassPermissions(t *testing.T) {
 	}
 	if got := valueOf(args, "--tools"); got != "Read" {
 		t.Errorf("tools are %q, want Read alone", got)
+	}
+}
+
+// A judgment nobody asked to act must not be handed a shell. The daily verdict
+// runs unattended over every plant; the blast radius of it writing is the
+// whole record.
+func TestOnlyAnActingRequestGetsAShell(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+
+	quiet, err := backend.arguments(Request{Turns: []Turn{ask(text("hi"))}}, false)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+	if strings.Contains(valueOf(quiet, "--tools"), "Bash") {
+		t.Error("a plain judgment was given Bash")
+	}
+	if slices.Contains(quiet, "--allowedTools") || slices.Contains(quiet, "--settings") {
+		t.Errorf("a plain judgment carried permission flags: %v", quiet)
+	}
+}
+
+// Two independent layers, because one of them is a string match on a command
+// line and the other is a process that has to agree with it.
+func TestActingIsGatedTwice(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+
+	args, err := backend.arguments(Request{
+		Turns:  []Turn{ask(text("i watered it"))},
+		Acting: &Acting{Binary: "/planty", Usage: "planty agent ..."},
+	}, false)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+
+	// Without dontAsk an allow rule only skips a prompt that print mode could
+	// never have shown, so everything else would still run.
+	if got := valueOf(args, "--permission-mode"); got != "dontAsk" {
+		t.Errorf("permission mode is %q, want dontAsk", got)
+	}
+	if got := valueOf(args, "--allowedTools"); got != "Bash(planty agent *)" {
+		t.Errorf("allowed %q, want only the agent verbs", got)
+	}
+	if !strings.Contains(valueOf(args, "--tools"), "Bash") {
+		t.Error("acting was requested but Bash was never granted")
+	}
+
+	hooks := valueOf(args, "--settings")
+	if !strings.Contains(hooks, "PreToolUse") || !strings.Contains(hooks, "/planty gate") {
+		t.Errorf("the second layer is missing: %s", hooks)
+	}
+	if slices.Contains(args, "bypassPermissions") {
+		t.Error("acting bypassed the permissions it just configured")
+	}
+}
+
+// safe-mode leaves ambient permission rules in force and silently disables
+// hooks, which would quietly remove one of the two layers above.
+func TestIsolationDoesNotRelyOnSafeMode(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+
+	args, err := backend.arguments(Request{Turns: []Turn{ask(text("hi"))}}, false)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+	if slices.Contains(args, "--safe-mode") {
+		t.Error("--safe-mode is back; it does not isolate permissions and kills hooks")
+	}
+	if got := valueOf(args, "--setting-sources"); got != "" {
+		t.Errorf("setting sources are %q, want none", got)
+	}
+	if !slices.Contains(args, "--strict-mcp-config") {
+		t.Error("ambient MCP servers can still attach")
 	}
 }

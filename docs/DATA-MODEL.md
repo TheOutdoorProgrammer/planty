@@ -226,6 +226,11 @@ Replaying is marginally cheaper for a two-turn exchange and breaks even at three
 Sessions live in the service's own scratch space, which does not survive a restart, so a conversation can outlive the session it was using.
 A resume that finds nothing falls back to replaying the transcript: slower, still correct, and invisible from the app.
 
+**A consultation can write, through one command and nothing else.** Told "I watered it this morning" or "remind me to mist this twice a day", it records that rather than telling you to.
+Writes go through `planty agent`, a three-verb surface with no way to water anything, and they land with source `agent` so the record always says who claimed a thing happened.
+The daily verdict, identification and autopsies stay read-only: a scheduled judgment that recorded observations would be judging evidence it wrote itself.
+`PLANTY_JUDGE_CAN_ACT=false` turns it off. `adr/0002` records what holds it shut and what was rejected.
+
 **Reminders are two fields because misting is not watering.** `every_days` says how often a day qualifies and `at_hours` says when on that day, so a mushroom kit is `{every_days: 1, at_hours: [8, 20]}` and a pothos is `{every_days: 10, at_hours: [8]}`.
 An interval expressed only in days cannot say the first one, and misting twice a day is the common case rather than the exotic one.
 Omit both and you get daily at 08:00, matching the digest.

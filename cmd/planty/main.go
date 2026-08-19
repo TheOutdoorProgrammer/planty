@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/agent"
 	"github.com/TheOutdoorProgrammer/planty/internal/api"
 	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/job"
@@ -35,6 +36,8 @@ const usage = `planty <command>
   thirst   report which plants the probes call dry, and water nothing
   water    run the LetPot line and verify it, only when asked by hand
   autopsy  work out what killed a plant: planty autopsy <slug>
+  agent    the short list of things a model may do: planty agent help
+  gate     PreToolUse hook deciding whether a tool call may proceed
   seed     load the sabbatical plants and their open questions
   migrate  apply database migrations and exit
   version  print the version and exit`
@@ -65,6 +68,11 @@ func run(log *slog.Logger) error {
 	if os.Args[1] == "version" {
 		fmt.Printf("planty %s (%s)\n", version, commit)
 		return nil
+	}
+
+	// A hook answers on every tool call and has no business opening Postgres.
+	if os.Args[1] == "gate" {
+		os.Exit(agent.Gate(os.Stdin, os.Stderr))
 	}
 
 	dsn := os.Getenv("PLANTY_DATABASE_URL")
@@ -115,6 +123,8 @@ func run(log *slog.Logger) error {
 		return water(db, log).Run(ctx)
 	case "autopsy":
 		return autopsy(ctx, db, log)
+	case "agent":
+		return agent.Run(ctx, db, os.Stdout, os.Args[2:])
 	case "seed":
 		return seed.Friends(ctx, db, log, os.Getenv("PLANTY_FRIEND_NAME"))
 	default:
@@ -134,9 +144,9 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
 		// Photos are worth having, not worth refusing to serve plants over.
 		log.Warn("photo storage unavailable, photo routes disabled", "error", err)
 	} else if store != nil {
-		seat := judge.New()
+		seat := judge.New().Able(acting())
 		server = server.WithPhotos(store, seat)
-		log.Info("photo storage ready", "judge", backendName(seat))
+		log.Info("photo storage ready", "judge", backendName(seat), "can_act", acting() != nil)
 	}
 
 	srv := &http.Server{
@@ -193,6 +203,20 @@ func daily(db *store.Store, log *slog.Logger) job.Daily {
 		Log:      log,
 		Notifier: notifier(),
 	}
+}
+
+// acting is what a conversation may write, nil when it may write nothing.
+// Only `serve` asks: a scheduled verdict that recorded observations would be
+// judging evidence it wrote itself. PLANTY_JUDGE_CAN_ACT=false switches it off.
+func acting() *judge.Acting {
+	if os.Getenv("PLANTY_JUDGE_CAN_ACT") == "false" {
+		return nil
+	}
+	binary, err := os.Executable()
+	if err != nil {
+		return nil
+	}
+	return &judge.Acting{Binary: binary, Usage: agent.Usage}
 }
 
 // backendName says which way judgments are being bought, which is the first

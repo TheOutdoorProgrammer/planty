@@ -50,7 +50,11 @@ FROM alpine:3.22
 RUN apk add --no-cache ca-certificates libgcc libstdc++ \
     && adduser -D -u 65532 -h /home/planty planty
 
-COPY --from=build /out/planty /planty
+# On PATH because the model runs `planty agent ...` by name, and symlinked at
+# the old absolute path so existing manifests and runbooks keep working.
+COPY --from=build /out/planty /usr/local/bin/planty
+RUN ln -s /usr/local/bin/planty /planty
+
 COPY --from=claude /out/claude /usr/local/bin/claude
 
 # Claude Code writes here every run, so it is a volume in the deployment and

@@ -41,6 +41,20 @@ type Request struct {
 	Effort    Effort
 	MaxTokens int64
 	Session   *Session
+	Acting    *Acting
+}
+
+// Acting lets the model record what it is told, rather than only answering.
+// Off everywhere except a consultation: a daily verdict that quietly wrote
+// observations would be judging its own evidence.
+type Acting struct {
+	// Binary is what the model may run, and the only thing it may run.
+	Binary string
+
+	// Usage is that command's own help, handed to the model so the two cannot
+	// drift. Passed in rather than imported: the package that defines these
+	// verbs reaches the store, and the store reaches back here.
+	Usage string
 }
 
 // Session lets a backend continue a conversation instead of re-reading it.

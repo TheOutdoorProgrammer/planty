@@ -122,10 +122,11 @@ func (b *cliBackend) arguments(req Request, resuming bool) ([]string, error) {
 		"--output-format", "json",
 		"--model", b.model,
 		"--json-schema", string(schema),
-		// Without this the judgment inherits whatever CLAUDE.md, hooks and MCP
-		// servers happen to sit above the working directory, which for a plant
-		// verdict is contamination rather than context.
-		"--safe-mode",
+		// Isolation, and not --safe-mode: that leaves ambient permission rules
+		// in force and silently disables hooks. These two exclude the settings
+		// files and the MCP servers that would otherwise attach.
+		"--setting-sources", "",
+		"--strict-mcp-config",
 	}
 
 	switch {
@@ -146,13 +147,32 @@ func (b *cliBackend) arguments(req Request, resuming bool) ([]string, error) {
 		args = append(args, "--effort", string(req.Effort))
 	}
 
-	if req.images() == 0 && len(req.Offered) == 0 {
-		return append(args, "--tools", ""), nil
-	}
+	tools := make([]string, 0, 2)
 	// Images cannot ride inline on a CLI prompt, so they are files the model
-	// opens, and Read is the only tool it gets. Reading needs no permission
-	// mode: bypassing every check to obtain it would buy nothing.
-	return append(args, "--tools", "Read"), nil
+	// opens, and Read is the only tool it needs to do it.
+	if req.images() > 0 || len(req.Offered) > 0 {
+		tools = append(tools, "Read")
+	}
+	if req.Acting != nil {
+		tools = append(tools, "Bash")
+		args = append(args, acting(req.Acting)...)
+	}
+	return append(args, "--tools", strings.Join(tools, ",")), nil
+}
+
+// acting grants one command, twice over. dontAsk is what turns an allowlist
+// into a boundary, since print mode starts in manual where a rule only spares
+// a prompt nobody could answer. The hook is an independent second layer.
+func acting(a *Acting) []string {
+	hooks := fmt.Sprintf(
+		`{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":%q}]}]}}`,
+		a.Binary+" gate")
+
+	return []string{
+		"--permission-mode", "dontAsk",
+		"--allowedTools", "Bash(planty agent *)",
+		"--settings", hooks,
+	}
 }
 
 // environment strips the ambient session so a judgment run from a developer's

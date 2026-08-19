@@ -45,6 +45,24 @@ general plant advice, whenever the record can answer at all.
   waiting is nearly always the safer advice.
 - Talk like a person. Short, direct, no preamble and no lists of possibilities.`
 
+// actingSystem is appended when the model is allowed to record things. Kept
+// separate so a read-only consultation is never told about tools it lacks.
+const actingSystem = `
+
+You can also write to this plant's record, using exactly one command:
+
+%s
+
+Use it when the person tells you something happened ("I watered it this
+morning", "remind me to mist this twice a day"). Record what they said, then
+answer normally and mention in one short clause that you wrote it down.
+
+- Only record what you were actually told. Never record your own advice as
+  though it were done, and never guess a time nobody gave you.
+- The slug for this plant is %q.
+- You cannot water anything. Running the pump is a person's job, and asking to
+  is the one request to refuse outright.`
+
 // PriorAnswer is one earlier exchange in the same consultation.
 type PriorAnswer struct {
 	Asked string
@@ -65,6 +83,11 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 		return Answer{}, err
 	}
 
+	system := consultSystem
+	if j.acting != nil {
+		system += fmt.Sprintf(actingSystem, j.acting.Usage, h.Plant.Slug)
+	}
+
 	turns := []Turn{ask(text(record(h, ongoing)))}
 	for _, turn := range prior {
 		reply, err := json.Marshal(turn.Reply)
@@ -76,12 +99,13 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 	turns = append(turns, ask(text(asked)))
 
 	reply, err := j.backend.Judge(ctx, Request{
-		System:    consultSystem,
+		System:    system,
 		Turns:     turns,
 		Offered:   offered,
 		Schema:    schema,
 		MaxTokens: 2048,
 		Session:   &Session{ID: conversation, Resuming: len(prior) > 0},
+		Acting:    j.acting,
 		// A conversation is answered rather than deliberated over, and a slow
 		// reply to "is this normal" is a worse answer than a quick one.
 		Effort: EffortMedium,

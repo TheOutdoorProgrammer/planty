@@ -13,7 +13,13 @@ var manual = map[string]string{
 	"serve":   "runs as a Deployment, not a CronJob",
 	"migrate": "every command migrates on start, so it is only ever run by hand",
 	"autopsy": "takes a slug, and is asked for when a plant dies",
-	"seed":    "one-off, against a new database",
+
+	// Both are called by the judge, not by a schedule: `agent` is the short
+	// list of things a model may do to a plant, and `gate` is the hook that
+	// decides whether it may.
+	"agent": "run by the model during a consultation, never on a timer",
+	"gate":  "a PreToolUse hook, invoked per tool call",
+	"seed":  "one-off, against a new database",
 
 	// Joey's rule, and the reason `thirst` exists: nothing waters a plant on a
 	// timer. He is told it needs doing and turns the pump on himself.

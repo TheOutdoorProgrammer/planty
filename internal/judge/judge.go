@@ -21,6 +21,28 @@ const Model = "claude-opus-5"
 // Judge turns evidence into a verdict.
 type Judge struct {
 	backend Backend
+	acting  *Acting
+}
+
+// Able lets a judge write to a plant's record as well as read it. Only the
+// conversation is given this: a daily verdict that quietly recorded
+// observations would be judging evidence it had written itself.
+func (j *Judge) Able(a *Acting) *Judge {
+	if j == nil {
+		return nil
+	}
+	j.acting = a
+	return j
+}
+
+// CLIBinary is the command the model would be allowed to run, empty when this
+// judge does not shell out to anything.
+func (j *Judge) CLIBinary() string {
+	cli, ok := j.backend.(*cliBackend)
+	if !ok {
+		return ""
+	}
+	return cli.binary
 }
 
 // New builds a judge, or nil when nothing can answer, because the watering
