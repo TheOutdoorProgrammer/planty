@@ -1,3 +1,4 @@
+import Photos
 import SwiftUI
 
 /// One photograph, filling the screen, pinchable. A plant page shows it 200
@@ -16,7 +17,8 @@ struct PhotoViewer: View {
     /// link that expires, so keeping the bytes once they arrive is the only way
     /// to hand them anywhere else.
     @State private var loaded: UIImage?
-    @State private var saveResult: String?
+    @State private var saveResult: PhotoSaveFeedback?
+    @State private var isSaving = false
 
     var body: some View {
         ZStack {
@@ -74,16 +76,22 @@ struct PhotoViewer: View {
         if let loaded {
             HStack(spacing: 10) {
                 Button {
-                    UIImageWriteToSavedPhotosAlbum(loaded, nil, nil, nil)
-                    withAnimation { saveResult = "Saved to Photos" }
+                    Task { await saveToPhotos(loaded) }
                 } label: {
-                    Image(systemName: "arrow.down.circle")
-                        .font(.headline)
-                        .foregroundStyle(PlantyColor.foreground)
-                        .frame(width: 44, height: 44)
-                        .background(.black.opacity(0.5), in: Circle())
+                    Group {
+                        if isSaving {
+                            ProgressView().tint(PlantyColor.foreground)
+                        } else {
+                            Image(systemName: "arrow.down.circle")
+                                .font(.headline)
+                                .foregroundStyle(PlantyColor.foreground)
+                        }
+                    }
+                    .frame(width: 44, height: 44)
+                    .background(.black.opacity(0.5), in: Circle())
                 }
-                .accessibilityLabel("Save to Photos")
+                .disabled(isSaving)
+                .accessibilityLabel(isSaving ? "Saving to Photos" : "Save to Photos")
 
                 ShareLink(item: Image(uiImage: loaded), preview: .init("Photo", image: Image(uiImage: loaded))) {
                     Image(systemName: "square.and.arrow.up")
@@ -95,9 +103,10 @@ struct PhotoViewer: View {
                 .accessibilityLabel("Share")
 
                 if let saveResult {
-                    Text(saveResult)
+                    Text(saveResult.message)
                         .font(.caption.weight(.semibold))
-                        .foregroundStyle(PlantyColor.foreground)
+                        .foregroundStyle(saveResult == .saved
+                            ? PlantyColor.foreground : PlantyColor.orange)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(.black.opacity(0.5), in: Capsule())
@@ -108,6 +117,21 @@ struct PhotoViewer: View {
                 }
             }
             .padding(16)
+        }
+    }
+
+    private func saveToPhotos(_ image: UIImage) async {
+        guard !isSaving else { return }
+        isSaving = true
+        defer { isSaving = false }
+
+        do {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetChangeRequest.creationRequestForAsset(from: image)
+            }
+            withAnimation { saveResult = .saved }
+        } catch {
+            withAnimation { saveResult = .failed }
         }
     }
 
@@ -150,6 +174,18 @@ struct PhotoViewer: View {
             .padding(.vertical, 8)
             .background(.black.opacity(0.5), in: Capsule())
             .padding(.bottom, 30)
+        }
+    }
+}
+
+private enum PhotoSaveFeedback: Equatable {
+    case saved
+    case failed
+
+    var message: String {
+        switch self {
+        case .saved: "Saved to Photos"
+        case .failed: "Could not save to Photos"
         }
     }
 }

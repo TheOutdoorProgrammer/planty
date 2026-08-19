@@ -120,9 +120,10 @@ An item is checked only after the implementation, regression test, commit, and p
   Save appears to do nothing even though the draft remains open.
   Fixed by passing the concrete failure into the note sheet, rendering it beside the preserved draft, and preventing interactive dismissal while the write is running.
 
-- [ ] **PNT-023 — Photo viewer claims a save succeeded without observing the result.**
+- [x] **PNT-023 — Photo viewer claims a save succeeded without observing the result.**
   `ios/Planty/Screens/Story/PhotoViewer.swift:73-107` calls `UIImageWriteToSavedPhotosAlbum` with no completion callback and immediately displays `Saved to Photos`.
   Denied permission and write failures therefore produce a false data-safety claim.
+  Fixed by awaiting the Photos transaction, disabling duplicate saves while it runs, and reporting success only after Photos commits the asset.
 
 - [ ] **PNT-024 — Cancelling a consultation leaves an unrecoverable dangling question.**
   `ConsultStore.ask` optimistically appends the question, but cancellation neither removes it nor marks it retryable.
