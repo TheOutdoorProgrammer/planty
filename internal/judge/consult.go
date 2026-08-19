@@ -50,9 +50,10 @@ general plant advice, whenever the record can answer at all.
   waiting is nearly always the safer advice.
 - Talk like a person. Short, direct, no preamble and no lists of possibilities.`
 
-// actingSystem is appended only when the model may act, so a read-only
-// consultation never hears about tools it lacks. %s is agent.Usage, carried
-// in via Acting because importing agent from here is a cycle; %q is the slug.
+// actingSystem is appended wherever the model may act. The first %s is
+// agent.Usage, carried in via Acting because importing agent from here is a
+// cycle; the second is which plant the conversation is about, which differs
+// between a plant's own page and a photograph of something in a shop.
 const actingSystem = `
 
 You can also act, through planty agent. What follows is its complete
@@ -90,8 +91,7 @@ Two things that do not exist, so that you do not spend a turn looking:
 
 Rules for acting, which outrank everything above:
 
-- This conversation is about the plant whose slug is %q. Act on that plant
-  unless the person plainly names a different one.
+%s
 - Record only what the person tells you actually happened, when they say it
   happened. Never record your own advice as though it were done, and never
   guess a time nobody gave you: with no time given, leave --when off and it
@@ -140,7 +140,7 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 
 	system := consultSystem
 	if j.acting != nil {
-		system += fmt.Sprintf(actingSystem, j.acting.Usage, h.Plant.Slug)
+		system += fmt.Sprintf(actingSystem, j.acting.Usage, aboutOnePlant(h.Plant.Slug))
 		if j.acting.Sources != "" {
 			system += "\n\n" + j.acting.Sources
 		}
@@ -228,3 +228,18 @@ func answerSchema() (map[string]any, error) {
 	err := json.Unmarshal([]byte(raw), &schema)
 	return schema, err
 }
+
+// aboutOnePlant is the subject line for a conversation opened from a plant.
+func aboutOnePlant(slug string) string {
+	return fmt.Sprintf(
+		"- This conversation is about the plant whose slug is %q. Act on that\n"+
+			"  plant unless the person plainly names a different one.", slug)
+}
+
+// aboutNothingYet is the subject line for a photograph of something nobody
+// owns. Acting is still allowed: "I am going to buy it" is a real thing to
+// say, and creating it then is the whole point of having the verb.
+const aboutNothingYet = `- This conversation is about a plant the person does not own, so there is no
+  plant to act on and nothing has been created. Do not create one to be
+  helpful. If they say they are keeping it, or ask you to add it, create it
+  then with the create verb and say you did.`

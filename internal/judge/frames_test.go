@@ -226,3 +226,18 @@ func TestNoHouseholdNotesMeansNoSection(t *testing.T) {
 		t.Error("an empty household section was written")
 	}
 }
+
+// The subject line differs between the two chats, and only that line.
+func TestTheSubjectLineNamesWhatIsBeingTalkedAbout(t *testing.T) {
+	one := aboutOnePlant("golden-pothos")
+	if !strings.Contains(one, `"golden-pothos"`) {
+		t.Errorf("the plant was not named: %q", one)
+	}
+	if strings.Contains(aboutNothingYet, "slug") {
+		t.Error("a chat with no plant was given a slug to act on")
+	}
+	// The person deciding to buy it is exactly when creating one is right.
+	if !strings.Contains(aboutNothingYet, "create") {
+		t.Error("there is no way to keep a plant the person decides to buy")
+	}
+}

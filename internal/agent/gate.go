@@ -79,7 +79,11 @@ func refuse(command string) string {
 	switch {
 	case verb == "planty":
 		if !strings.HasPrefix(rest, "agent ") {
-			return "planty may only be run as `planty agent <verb>`"
+			// Says where the answer already is: the refusal that only said no
+			// was followed by the model trying two more ways to read help.
+			return "planty may only be run as `planty agent <verb>`, and its " +
+				"complete reference is already in your instructions, so there " +
+				"is nothing to learn by running help"
 		}
 	case looking[verb]:
 		if reason := checkSecrets(command); reason != "" {

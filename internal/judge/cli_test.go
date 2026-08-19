@@ -530,3 +530,33 @@ func TestReadingIsAlwaysAvailable(t *testing.T) {
 		t.Errorf("Read was not granted: --tools %q", tools)
 	}
 }
+
+// Every chat surface has the same powers. The no-plant chat used to be handed
+// a list of trusted sites and no way to reach any of them.
+func TestBothChatsGetTheSameTools(t *testing.T) {
+	acting := &Acting{
+		Binary:  "planty",
+		Usage:   "usage text",
+		Trusted: []string{"www.aspca.org"},
+		Sources: "sources text",
+	}
+	b := newCLIBackend("planty", "claude-opus-5")
+
+	withPlant, err := b.arguments(Request{Schema: map[string]any{}, Acting: acting}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withoutPlant, err := b.arguments(Request{Schema: map[string]any{}, Acting: acting}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, args := range [][]string{withPlant, withoutPlant} {
+		tools := valueOf(args, "--tools")
+		for _, wanted := range []string{"Read", "Bash", "WebFetch", "WebSearch"} {
+			if !strings.Contains(tools, wanted) {
+				t.Errorf("%s was not granted: --tools %q", wanted, tools)
+			}
+		}
+	}
+}

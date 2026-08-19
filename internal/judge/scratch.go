@@ -47,9 +47,15 @@ func (j *Judge) Ask(ctx context.Context, asked string, shown []Offer,
 		return Answer{}, err
 	}
 
+	// The same powers as every other chat. A question about a plant in a shop
+	// is worth as much as one about a plant on the shelf, and the person can
+	// decide mid-conversation that they are buying it.
 	system := scratchSystem
-	if j.acting != nil && j.acting.Sources != "" {
-		system += "\n\n" + j.acting.Sources
+	if j.acting != nil {
+		system += fmt.Sprintf(actingSystem, j.acting.Usage, aboutNothingYet)
+		if j.acting.Sources != "" {
+			system += "\n\n" + j.acting.Sources
+		}
 	}
 
 	// A photograph with no question is still a question, and the commonest one.
@@ -76,6 +82,7 @@ func (j *Judge) Ask(ctx context.Context, asked string, shown []Offer,
 		MaxTokens: 2048,
 		Session:   &Session{ID: conversation, Resuming: len(prior) > 0},
 		Live:      true,
+		Acting:    j.acting,
 		Effort:    EffortMedium,
 	})
 	if err != nil {
