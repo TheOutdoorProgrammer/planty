@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -27,7 +29,54 @@ func (s *Server) listPlants(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.ok(w, http.StatusOK, map[string]any{"plants": plants, "count": len(plants)})
+	s.ok(w, http.StatusOK, map[string]any{
+		"plants": s.withThumbnails(r, plants),
+		"count":  len(plants),
+	})
+}
+
+// listedPlant is a plant plus the newest picture of it, so a library of plants
+// shows the plants rather than a column of identical leaf glyphs.
+type listedPlant struct {
+	plant.Plant
+	PhotoURL   string     `json:"photo_url,omitempty"`
+	PhotoTaken *time.Time `json:"photo_taken_at,omitempty"`
+}
+
+// withThumbnails attaches a link to each plant's most recent photograph.
+// Best effort: a plant with no photo, or storage being down, still lists.
+func (s *Server) withThumbnails(r *http.Request, plants []plant.Plant) []listedPlant {
+	listed := make([]listedPlant, 0, len(plants))
+	for _, p := range plants {
+		listed = append(listed, listedPlant{Plant: p})
+	}
+	if s.photos == nil || len(plants) == 0 {
+		return listed
+	}
+
+	ids := make([]uuid.UUID, 0, len(plants))
+	for _, p := range plants {
+		ids = append(ids, p.ID)
+	}
+	newest, err := s.store.NewestPhotos(r.Context(), ids)
+	if err != nil {
+		s.log.Warn("listing without thumbnails", "error", err)
+		return listed
+	}
+
+	for i, entry := range listed {
+		shot, ok := newest[entry.ID]
+		if !ok {
+			continue
+		}
+		link, err := s.photos.URL(r.Context(), shot.StorageKey, PhotoLinkTTL)
+		if err != nil {
+			continue
+		}
+		listed[i].PhotoURL = link
+		listed[i].PhotoTaken = &shot.TakenAt
+	}
+	return listed
 }
 
 func (s *Server) createPlant(w http.ResponseWriter, r *http.Request) {

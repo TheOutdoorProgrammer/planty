@@ -46,6 +46,28 @@ struct PlantStoryScreen: View {
         }
     }
 
+    /// Asking needs no photograph, which is why it sits here rather than
+    /// behind the camera: most questions are about the record, not a picture.
+    private var plantActions: some View {
+        HStack(spacing: 10) {
+            NavigationLink {
+                ConsultScreen(store: session.consultStore(for: store.plant))
+            } label: {
+                Label("Ask about this", systemImage: "bubble.left.and.text.bubble.right.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+
+            NavigationLink {
+                RemindersScreen(store: session.remindersStore(for: store.plant))
+            } label: {
+                Label("Reminders", systemImage: "bell.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+        }
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(store.plant.commonName)
@@ -70,6 +92,7 @@ struct PlantStoryScreen: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(PlantyColor.green)
             }
+            plantActions
             shelterControl
         }
     }

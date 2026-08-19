@@ -112,3 +112,45 @@ extension TodayInputs {
         )
     }
 }
+
+extension PlantAnswer {
+    static func fixture(
+        reply: String = "It does not need water today.",
+        confidence: Double = 0.9,
+        lookedAt: String? = nil,
+        followUps: [String] = [],
+        conversationID: UUID = UUID()
+    ) -> PlantAnswer {
+        PlantAnswer(
+            id: UUID(),
+            conversationID: conversationID,
+            reply: reply,
+            confidence: confidence,
+            lookedAt: lookedAt,
+            suggestedFollowUps: followUps
+        )
+    }
+}
+
+extension Reminder {
+    static func fixture(
+        kind: ObservationKind = .misted,
+        everyDays: Int = 1,
+        atHours: [Int] = [8, 20],
+        active: Bool = true,
+        lastDone: Date? = nil,
+        due: Bool? = nil
+    ) -> Reminder {
+        Reminder(
+            id: UUID(),
+            plantID: UUID(),
+            kind: kind,
+            everyDays: everyDays,
+            atHours: atHours,
+            active: active,
+            note: nil,
+            lastDone: lastDone,
+            due: due
+        )
+    }
+}

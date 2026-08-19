@@ -116,6 +116,14 @@ final class AppSession {
         DiagnosisStore(service: diagnosis, api: api, plant: plant, photo: photo)
     }
 
+    func consultStore(for plant: Plant) -> ConsultStore {
+        ConsultStore(api: api, plant: plant)
+    }
+
+    func remindersStore(for plant: Plant) -> RemindersStore {
+        RemindersStore(api: api, plant: plant)
+    }
+
     /// Sends the user to Snap with the plant locked in, which is the whole of
     /// what "I'm here" does.
     func beginCapture(for entry: DigestEntry) {

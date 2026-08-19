@@ -49,6 +49,24 @@ struct PlantyClient: PlantyAPI {
         try await get("/v1/plants/\(escaped(slug))/timeline")
     }
 
+    func ask(slug: String, question: PlantQuestion) async throws -> PlantAnswer {
+        try await send("POST", "/v1/plants/\(escaped(slug))/ask", body: question)
+    }
+
+    func reminders(slug: String) async throws -> [Reminder] {
+        let response: ReminderListResponse = try await get("/v1/plants/\(escaped(slug))/reminders")
+        return response.reminders
+    }
+
+    func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder {
+        try await send("PUT", "/v1/plants/\(escaped(slug))/reminders", body: reminder)
+    }
+
+    func deleteReminder(slug: String, kind: ObservationKind) async throws {
+        let path = "/v1/plants/\(escaped(slug))/reminders/\(escaped(kind.rawValue))"
+        _ = try await perform(try makeRequest("DELETE", path))
+    }
+
     func acknowledge(verdictID: UUID) async throws {
         let request = try makeRequest("POST", "/v1/verdicts/\(verdictID.uuidString)/ack")
         _ = try await perform(request)

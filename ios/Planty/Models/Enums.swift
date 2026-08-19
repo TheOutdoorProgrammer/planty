@@ -106,6 +106,9 @@ enum VerdictAction: String, FallbackDecodable, CaseIterable {
 
 enum ObservationKind: String, FallbackDecodable, CaseIterable {
     case watered
+    // Not watering: it wets leaves rather than soil, no probe ever sees it,
+    // and the two are scheduled on completely different rhythms.
+    case misted
     case repotted
     case fertilized
     case pruned
@@ -121,6 +124,7 @@ enum ObservationKind: String, FallbackDecodable, CaseIterable {
     var label: String {
         switch self {
         case .watered: "Watered"
+        case .misted: "Misted"
         case .repotted: "Repotted"
         case .fertilized: "Fed"
         case .pruned: "Pruned"
@@ -136,6 +140,7 @@ enum ObservationKind: String, FallbackDecodable, CaseIterable {
     var symbol: String {
         switch self {
         case .watered: "drop.fill"
+        case .misted: "humidity.fill"
         case .repotted: "shippingbox.fill"
         case .fertilized: "sparkles"
         case .pruned: "scissors"

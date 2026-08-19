@@ -18,6 +18,15 @@ protocol PlantyAPI: Sendable {
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink
     func shelter(slugs: [String], indoors: Bool) async throws -> Int
     func identify(jpeg: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate]
+
+    /// Ask about a plant from its record. No photograph: the answer comes from
+    /// what is already known, and any pictures are offered rather than sent.
+    func ask(slug: String, question: PlantQuestion) async throws -> PlantAnswer
+
+    func reminders(slug: String) async throws -> [Reminder]
+    func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder
+    func deleteReminder(slug: String, kind: ObservationKind) async throws
+
     func health() async throws
 }
 

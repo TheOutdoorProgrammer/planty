@@ -38,6 +38,12 @@ struct Plant: Codable, Sendable, Hashable, Identifiable {
     var createdAt: Date
     var updatedAt: Date
 
+    /// The newest photograph of this plant, short-lived and only sent by the
+    /// list. Optional because a plant nobody has photographed yet is normal,
+    /// and because every other endpoint returns a plant without one.
+    var photoURL: URL?
+    var photoTakenAt: Date?
+
     enum CodingKeys: String, CodingKey {
         case id
         case slug
@@ -64,6 +70,8 @@ struct Plant: Codable, Sendable, Hashable, Identifiable {
         case shelteredAt = "sheltered_at"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case photoURL = "photo_url"
+        case photoTakenAt = "photo_taken_at"
     }
 }
 

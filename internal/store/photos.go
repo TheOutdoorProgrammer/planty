@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -56,6 +57,38 @@ func (s *Store) Photos(ctx context.Context, plantID uuid.UUID, limit int) ([]pla
 		out = append(out, p)
 	}
 	return out, rows.Err()
+}
+
+// NewestPhotos returns the most recent photograph of each of the given plants,
+// keyed by plant. One query rather than one per plant: the library screen shows
+// every plant at once, and a request per row is a list that loads in steps.
+func (s *Store) NewestPhotos(ctx context.Context, plantIDs []uuid.UUID) (map[uuid.UUID]plant.Photo, error) {
+	newest := make(map[uuid.UUID]plant.Photo, len(plantIDs))
+	if len(plantIDs) == 0 {
+		return newest, nil
+	}
+
+	rows, err := s.pool.Query(ctx, `
+		SELECT DISTINCT ON (plant_id)
+		       id, plant_id, storage_key, taken_at, coalesce(caption,''),
+		       coalesce(vision_findings,''), analyzed_at, created_at
+		FROM photos
+		WHERE plant_id = ANY($1)
+		ORDER BY plant_id, taken_at DESC`, plantIDs)
+	if err != nil {
+		return nil, fmt.Errorf("newest photos: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var p plant.Photo
+		if err := rows.Scan(&p.ID, &p.PlantID, &p.StorageKey, &p.TakenAt,
+			&p.Caption, &p.VisionFindings, &p.AnalyzedAt, &p.CreatedAt); err != nil {
+			return nil, fmt.Errorf("scan newest photo: %w", err)
+		}
+		newest[p.PlantID] = p
+	}
+	return newest, rows.Err()
 }
 
 // RecordVision stores what the model saw, kept apart from human captions so a

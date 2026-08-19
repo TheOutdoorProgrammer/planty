@@ -44,7 +44,7 @@ struct PlantPhotoView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-            } else if let url = photo?.url {
+            } else if let url = photo?.url ?? plant.photoURL {
                 remote(url)
             } else {
                 placeholder

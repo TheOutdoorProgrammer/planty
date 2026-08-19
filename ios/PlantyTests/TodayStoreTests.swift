@@ -30,6 +30,22 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     var acknowledged: [UUID] { lock.withLock { _acknowledged } }
     var observations: [(String, NewObservation)] { lock.withLock { _observations } }
 
+    private var _answer: PlantAnswer = .fixture()
+    private var _asked: [(String, PlantQuestion)] = []
+    private var _reminders: [Reminder] = []
+
+    var answer: PlantAnswer {
+        get { lock.withLock { _answer } }
+        set { lock.withLock { _answer = newValue } }
+    }
+
+    var asked: [(String, PlantQuestion)] { lock.withLock { _asked } }
+
+    var reminderList: [Reminder] {
+        get { lock.withLock { _reminders } }
+        set { lock.withLock { _reminders = newValue } }
+    }
+
     private func check() throws {
         if let failure { throw failure }
     }
@@ -138,6 +154,42 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
             unit: harvest.unit,
             createdAt: harvest.occurredAt
         )
+    }
+
+    func ask(slug: String, question: PlantQuestion) async throws -> PlantAnswer {
+        try check()
+        lock.withLock { _asked.append((slug, question)) }
+        return lock.withLock { _answer }
+    }
+
+    func reminders(slug: String) async throws -> [Reminder] {
+        try check()
+        return reminderList
+    }
+
+    func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder {
+        try check()
+        let saved = Reminder(
+            id: UUID(),
+            plantID: UUID(),
+            kind: reminder.kind,
+            everyDays: reminder.everyDays,
+            atHours: reminder.atHours,
+            active: reminder.active,
+            note: reminder.note,
+            lastDone: nil,
+            due: nil
+        )
+        lock.withLock {
+            _reminders.removeAll { $0.kind == saved.kind }
+            _reminders.append(saved)
+        }
+        return saved
+    }
+
+    func deleteReminder(slug: String, kind: ObservationKind) async throws {
+        try check()
+        lock.withLock { _reminders.removeAll { $0.kind == kind } }
     }
 
     func health() async throws {

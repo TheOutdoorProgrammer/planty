@@ -45,6 +45,18 @@ private final class HangingAPI: PlantyAPI, @unchecked Sendable {
     func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo {
         throw PlantyError.notFound
     }
+    func ask(slug: String, question: PlantQuestion) async throws -> PlantAnswer {
+        try await Task.sleep(for: .seconds(60))
+        throw PlantyError.notFound
+    }
+    func reminders(slug: String) async throws -> [Reminder] {
+        try await Task.sleep(for: .seconds(60))
+        return []
+    }
+    func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder {
+        throw PlantyError.notFound
+    }
+    func deleteReminder(slug: String, kind: ObservationKind) async throws {}
     func health() async throws {}
 }
 
