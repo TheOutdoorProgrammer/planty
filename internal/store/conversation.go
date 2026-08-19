@@ -38,16 +38,48 @@ func (s *Store) saveTurn(ctx context.Context, kind string, t turn) (turn, error)
 		owner = t.PlantID
 	}
 
-	row := s.pool.QueryRow(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return turn{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	// A new conversation has no row to lock, so an advisory lock serialises
+	// concurrent first turns carrying the same client-supplied UUID.
+	lockKey := kind + ":" + t.ConversationID.String()
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, lockKey); err != nil {
+		return turn{}, err
+	}
+
+	var ownersMatch *bool
+	err = tx.QueryRow(ctx, `
+		SELECT bool_and(plant_id IS NOT DISTINCT FROM $3::uuid)
+		FROM diagnosis_turns
+		WHERE kind = $1 AND conversation_id = $2`, kind, t.ConversationID, owner).Scan(&ownersMatch)
+	if err != nil {
+		return turn{}, err
+	}
+	if ownersMatch != nil && !*ownersMatch {
+		return turn{}, ErrConversationOwner
+	}
+
+	row := tx.QueryRow(ctx, `
 		INSERT INTO diagnosis_turns (plant_id, conversation_id, asked, reply, photo_id, kind)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING `+turnColumns,
 		owner, t.ConversationID, t.Asked, []byte(t.Reply), t.PhotoID, kind)
-	return scanTurn(row)
+	saved, err := scanTurn(row)
+	if err != nil {
+		return turn{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return turn{}, err
+	}
+	return saved, nil
 }
 
 func (s *Store) conversation(ctx context.Context, kind string,
-	conversationID uuid.UUID) ([]turn, error) {
+	conversationID, owner uuid.UUID) ([]turn, error) {
 	rows, err := s.pool.Query(ctx, `
 		SELECT `+turnColumns+`
 		FROM diagnosis_turns
@@ -64,9 +96,18 @@ func (s *Store) conversation(ctx context.Context, kind string,
 		if err != nil {
 			return nil, err
 		}
+		if t.PlantID != owner {
+			return nil, ErrConversationOwner
+		}
 		out = append(out, t)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(out) == 0 {
+		return nil, ErrNotFound
+	}
+	return out, nil
 }
 
 func scanTurn(row interface{ Scan(dest ...any) error }) (turn, error) {

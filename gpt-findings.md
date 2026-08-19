@@ -61,9 +61,10 @@ An item is checked only after the implementation, regression test, commit, and p
   Oversized unauthenticated requests can consume pod memory or the 1 GiB temporary volume.
   Fixed by bounding the actual multipart request before parsing, independently bounding each file, returning 413 for size failures, and testing raw and multipart limits.
 
-- [ ] **PNT-010 — Conversation IDs can cross-contaminate plants and scratch chats.**
+- [x] **PNT-010 — Conversation IDs can cross-contaminate plants and scratch chats.**
   `internal/api/consult.go:118-133`, `internal/api/ask.go:95-112`, and `internal/store/conversation.go:49-55` load by conversation UUID without asserting the plant or scratch owner.
   A stale conversation ID can replay one plant's context into another and save subsequent turns under the wrong record.
+  Fixed by scoping every conversation read to its plant or scratch owner and transactionally rejecting owner changes, including concurrent first turns sharing a UUID.
 
 - [ ] **PNT-011 — The unauthenticated LAN API is writable through CSRF and DNS rebinding.**
   The server binds all interfaces, has no authentication or Origin/Host protection, and JSON handlers do not consistently require `application/json`.

@@ -120,6 +120,8 @@ func (s *Server) fail(w http.ResponseWriter, code int, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		code = http.StatusNotFound
+	case errors.Is(err, store.ErrConversationOwner):
+		code = http.StatusConflict
 	case errors.Is(err, plant.ErrInvalid):
 		code = http.StatusBadRequest
 	}

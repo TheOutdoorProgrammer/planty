@@ -98,7 +98,7 @@ func (s *Server) priorScratchAnswers(r *http.Request,
 	if conversationID == nil {
 		return nil, uuid.New(), nil
 	}
-	turns, err := s.store.Consultation(r.Context(), *conversationID)
+	turns, err := s.store.Consultation(r.Context(), *conversationID, uuid.Nil)
 	if err != nil {
 		return nil, uuid.Nil, err
 	}

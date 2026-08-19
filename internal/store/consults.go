@@ -3,12 +3,15 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 )
+
+var ErrConversationOwner = errors.New("conversation belongs to a different subject")
 
 // ConsultTurn is one exchange in a conversation, whether about a plant's
 // record, a photograph of it, or something nobody owns.
@@ -48,8 +51,8 @@ func (s *Store) SaveConsultTurn(ctx context.Context, t ConsultTurn) (ConsultTurn
 
 // Consultation returns a conversation's turns, oldest first.
 func (s *Store) Consultation(ctx context.Context,
-	conversationID uuid.UUID) ([]ConsultTurn, error) {
-	turns, err := s.conversation(ctx, kindConsult, conversationID)
+	conversationID, plantID uuid.UUID) ([]ConsultTurn, error) {
+	turns, err := s.conversation(ctx, kindConsult, conversationID, plantID)
 	if err != nil {
 		return nil, err
 	}

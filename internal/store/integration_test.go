@@ -9,6 +9,7 @@ import (
 
 	"github.com/TheOutdoorProgrammer/planty/internal/pgtest"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/google/uuid"
 )
 
 // Needs a real Postgres: the digest join once emitted invalid SQL that
@@ -143,6 +144,37 @@ func TestANewerVerdictSupersedesTheOldInstruction(t *testing.T) {
 	}
 	if err := s.AckVerdict(ctx, old.ID); err != nil {
 		t.Fatal("the superseded verdict was not retained as history")
+	}
+}
+
+func TestConversationCannotMoveBetweenSubjects(t *testing.T) {
+	s, ctx := testStore(t)
+	first := newPlant(t, s, ctx, "Conversation owner")
+	second := newPlant(t, s, ctx, "Conversation intruder")
+
+	started, err := s.SaveConsultTurn(ctx, ConsultTurn{
+		PlantID: first.ID,
+		Asked:   "What is happening?",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.Consultation(ctx, started.ConversationID, second.ID); !errors.Is(err, ErrConversationOwner) {
+		t.Fatalf("reading through another plant returned %v, want ErrConversationOwner", err)
+	}
+	if _, err := s.SaveConsultTurn(ctx, ConsultTurn{
+		PlantID:        second.ID,
+		ConversationID: started.ConversationID,
+		Asked:          "Continue under the wrong plant",
+	}); !errors.Is(err, ErrConversationOwner) {
+		t.Fatalf("writing through another plant returned %v, want ErrConversationOwner", err)
+	}
+	if _, err := s.Consultation(ctx, started.ConversationID, first.ID); err != nil {
+		t.Fatalf("the owning plant lost its conversation: %v", err)
+	}
+	if _, err := s.Consultation(ctx, started.ConversationID, uuid.Nil); !errors.Is(err, ErrConversationOwner) {
+		t.Fatalf("scratch access returned %v, want ErrConversationOwner", err)
 	}
 }
 

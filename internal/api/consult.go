@@ -55,7 +55,7 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prior, conversation, err := s.priorAnswers(r, ask.ConversationID)
+	prior, conversation, err := s.priorAnswers(r, p.ID, ask.ConversationID)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
@@ -115,13 +115,13 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) priorAnswers(r *http.Request,
+func (s *Server) priorAnswers(r *http.Request, plantID uuid.UUID,
 	conversationID *uuid.UUID) ([]judge.PriorAnswer, uuid.UUID, error) {
 	if conversationID == nil {
 		return nil, uuid.New(), nil
 	}
 
-	turns, err := s.store.Consultation(r.Context(), *conversationID)
+	turns, err := s.store.Consultation(r.Context(), *conversationID, plantID)
 	if err != nil {
 		return nil, uuid.Nil, err
 	}
