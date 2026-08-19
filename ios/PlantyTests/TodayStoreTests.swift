@@ -43,6 +43,7 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     private var _reminders: [Reminder] = []
     private var _notes: [PlantNote] = []
     private var _detailVerdict: Verdict?
+    private var _household: [PlantNote] = []
     private var _scratchAsks: [ScratchQuestion] = []
     private var _created: [String] = []
     private var _uploads: [(String, Data)] = []
@@ -68,6 +69,11 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     var noteList: [PlantNote] {
         get { lock.withLock { _notes } }
         set { lock.withLock { _notes = newValue } }
+    }
+
+    var householdList: [PlantNote] {
+        get { lock.withLock { _household } }
+        set { lock.withLock { _household = newValue } }
     }
 
     /// What GET /v1/plants/{slug} reports as the plant's open verdict.
@@ -209,6 +215,18 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     func notes(slug: String) async throws -> [PlantNote] {
         try check()
         return noteList
+    }
+
+    func householdNotes() async throws -> [PlantNote] {
+        try check()
+        return householdList
+    }
+
+    func addHouseholdNote(draft: NoteDraft) async throws -> PlantNote {
+        try check()
+        let written = PlantNote.fixture(title: draft.title, body: draft.body ?? "")
+        householdList.insert(written, at: 0)
+        return written
     }
 
     func addNote(slug: String, draft: NoteDraft) async throws -> PlantNote {

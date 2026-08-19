@@ -133,6 +133,12 @@ final class AppSession {
         NotesStore(api: api, slug: plant.slug)
     }
 
+    /// Notes about the place. Read before every answer about every plant,
+    /// which is what makes them worth keeping apart from a plant's own.
+    func householdNotesStore() -> NotesStore {
+        NotesStore(api: api)
+    }
+
     /// Sends the user to Snap with the plant locked in, which is the whole of
     /// what "I'm here" does.
     func beginCapture(for entry: DigestEntry) {

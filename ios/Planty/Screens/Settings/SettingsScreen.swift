@@ -14,6 +14,7 @@ struct SettingsScreen: View {
         NavigationStack {
             Form {
                 connectionSection
+                householdSection
                 freshnessSection
                 sensorsSection
                 aboutSection
@@ -28,6 +29,20 @@ struct SettingsScreen: View {
                 }
             }
             .task { load() }
+        }
+    }
+
+    /// What is true of the place rather than of any one plant. Kept here
+    /// rather than on a plant's page, because it belongs to all of them.
+    private var householdSection: some View {
+        Section {
+            NavigationLink {
+                NotesScreen(store: session.householdNotesStore())
+            } label: {
+                Label("About the house", systemImage: "house.fill")
+            }
+        } footer: {
+            Text("Read before every answer about every plant.")
         }
     }
 

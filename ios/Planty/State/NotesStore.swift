@@ -6,14 +6,16 @@ import Observation
 @MainActor
 final class NotesStore {
     private let api: PlantyAPI
-    let slug: String
+
+    /// Nil is the household: notes about the place rather than a plant.
+    let slug: String?
 
     private(set) var notes: [PlantNote] = []
     private(set) var isLoading = false
     private(set) var isSaving = false
     var error: PlantyError?
 
-    init(api: PlantyAPI, slug: String) {
+    init(api: PlantyAPI, slug: String? = nil) {
         self.api = api
         self.slug = slug
     }
@@ -22,7 +24,7 @@ final class NotesStore {
         isLoading = true
         defer { isLoading = false }
         do {
-            notes = try await api.notes(slug: slug)
+            notes = try await load(slug)
             error = nil
         } catch {
             self.error = PlantyError.from(error)
@@ -39,10 +41,8 @@ final class NotesStore {
         isSaving = true
         defer { isSaving = false }
         do {
-            let written = try await api.addNote(
-                slug: slug,
-                draft: NoteDraft(title: heading(title), body: text)
-            )
+            let draft = NoteDraft(title: heading(title), body: text)
+            let written = try await write(draft, to: slug)
             notes.insert(written, at: 0)
             error = nil
             return true
@@ -85,6 +85,16 @@ final class NotesStore {
         } catch {
             self.error = PlantyError.from(error)
         }
+    }
+
+    private func load(_ slug: String?) async throws -> [PlantNote] {
+        guard let slug else { return try await api.householdNotes() }
+        return try await api.notes(slug: slug)
+    }
+
+    private func write(_ draft: NoteDraft, to slug: String?) async throws -> PlantNote {
+        guard let slug else { return try await api.addHouseholdNote(draft: draft) }
+        return try await api.addNote(slug: slug, draft: draft)
     }
 
     /// An empty title is no title, not an empty one.

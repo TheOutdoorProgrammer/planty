@@ -118,6 +118,15 @@ struct PlantyClient: PlantyAPI {
         return response.notes
     }
 
+    func householdNotes() async throws -> [PlantNote] {
+        let response: NoteListResponse = try await get("/v1/notes")
+        return response.notes
+    }
+
+    func addHouseholdNote(draft: NoteDraft) async throws -> PlantNote {
+        try await send("POST", "/v1/notes", body: draft)
+    }
+
     func addNote(slug: String, draft: NoteDraft) async throws -> PlantNote {
         try await send("POST", "/v1/plants/\(escaped(slug))/notes", body: draft)
     }

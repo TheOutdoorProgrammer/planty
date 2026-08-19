@@ -220,3 +220,47 @@ struct StoryNarrativeTests {
         #expect(chapters.first?.narrative.contains("Watered it..") == false)
     }
 }
+
+@Suite("Notes about the house")
+struct HouseholdNotesTests {
+    @Test("A household note goes nowhere near a plant")
+    @MainActor
+    func householdNotesAreNotPlantNotes() async {
+        let api = FakeAPI()
+        let house = NotesStore(api: api)
+
+        await house.write(title: "Cat", body: "there is a cat indoors that chews leaves")
+
+        #expect(api.householdList.count == 1)
+        #expect(api.noteList.isEmpty, "a household note was filed against a plant")
+        #expect(house.notes.first?.body == "there is a cat indoors that chews leaves")
+    }
+
+    @Test("A plant's notes and the household's do not mix")
+    @MainActor
+    func theTwoListsStaySeparate() async {
+        let api = FakeAPI()
+        let house = NotesStore(api: api)
+        let pothos = NotesStore(api: api, slug: "golden-pothos")
+
+        await house.write(title: "", body: "nobody is home in August")
+        await pothos.write(title: "", body: "this one wilts dramatically")
+
+        await house.load()
+        await pothos.load()
+
+        #expect(house.notes.map(\.body) == ["nobody is home in August"])
+        #expect(pothos.notes.map(\.body) == ["this one wilts dramatically"])
+    }
+
+    @Test("A failed household write says so")
+    @MainActor
+    func failedHouseholdWriteIsReported() async {
+        let api = FakeAPI()
+        api.failure = .offline
+        let house = NotesStore(api: api)
+
+        #expect(await house.write(title: "", body: "something") == false)
+        #expect(house.error == .offline)
+    }
+}

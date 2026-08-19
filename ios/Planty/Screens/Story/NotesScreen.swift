@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Everything written down about one plant, and the writing of more.
+/// Everything written down about one plant, or about the house.
 struct NotesScreen: View {
     @State var store: NotesStore
     @State private var editing: PlantNote?
@@ -34,7 +34,7 @@ struct NotesScreen: View {
             .padding(.vertical, 16)
         }
         .plantyPage()
-        .navigationTitle("Notes")
+        .navigationTitle(store.slug == nil ? "About the house" : "Notes")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -73,10 +73,17 @@ struct NotesScreen: View {
     private var empty: some View {
         StateMessage(
             title: "Nothing written down yet.",
-            message: """
-                Notes are for what the sensors cannot see: where it came \
-                from, what it hates, what the cat does to it.
-                """,
+            message: store.slug == nil
+                ? """
+                    Anything true of the place rather than one plant: an \
+                    animal that chews things, a room nobody heats, a week \
+                    nobody is home. Planty reads these before answering \
+                    about any plant.
+                    """
+                : """
+                    Notes are for what the sensors cannot see: where it came \
+                    from, what it hates, what the cat does to it.
+                    """,
             accent: PlantyColor.purple,
             icon: "note.text"
         ) {

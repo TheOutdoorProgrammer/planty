@@ -142,6 +142,10 @@ final class RecordingAPI: PlantyAPI, @unchecked Sendable {
     func reminders(slug: String) async throws -> [Reminder] { throw PlantyError.notFound }
 
     func notes(slug: String) async throws -> [PlantNote] { [] }
+    func householdNotes() async throws -> [PlantNote] { [] }
+    func addHouseholdNote(draft: NoteDraft) async throws -> PlantNote {
+        throw PlantyError.notFound
+    }
     func addNote(slug: String, draft: NoteDraft) async throws -> PlantNote {
         throw PlantyError.notFound
     }

@@ -37,6 +37,8 @@ protocol PlantyAPI: Sendable {
     func postmortem(slug: String) async throws -> Postmortem
 
     func notes(slug: String) async throws -> [PlantNote]
+    func householdNotes() async throws -> [PlantNote]
+    func addHouseholdNote(draft: NoteDraft) async throws -> PlantNote
     func addNote(slug: String, draft: NoteDraft) async throws -> PlantNote
     func updateNote(id: UUID, draft: NoteDraft) async throws -> PlantNote
     func deleteNote(id: UUID) async throws
