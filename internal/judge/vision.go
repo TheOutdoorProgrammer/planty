@@ -118,7 +118,7 @@ func (j *Judge) Diagnose(ctx context.Context, p plant.Plant, frames []Frame, ask
 		turns = replay(prior, opening, asked)
 	}
 
-	answer, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.backend.Judge(ctx, Request{
 		System:    visionSystem,
 		Turns:     turns,
 		Schema:    schema,
@@ -131,7 +131,7 @@ func (j *Judge) Diagnose(ctx context.Context, p plant.Plant, frames []Frame, ask
 	}
 
 	var out Diagnosis
-	if err := json.Unmarshal([]byte(answer), &out); err != nil {
+	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
 		return Diagnosis{}, fmt.Errorf("decode diagnosis: %w", err)
 	}
 	return out, nil

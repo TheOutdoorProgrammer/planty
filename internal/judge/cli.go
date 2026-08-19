@@ -34,7 +34,7 @@ type envelope struct {
 	StructuredOutput json.RawMessage `json:"structured_output"`
 }
 
-func (b *cliBackend) Judge(ctx context.Context, req Request) (string, error) {
+func (b *cliBackend) Judge(ctx context.Context, req Request) (Outcome, error) {
 	answer, err := b.run(ctx, req, req.Session != nil && req.Session.Resuming)
 	if !errors.Is(err, errSessionGone) {
 		return answer, err
@@ -47,13 +47,13 @@ func (b *cliBackend) Judge(ctx context.Context, req Request) (string, error) {
 }
 
 // run performs one call, either continuing the session or establishing it.
-func (b *cliBackend) run(ctx context.Context, req Request, resuming bool) (string, error) {
+func (b *cliBackend) run(ctx context.Context, req Request, resuming bool) (Outcome, error) {
 	// Dies with the call: the photographs, and whatever the CLI writes beside
 	// them. Sessions are keyed by id rather than directory, so a fresh one
 	// every time still resumes.
 	dir, err := os.MkdirTemp("", "planty-judge-")
 	if err != nil {
-		return "", fmt.Errorf("scratch directory: %w", err)
+		return Outcome{}, fmt.Errorf("scratch directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
@@ -66,16 +66,16 @@ func (b *cliBackend) run(ctx context.Context, req Request, resuming bool) (strin
 
 	prompt, err := render(dir, turns)
 	if err != nil {
-		return "", err
+		return Outcome{}, err
 	}
 	catalogue, err := stage(dir, req.Offered)
 	if err != nil {
-		return "", err
+		return Outcome{}, err
 	}
 	prompt += catalogue
 	args, err := b.arguments(req, resuming)
 	if err != nil {
-		return "", err
+		return Outcome{}, err
 	}
 
 	// "--" or the prompt is swallowed: --tools takes a list, so a prompt
@@ -90,11 +90,11 @@ func (b *cliBackend) run(ctx context.Context, req Request, resuming bool) (strin
 	if err := cmd.Run(); err != nil {
 		complaint := strings.TrimSpace(stderr.String())
 		if resuming && mentionsAMissingSession(complaint) {
-			return "", errSessionGone
+			return Outcome{}, errSessionGone
 		}
-		return "", fmt.Errorf("claude: %w: %s", err, complaint)
+		return Outcome{}, fmt.Errorf("claude: %w: %s", err, complaint)
 	}
-	return answerFrom(stdout.Bytes())
+	return outcomeFrom(stdout.Bytes())
 }
 
 // errSessionGone reports that a session we expected to continue is not there,
@@ -119,7 +119,11 @@ func (b *cliBackend) arguments(req Request, resuming bool) ([]string, error) {
 
 	args := []string{
 		"--print",
-		"--output-format", "json",
+		// Streamed, because the plain json format reports only that tools ran,
+		// not which. Showing the person the command and the page it fetched is
+		// the difference between "I looked it up" and something checkable.
+		"--output-format", "stream-json",
+		"--verbose",
 		"--model", b.model,
 		"--json-schema", string(schema),
 		// Isolation, and not --safe-mode: that leaves ambient permission rules
@@ -296,6 +300,12 @@ func answerFrom(raw []byte) (string, error) {
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
 		return "", fmt.Errorf("decode claude output: %w: %s", err, truncate(raw))
 	}
+	return answerFromEnvelope(wrapper)
+}
+
+// answerFromEnvelope is the half that both output formats share, since the
+// streamed form ends with the same envelope the plain one returns whole.
+func answerFromEnvelope(wrapper envelope) (string, error) {
 	if wrapper.StopReason == "refusal" {
 		return "", ErrRefused
 	}

@@ -10,9 +10,34 @@ import (
 // exist because the same judgment is bought either metered through the API or
 // against a subscription through the Claude Code CLI.
 type Backend interface {
-	Judge(ctx context.Context, req Request) (string, error)
+	Judge(ctx context.Context, req Request) (Outcome, error)
 	Name() string
 }
+
+// Outcome is an answer plus what was done to reach it.
+type Outcome struct {
+	Answer string
+	Steps  []Step
+}
+
+// Step is one thing the model did on the way to answering: a thought, a
+// command, a page fetched, a photograph opened. Shown to the person who asked,
+// because "I looked it up" is worth nothing without which page.
+type Step struct {
+	Kind   StepKind `json:"kind"`
+	Tool   string   `json:"tool,omitempty"`
+	Detail string   `json:"detail,omitempty"`
+	Output string   `json:"output,omitempty"`
+}
+
+// StepKind separates reasoning from action, since they read differently and a
+// reader usually wants one or the other rather than both interleaved.
+type StepKind string
+
+const (
+	StepThought StepKind = "thought"
+	StepAction  StepKind = "action"
+)
 
 // Role is who is speaking in one turn.
 type Role string

@@ -60,7 +60,7 @@ func (j *Judge) Postmortem(ctx context.Context, h History) (Autopsy, error) {
 		return Autopsy{}, err
 	}
 
-	answer, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.backend.Judge(ctx, Request{
 		System:    postmortemSystem,
 		Turns:     []Turn{ask(text(narrate(h)))},
 		Schema:    schema,
@@ -73,7 +73,7 @@ func (j *Judge) Postmortem(ctx context.Context, h History) (Autopsy, error) {
 	}
 
 	var out Autopsy
-	if err := json.Unmarshal([]byte(answer), &out); err != nil {
+	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
 		return Autopsy{}, fmt.Errorf("decode autopsy: %w", err)
 	}
 	return out, nil

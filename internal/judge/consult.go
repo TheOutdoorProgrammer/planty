@@ -25,6 +25,11 @@ type Answer struct {
 	Confidence  float64  `json:"confidence"`
 	LookedAt    string   `json:"looked_at,omitempty"`
 	Suggestions []string `json:"suggested_follow_ups,omitempty"`
+
+	// What was done to reach this, filled in after the model answers rather
+	// than by it. Stored with the turn, so reopening a conversation still
+	// shows how each answer was arrived at.
+	Steps []Step `json:"steps,omitempty"`
 }
 
 const consultSystem = `You are answering a question about one specific houseplant,
@@ -125,7 +130,7 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 	}
 	turns = append(turns, ask(text(asked)))
 
-	reply, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.backend.Judge(ctx, Request{
 		System:    system,
 		Turns:     turns,
 		Offered:   offered,
@@ -142,9 +147,10 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 	}
 
 	var out Answer
-	if err := json.Unmarshal([]byte(reply), &out); err != nil {
+	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
 		return Answer{}, fmt.Errorf("decode answer: %w", err)
 	}
+	out.Steps = outcome.Steps
 	return out, nil
 }
 

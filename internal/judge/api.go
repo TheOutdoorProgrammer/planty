@@ -26,7 +26,7 @@ func newAPIBackend(apiKey, model string) *apiBackend {
 
 func (b *apiBackend) Name() string { return "anthropic api" }
 
-func (b *apiBackend) Judge(ctx context.Context, req Request) (string, error) {
+func (b *apiBackend) Judge(ctx context.Context, req Request) (Outcome, error) {
 	output := anthropic.OutputConfigParam{
 		Format: anthropic.JSONOutputFormatParam{Schema: req.Schema},
 	}
@@ -45,18 +45,18 @@ func (b *apiBackend) Judge(ctx context.Context, req Request) (string, error) {
 		OutputConfig: output,
 	})
 	if err != nil {
-		return "", err
+		return Outcome{}, err
 	}
 	if message.StopReason == anthropic.StopReasonRefusal {
-		return "", ErrRefused
+		return Outcome{}, ErrRefused
 	}
 
 	for _, block := range message.Content {
 		if answer, ok := block.AsAny().(anthropic.TextBlock); ok {
-			return answer.Text, nil
+			return Outcome{Answer: answer.Text}, nil
 		}
 	}
-	return "", fmt.Errorf("no answer in the reply")
+	return Outcome{}, fmt.Errorf("no answer in the reply")
 }
 
 // withOffers names the photographs without attaching them, because an image

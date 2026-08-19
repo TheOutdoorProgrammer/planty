@@ -154,7 +154,7 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 		return Result{}, err
 	}
 
-	answer, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.backend.Judge(ctx, Request{
 		System:    system,
 		Turns:     []Turn{ask(text(describe(e)))},
 		Schema:    schema,
@@ -168,7 +168,7 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 	}
 
 	var out Result
-	if err := json.Unmarshal([]byte(answer), &out); err != nil {
+	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
 		return Result{}, fmt.Errorf("decode verdict: %w", err)
 	}
 	return out, nil

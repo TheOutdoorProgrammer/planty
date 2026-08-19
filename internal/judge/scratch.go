@@ -68,7 +68,7 @@ func (j *Judge) Ask(ctx context.Context, asked string, shown []Offer,
 	}
 	turns = append(turns, ask(text(opening)))
 
-	reply, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.backend.Judge(ctx, Request{
 		System:    system,
 		Turns:     turns,
 		Offered:   shown,
@@ -82,8 +82,9 @@ func (j *Judge) Ask(ctx context.Context, asked string, shown []Offer,
 	}
 
 	var out Answer
-	if err := json.Unmarshal([]byte(reply), &out); err != nil {
+	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
 		return Answer{}, fmt.Errorf("decode answer: %w", err)
 	}
+	out.Steps = outcome.Steps
 	return out, nil
 }

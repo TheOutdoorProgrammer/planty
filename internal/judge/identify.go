@@ -73,7 +73,7 @@ func (j *Judge) Identify(ctx context.Context, image Frame, seen Sighting) ([]Can
 		return nil, err
 	}
 
-	reply, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.backend.Judge(ctx, Request{
 		System: identifySystem,
 		Turns: []Turn{ask(
 			picture(image.Media, image.Bytes),
@@ -89,7 +89,7 @@ func (j *Judge) Identify(ctx context.Context, image Frame, seen Sighting) ([]Can
 	var answer struct {
 		Candidates []Candidate `json:"candidates"`
 	}
-	if err := json.Unmarshal([]byte(reply), &answer); err != nil {
+	if err := json.Unmarshal([]byte(outcome.Answer), &answer); err != nil {
 		return nil, fmt.Errorf("decode candidates: %w", err)
 	}
 	if len(answer.Candidates) > MaxCandidates {
