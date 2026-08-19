@@ -20,6 +20,10 @@ import (
 // larger is a mistake, and the vision call has its own limits anyway.
 const MaxPhotoBytes = 12 << 20
 
+// Multipart framing is small, but the request limit must leave room for it
+// beyond the file limit or a valid image at the boundary would be rejected.
+const maxMultipartOverhead = 64 << 10
+
 // PhotoLinkTTL is how long a presigned image link stays valid.
 const PhotoLinkTTL = 30 * time.Minute
 
@@ -43,9 +47,9 @@ func (s *Server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, contentType, caption, takenAt, err := readUpload(r)
+	body, contentType, caption, takenAt, err := readUpload(w, r)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, statusForUpload(err), err)
 		return
 	}
 	if takenAt.IsZero() {
@@ -115,10 +119,20 @@ func statusForPhoto(err error) int {
 	}
 }
 
+func statusForUpload(err error) int {
+	if errors.Is(err, ErrPhotoSize) {
+		return http.StatusRequestEntityTooLarge
+	}
+	return http.StatusBadRequest
+}
+
 // readUpload accepts either shape, because the two clients have different
 // natural idioms: URLSession builds multipart, and curl or an agent posts raw
 // bytes with a Content-Type. Rejecting one of them would be arbitrary.
-func readUpload(r *http.Request) (
+func readUpload(
+	w http.ResponseWriter,
+	r *http.Request,
+) (
 	body []byte,
 	contentType string,
 	caption string,
@@ -133,12 +147,13 @@ func readUpload(r *http.Request) (
 	}
 
 	if !strings.HasPrefix(contentType, "multipart/form-data") {
-		body, err = io.ReadAll(io.LimitReader(r.Body, MaxPhotoBytes+1))
+		body, err = readBounded(r.Body, MaxPhotoBytes)
 		return body, contentType, caption, takenAt, err
 	}
 
+	r.Body = http.MaxBytesReader(w, r.Body, MaxPhotoBytes+maxMultipartOverhead)
 	if err := r.ParseMultipartForm(MaxPhotoBytes); err != nil {
-		return nil, "", "", time.Time{}, err
+		return nil, "", "", time.Time{}, uploadReadError(err)
 	}
 	file, header, err := r.FormFile("photo")
 	if err != nil {
@@ -155,8 +170,27 @@ func readUpload(r *http.Request) (
 			return nil, "", "", time.Time{}, err
 		}
 	}
-	body, err = io.ReadAll(io.LimitReader(file, MaxPhotoBytes+1))
+	body, err = readBounded(file, MaxPhotoBytes)
 	return body, header.Header.Get("Content-Type"), caption, takenAt, err
+}
+
+func readBounded(reader io.Reader, limit int64) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(reader, limit+1))
+	if err != nil {
+		return nil, uploadReadError(err)
+	}
+	if int64(len(body)) > limit {
+		return nil, ErrPhotoSize
+	}
+	return body, nil
+}
+
+func uploadReadError(err error) error {
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		return ErrPhotoSize
+	}
+	return err
 }
 
 func parseUploadTime(raw string) (time.Time, error) {

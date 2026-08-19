@@ -2,9 +2,9 @@ package api
 
 import (
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
@@ -24,9 +24,9 @@ func (s *Server) identify(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	image, media, err := readImage(r, MaxIdentifyBytes)
+	image, media, err := readImage(w, r, MaxIdentifyBytes)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, statusForUpload(err), err)
 		return
 	}
 
@@ -54,9 +54,9 @@ func (s *Server) plantFromPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	image, media, err := readImage(r, MaxPhotoBytes)
+	image, media, err := readImage(w, r, MaxPhotoBytes)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, statusForUpload(err), err)
 		return
 	}
 
@@ -155,16 +155,22 @@ func sighting(r *http.Request) judge.Sighting {
 
 // readImage accepts a multipart part named photo, or raw bytes with a content
 // type, matching how photo upload already works.
-func readImage(r *http.Request, limit int64) ([]byte, string, error) {
-	body := http.MaxBytesReader(nil, r.Body, limit)
-
-	if file, header, err := r.FormFile("photo"); err == nil {
+func readImage(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, string, error) {
+	if strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/form-data") {
+		r.Body = http.MaxBytesReader(w, r.Body, limit+maxMultipartOverhead)
+		if err := r.ParseMultipartForm(limit); err != nil {
+			return nil, "", uploadReadError(err)
+		}
+		file, header, err := r.FormFile("photo")
+		if err != nil {
+			return nil, "", errors.New("multipart upload needs a 'photo' part")
+		}
 		defer func() { _ = file.Close() }()
 		media := header.Header.Get("Content-Type")
 		if media == "" {
 			media = "image/jpeg"
 		}
-		bytes, err := io.ReadAll(file)
+		bytes, err := readBounded(file, limit)
 		return bytes, media, err
 	}
 
@@ -172,7 +178,7 @@ func readImage(r *http.Request, limit int64) ([]byte, string, error) {
 	if media == "" {
 		media = "image/jpeg"
 	}
-	bytes, err := io.ReadAll(body)
+	bytes, err := readBounded(r.Body, limit)
 	if err != nil {
 		return nil, "", err
 	}

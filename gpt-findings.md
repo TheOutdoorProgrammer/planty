@@ -54,9 +54,10 @@ An item is checked only after the implementation, regression test, commit, and p
   Imported historical photos are placed at upload time, corrupting the timeline used for longitudinal comparisons.
   Fixed by accepting and validating RFC3339 `taken_at` on both multipart and raw upload shapes, defaulting only omitted timestamps to now, and adding regression tests for preservation and rejection.
 
-- [ ] **PNT-009 — Multipart image endpoints do not enforce their advertised request limits.**
+- [x] **PNT-009 — Multipart image endpoints do not enforce their advertised request limits.**
   `internal/api/identify.go:158-175` bounds a local reader but parses the original `r.Body`, and `ParseMultipartForm` in `internal/api/photos.go:127` is a memory threshold rather than a request-size limit.
   Oversized unauthenticated requests can consume pod memory or the 1 GiB temporary volume.
+  Fixed by bounding the actual multipart request before parsing, independently bounding each file, returning 413 for size failures, and testing raw and multipart limits.
 
 - [ ] **PNT-010 — Conversation IDs can cross-contaminate plants and scratch chats.**
   `internal/api/consult.go:118-133`, `internal/api/ask.go:95-112`, and `internal/store/conversation.go:49-55` load by conversation UUID without asserting the plant or scratch owner.

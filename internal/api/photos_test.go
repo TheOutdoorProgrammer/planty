@@ -2,6 +2,7 @@ package api
 
 import (
 	"bytes"
+	"errors"
 	"mime/multipart"
 	"net/http/httptest"
 	"testing"
@@ -28,7 +29,7 @@ func TestMultipartUploadKeepsCaptureTime(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "/v1/plants/fern/photos", &body)
 	req.Header.Set("Content-Type", form.FormDataContentType())
-	_, _, _, got, err := readUpload(req)
+	_, _, _, got, err := readUpload(httptest.NewRecorder(), req)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,7 +46,37 @@ func TestUploadRejectsInvalidCaptureTime(t *testing.T) {
 	)
 	req.Header.Set("Content-Type", "image/jpeg")
 
-	if _, _, _, _, err := readUpload(req); err == nil {
+	if _, _, _, _, err := readUpload(httptest.NewRecorder(), req); err == nil {
 		t.Fatal("invalid taken_at was accepted")
+	}
+}
+
+func TestMultipartIdentificationEnforcesTheFileLimit(t *testing.T) {
+	var body bytes.Buffer
+	form := multipart.NewWriter(&body)
+	part, err := form.CreateFormFile("photo", "plant.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := part.Write([]byte("12345")); err != nil {
+		t.Fatal(err)
+	}
+	if err := form.Close(); err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest("POST", "/v1/identify", &body)
+	req.Header.Set("Content-Type", form.FormDataContentType())
+
+	if _, _, err := readImage(httptest.NewRecorder(), req, 4); !errors.Is(err, ErrPhotoSize) {
+		t.Fatalf("oversized multipart image returned %v, want ErrPhotoSize", err)
+	}
+}
+
+func TestRawIdentificationEnforcesTheFileLimit(t *testing.T) {
+	req := httptest.NewRequest("POST", "/v1/identify", bytes.NewReader([]byte("12345")))
+	req.Header.Set("Content-Type", "image/jpeg")
+
+	if _, _, err := readImage(httptest.NewRecorder(), req, 4); !errors.Is(err, ErrPhotoSize) {
+		t.Fatalf("oversized raw image returned %v, want ErrPhotoSize", err)
 	}
 }
