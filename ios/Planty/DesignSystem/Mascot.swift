@@ -38,6 +38,11 @@ struct PlantPhotoView: View {
     var localJPEG: Data?
     var height: CGFloat = 220
 
+    /// Off for the small tiles in a list, where a tap means "open the plant".
+    var opensFullScreen = true
+
+    @State private var isViewing = false
+
     var body: some View {
         Group {
             if let localJPEG, let image = UIImage(data: localJPEG) {
@@ -59,6 +64,16 @@ struct PlantPhotoView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(label)
+        .modifier(Openable(
+            enabled: opensFullScreen && hasPicture,
+            isViewing: $isViewing,
+            plant: plant, photo: photo, localJPEG: localJPEG
+        ))
+    }
+
+    /// A stand-in is not worth opening full screen.
+    private var hasPicture: Bool {
+        localJPEG != nil || photo?.url != nil || plant.photoURL != nil
     }
 
     /// A presigned link expires, so a failure here is ordinary rather than an
@@ -124,5 +139,31 @@ struct PlantPhotoView: View {
             return "No photo of \(plant.commonName) yet."
         }
         return photo.accessibilityDescription(plantName: plant.commonName)
+    }
+}
+
+
+/// Makes a photograph open full screen, and does nothing at all when there is
+/// no photograph to open.
+private struct Openable: ViewModifier {
+    let enabled: Bool
+    @Binding var isViewing: Bool
+    let plant: Plant
+    let photo: Photo?
+    let localJPEG: Data?
+
+    func body(content: Content) -> some View {
+        if enabled {
+            content
+                .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+                .onTapGesture { isViewing = true }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint("Opens the photograph full screen")
+                .fullScreenCover(isPresented: $isViewing) {
+                    PhotoViewer(plant: plant, photo: photo, localJPEG: localJPEG)
+                }
+        } else {
+            content
+        }
     }
 }

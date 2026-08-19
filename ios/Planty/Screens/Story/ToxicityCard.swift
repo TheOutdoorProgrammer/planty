@@ -165,6 +165,9 @@ struct ToxicityCard<Ask: View>: View {
                 Spacer()
             }
             .foregroundStyle(PlantyColor.secondaryText)
+            // A row of caption text is about sixteen points tall, which is a
+            // target you cannot reliably hit. Forty-four is Apple's minimum.
+            .frame(minHeight: 44)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

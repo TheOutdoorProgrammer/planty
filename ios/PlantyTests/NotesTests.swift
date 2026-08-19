@@ -178,3 +178,45 @@ struct AnswerStepTests {
         #expect(answer.steps.first?.icon == "exclamationmark.triangle")
     }
 }
+
+@Suite("A day in the story")
+struct StoryNarrativeTests {
+    private func timeline(on day: Date, notes: [String]) -> PlantTimeline {
+        PlantTimeline(
+            observations: notes.map {
+                PlantObservation(
+                    id: UUID(), plantID: UUID(), kind: .note, body: $0,
+                    occurredAt: day, source: .app, createdAt: day
+                )
+            },
+            photos: [], verdicts: [], sensors: [], readings: []
+        )
+    }
+
+    /// Two unrelated notes joined by a bare space read as one mangled
+    /// sentence: a jotting like "gate probe" ran straight into the verdict.
+    @Test("Two notes on one day do not run together")
+    func detailsDoNotRunTogether() {
+        let day = Date(timeIntervalSince1970: 1_760_000_000)
+        let chapters = StoryBuilder.chapters(
+            from: timeline(on: day, notes: ["gate probe", "Watered it thoroughly"])
+        )
+
+        guard let narrative = chapters.first?.narrative else {
+            Issue.record("no chapter was built")
+            return
+        }
+        #expect(!narrative.contains("gate probe Watered"),
+                "two notes ran into each other: \(narrative)")
+        #expect(narrative.contains("gate probe."), "the first note was not ended")
+    }
+
+    @Test("A note that already ends properly is not given a second full stop")
+    func endedSentencesAreLeftAlone() {
+        let day = Date(timeIntervalSince1970: 1_760_000_000)
+        let chapters = StoryBuilder.chapters(
+            from: timeline(on: day, notes: ["Watered it."])
+        )
+        #expect(chapters.first?.narrative.contains("Watered it..") == false)
+    }
+}

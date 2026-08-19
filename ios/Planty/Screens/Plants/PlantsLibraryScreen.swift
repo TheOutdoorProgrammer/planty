@@ -184,7 +184,9 @@ struct PlantLibraryRow: View {
 
     var body: some View {
         HStack(spacing: 14) {
-            PlantPhotoView(plant: plant, height: 64)
+            // A tap on this row means "open the plant", so the thumbnail must
+            // not steal it to show one picture full screen.
+            PlantPhotoView(plant: plant, height: 64, opensFullScreen: false)
                 .frame(width: 64)
 
             VStack(alignment: .leading, spacing: 5) {

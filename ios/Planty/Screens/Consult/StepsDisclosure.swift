@@ -26,6 +26,9 @@ struct StepsDisclosure: View {
                         Spacer()
                     }
                     .foregroundStyle(PlantyColor.secondaryText)
+                    // Caption text is about sixteen points tall, which is not a
+                    // target anybody can hit. Forty-four is Apple's minimum.
+                    .frame(minHeight: 44)
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
@@ -84,6 +87,7 @@ private struct StepRow: View {
                     }
                     Spacer(minLength: 0)
                 }
+                .frame(minHeight: 44)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)

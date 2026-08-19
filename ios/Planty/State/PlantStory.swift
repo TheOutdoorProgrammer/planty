@@ -99,10 +99,21 @@ enum StoryBuilder {
     }
 
     private static func narrative(for events: [StoryEvent]) -> String {
-        let sentences = events.compactMap(\.detail).filter { !$0.isEmpty }
+        let sentences = events.compactMap(\.detail)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
         guard !sentences.isEmpty else {
             return events.map(\.title).joined(separator: ". ") + "."
         }
-        return sentences.prefix(2).joined(separator: " ")
+        // Two unrelated notes joined by a bare space read as one mangled
+        // sentence: a jotting like "gate probe" ran straight into the day's
+        // verdict. Anything without an end gets one.
+        return sentences.prefix(2).map(ended).joined(separator: " ")
+    }
+
+    /// Ends a fragment so the next one cannot run into it.
+    private static func ended(_ sentence: String) -> String {
+        guard let last = sentence.last, !".!?…".contains(last) else { return sentence }
+        return sentence + "."
     }
 }
