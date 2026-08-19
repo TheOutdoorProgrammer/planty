@@ -11,24 +11,34 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
-// notes lists what has been written down about a plant.
+// notes lists what has been written down, about one plant or about the house.
 func (d Deps) notes(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("notes")
 	slug := set.String("plant", "", "the plant's slug")
+	household := set.Bool("household", false, "notes about the house rather than a plant")
 	if err := parse(set, args); err != nil {
 		return err
 	}
-
-	p, err := d.lookUp(ctx, *slug)
-	if err != nil {
-		return err
+	if (*slug == "") == !*household {
+		return errors.New("say which: --plant <slug> or --household, not both and not neither")
 	}
-	notes, err := d.Store.Notes(ctx, p.ID)
+
+	var owner uuid.UUID
+	subject := "the household"
+	if !*household {
+		p, err := d.lookUp(ctx, *slug)
+		if err != nil {
+			return err
+		}
+		owner, subject = p.ID, p.Slug
+	}
+
+	notes, err := d.Store.Notes(ctx, owner)
 	if err != nil {
 		return err
 	}
 	if len(notes) == 0 {
-		_, _ = fmt.Fprintf(out, "no notes on %s\n", p.Slug)
+		_, _ = fmt.Fprintf(out, "no notes on %s\n", subject)
 		return nil
 	}
 
@@ -47,7 +57,8 @@ func (d Deps) notes(ctx context.Context, out io.Writer, args []string) error {
 // only mean an existing one.
 func (d Deps) note(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("note")
-	slug := set.String("plant", "", "the plant's slug, to write a new note")
+	slug := set.String("plant", "", "the plant's slug, to write a new note about it")
+	household := set.Bool("household", false, "write about the house rather than a plant")
 	id := set.String("id", "", "an existing note's id, to change or remove it")
 	title := set.String("title", "", "an optional heading")
 	body := set.String("text", "", "the note itself")
@@ -57,8 +68,14 @@ func (d Deps) note(ctx context.Context, out io.Writer, args []string) error {
 	}
 
 	seen := given(set)
-	if (*slug == "") == (*id == "") {
-		return errors.New("say which: --plant <slug> to write a new note, or --id <id> to change one")
+	subjects := 0
+	for _, given := range []bool{*slug != "", *household, *id != ""} {
+		if given {
+			subjects++
+		}
+	}
+	if subjects != 1 {
+		return errors.New("say exactly one of: --plant <slug>, --household, or --id <id>")
 	}
 
 	if *id != "" {
@@ -83,17 +100,23 @@ func (d Deps) note(ctx context.Context, out io.Writer, args []string) error {
 		return errors.New("--text is what the note says, and it cannot be empty")
 	}
 
-	p, err := d.lookUp(ctx, *slug)
-	if err != nil {
-		return err
+	var owner uuid.UUID
+	subject := "the household"
+	if !*household {
+		p, err := d.lookUp(ctx, *slug)
+		if err != nil {
+			return err
+		}
+		owner, subject = p.ID, p.Slug
 	}
+
 	written, err := d.Store.AddNote(ctx, plant.Note{
-		PlantID: p.ID, Title: *title, Body: *body,
+		PlantID: owner, Title: *title, Body: *body,
 	})
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(out, "noted against %s: %s\n", p.Slug, written.ID)
+	_, _ = fmt.Fprintf(out, "noted against %s: %s\n", subject, written.ID)
 	return nil
 }
 

@@ -21,13 +21,13 @@ func TestOneCaptureIsOnePhotograph(t *testing.T) {
 	}
 
 	first, err := s.SavePhoto(ctx, plant.Photo{
-		PlantID: p.ID, StorageKey: t.Name()+"-a.jpg", ContentHash: t.Name()+"-same",
+		PlantID: p.ID, StorageKey: t.Name() + "-a.jpg", ContentHash: t.Name() + "-same",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	again, err := s.SavePhoto(ctx, plant.Photo{
-		PlantID: p.ID, StorageKey: t.Name()+"-b.jpg", ContentHash: t.Name()+"-same",
+		PlantID: p.ID, StorageKey: t.Name() + "-b.jpg", ContentHash: t.Name() + "-same",
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -62,10 +62,10 @@ func TestADifferentPictureIsKept(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := s.SavePhoto(ctx, plant.Photo{PlantID: p.ID, StorageKey: t.Name()+"-a.jpg", ContentHash: t.Name()+"-aaa"}); err != nil {
+	if _, err := s.SavePhoto(ctx, plant.Photo{PlantID: p.ID, StorageKey: t.Name() + "-a.jpg", ContentHash: t.Name() + "-aaa"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.SavePhoto(ctx, plant.Photo{PlantID: p.ID, StorageKey: t.Name()+"-b.jpg", ContentHash: t.Name()+"-bbb"}); err != nil {
+	if _, err := s.SavePhoto(ctx, plant.Photo{PlantID: p.ID, StorageKey: t.Name() + "-b.jpg", ContentHash: t.Name() + "-bbb"}); err != nil {
 		t.Fatal(err)
 	}
 

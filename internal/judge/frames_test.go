@@ -193,3 +193,36 @@ func TestALivingPlantIsNotNarratedAsDead(t *testing.T) {
 		t.Errorf("an autopsy lost its past tense:\n%s", dead)
 	}
 }
+
+// A cat that chews things changes what the right advice is, not merely how it
+// is worded, so it has to reach the text the model actually reads.
+func TestTheHouseholdReachesTheRecord(t *testing.T) {
+	h := History{
+		Plant: plant.Plant{CommonName: "Golden Pothos", Slug: "golden-pothos"},
+		Household: []plant.Note{
+			{Title: "Cat", Body: "there is a cat indoors that chews leaves"},
+			{Body: "nobody is home in August"},
+		},
+	}
+
+	written := record(h, ongoing)
+
+	if !strings.Contains(written, "chews leaves") {
+		t.Error("a household note never reached the model's record")
+	}
+	if !strings.Contains(written, "Cat: there is a cat") {
+		t.Error("the note's heading was dropped")
+	}
+	if !strings.Contains(written, "nobody is home in August") {
+		t.Error("an untitled household note was dropped")
+	}
+}
+
+// An empty section reading "true of this house:" followed by nothing is worse
+// than no section at all.
+func TestNoHouseholdNotesMeansNoSection(t *testing.T) {
+	h := History{Plant: plant.Plant{CommonName: "Fern", Slug: "fern"}}
+	if strings.Contains(record(h, ongoing), "True of this house") {
+		t.Error("an empty household section was written")
+	}
+}

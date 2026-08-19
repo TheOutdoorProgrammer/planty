@@ -15,17 +15,29 @@ const noteColumns = `id, plant_id, coalesce(title,''), body, created_at, updated
 
 func scanNote(row pgx.Row) (plant.Note, error) {
 	var n plant.Note
-	err := row.Scan(&n.ID, &n.PlantID, &n.Title, &n.Body, &n.CreatedAt, &n.UpdatedAt)
+	var owner *uuid.UUID
+	err := row.Scan(&n.ID, &owner, &n.Title, &n.Body, &n.CreatedAt, &n.UpdatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return plant.Note{}, ErrNotFound
+	}
+	// Null means the household rather than any plant.
+	if owner != nil {
+		n.PlantID = *owner
 	}
 	return n, err
 }
 
-// Notes returns a plant's notes, newest first.
+// Notes returns notes newest first: a plant's own, or the household's when
+// the zero uuid is given. The household's are about the place rather than
+// anything growing in it, and are read on every consultation.
 func (s *Store) Notes(ctx context.Context, plantID uuid.UUID) ([]plant.Note, error) {
+	var owner any
+	if plantID != uuid.Nil {
+		owner = plantID
+	}
 	rows, err := s.pool.Query(ctx, `SELECT `+noteColumns+`
-		FROM plant_notes WHERE plant_id = $1 ORDER BY created_at DESC`, plantID)
+		FROM notes WHERE plant_id IS NOT DISTINCT FROM $1
+		ORDER BY created_at DESC`, owner)
 	if err != nil {
 		return nil, err
 	}
@@ -45,7 +57,7 @@ func (s *Store) Notes(ctx context.Context, plantID uuid.UUID) ([]plant.Note, err
 // Note returns one note by id.
 func (s *Store) Note(ctx context.Context, id uuid.UUID) (plant.Note, error) {
 	return scanNote(s.pool.QueryRow(ctx,
-		`SELECT `+noteColumns+` FROM plant_notes WHERE id = $1`, id))
+		`SELECT `+noteColumns+` FROM notes WHERE id = $1`, id))
 }
 
 // AddNote writes a new note against a plant.
@@ -53,10 +65,14 @@ func (s *Store) AddNote(ctx context.Context, n plant.Note) (plant.Note, error) {
 	if strings.TrimSpace(n.Body) == "" {
 		return plant.Note{}, invalidNote("a note needs something in it")
 	}
+	var owner any
+	if n.PlantID != uuid.Nil {
+		owner = n.PlantID
+	}
 	return scanNote(s.pool.QueryRow(ctx, `
-		INSERT INTO plant_notes (plant_id, title, body)
+		INSERT INTO notes (plant_id, title, body)
 		VALUES ($1, nullif($2,''), $3)
-		RETURNING `+noteColumns, n.PlantID, n.Title, strings.TrimSpace(n.Body)))
+		RETURNING `+noteColumns, owner, n.Title, strings.TrimSpace(n.Body)))
 }
 
 // UpdateNote changes a note's title, body, or both. A nil field is left alone,
@@ -69,7 +85,7 @@ func (s *Store) UpdateNote(ctx context.Context, id uuid.UUID, title, body *strin
 		return plant.Note{}, invalidNote("a note needs something in it; delete it instead")
 	}
 	return scanNote(s.pool.QueryRow(ctx, `
-		UPDATE plant_notes
+		UPDATE notes
 		SET title = coalesce(nullif($2,''), title),
 		    body  = coalesce($3, body),
 		    updated_at = now()
@@ -79,7 +95,7 @@ func (s *Store) UpdateNote(ctx context.Context, id uuid.UUID, title, body *strin
 
 // DeleteNote removes one note, reporting whether there was one to remove.
 func (s *Store) DeleteNote(ctx context.Context, id uuid.UUID) error {
-	tag, err := s.pool.Exec(ctx, `DELETE FROM plant_notes WHERE id = $1`, id)
+	tag, err := s.pool.Exec(ctx, `DELETE FROM notes WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}

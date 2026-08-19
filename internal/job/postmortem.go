@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/google/uuid"
 	"log/slog"
 	"slices"
 	"strings"
@@ -90,6 +91,14 @@ func (p Postmortem) Run(ctx context.Context, slug string) (plant.Postmortem, err
 func Gather(ctx context.Context, db *store.Store, subject plant.Plant,
 	since time.Time) (judge.History, error) {
 	history := judge.History{Plant: subject}
+
+	// Read for every plant, because "there is a cat here" changes the advice
+	// for all of them and belongs to none of them.
+	household, err := db.Notes(ctx, uuid.Nil)
+	if err != nil {
+		return history, err
+	}
+	history.Household = household
 
 	observations, err := db.Observations(ctx, subject.ID, 100)
 	if err != nil {

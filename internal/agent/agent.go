@@ -186,17 +186,25 @@ Verdicts and owners:
               planty agent answer --question <id> --answer <text>
               example: planty agent answer --question 6f0dd1c2-6b3a-4e0e-9d3f-2a4b8c9d0e1f --answer "Repotted in March"
 
-  notes       read what has been written down about a plant
+  notes       read what has been written down, about one plant or the house
               planty agent notes --plant <slug>
+              planty agent notes --household
               example: planty agent notes --plant golden-pothos
 
-  note        write, change or remove one note. --plant writes a new one, --id
-              changes or removes an existing one; ids come from the notes verb
+  note        write, change or remove one note. --plant writes about a plant,
+              --household about the place, --id changes or removes an existing
+              one; ids come from the notes verb
               planty agent note --plant <slug> --text <text> [--title <title>]
+              planty agent note --household --text <text> [--title <title>]
               planty agent note --id <id> [--text <text>] [--title <title>]
               planty agent note --id <id> --delete
               Changing only --text leaves the title alone, and the other way round.
+              A household note is read on every consultation about every plant,
+              so it is where something true of the place goes: an animal that
+              chews things, a room nobody heats, a week nobody is home. Anything
+              true only of one plant is a note on that plant instead.
               example: planty agent note --plant golden-pothos --text "the cat keeps chewing this one"
+              example: planty agent note --household --title "Cat" --text "There is a cat indoors that chews leaves, so placement has to account for it"
 
   attach      file a photograph the person just sent against one of their plants,
               so it joins that plant's history instead of being only a question.

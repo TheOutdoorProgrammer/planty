@@ -17,6 +17,10 @@ type History struct {
 	Verdicts     []plant.Verdict
 	Readings     []Sample
 	PhotoNotes   []string
+
+	// True of the house rather than of this plant, and true of every other
+	// plant too: a cat that chews things, a week nobody is home.
+	Household []plant.Note
 }
 
 // Sample is one soil reading in the run-up, already expressed as a fraction of
@@ -125,6 +129,19 @@ func record(h History, voice tense) string {
 	}
 	if p.CareProfile.OwnerSays != "" {
 		fmt.Fprintf(&b, "%s: %q\n", voice.ownerSaid, p.CareProfile.OwnerSays)
+	}
+
+	// Before the readings on purpose: a cat that chews things changes what the
+	// right advice is, not merely how it is worded.
+	if len(h.Household) > 0 {
+		b.WriteString("\nTrue of this house, and so of every plant in it:\n")
+		for _, note := range h.Household {
+			if note.Title != "" {
+				fmt.Fprintf(&b, "  %s: %s\n", note.Title, note.Body)
+				continue
+			}
+			fmt.Fprintf(&b, "  %s\n", note.Body)
+		}
 	}
 
 	b.WriteString("\nSoil readings, as a fraction of that probe's own dry-to-wet range:\n")

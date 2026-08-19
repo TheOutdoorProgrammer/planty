@@ -53,6 +53,9 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /v1/plants/{slug}/notes", s.listNotes)
 	mux.HandleFunc("POST /v1/plants/{slug}/notes", s.addNote)
+	// No slug: true of the house rather than of anything growing in it.
+	mux.HandleFunc("GET /v1/notes", s.listHouseholdNotes)
+	mux.HandleFunc("POST /v1/notes", s.addHouseholdNote)
 	mux.HandleFunc("PATCH /v1/notes/{id}", s.updateNote)
 	mux.HandleFunc("DELETE /v1/notes/{id}", s.deleteNote)
 

@@ -83,7 +83,8 @@ Two things that do not exist, so that you do not spend a turn looking:
 - There is no memory file and no store of facts on disk. The directory you are
   in is temporary and is deleted the moment this answer is finished, so writing
   anything into it keeps nothing. Something worth remembering about a plant is
-  a note against that plant.
+  a note against that plant, and something worth remembering about the place is
+  a household note, which is read back to you on every conversation.
 - The verb list above is complete. If what you want is not in it, it is not
   available; say so plainly rather than inventing a verb and trying it.
 
