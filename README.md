@@ -109,14 +109,15 @@ The plant data is dull but the pod holds a Home Assistant token and an Anthropic
 cmd/planty/          The binary: serve plus the scheduled jobs
 internal/plant/      Domain types shared by every surface
 internal/store/      Postgres, and the only thing that touches it
-internal/api/        HTTP, 22 routes
-internal/judge/      Claude: daily verdicts, vision diagnosis, autopsies
+internal/api/        HTTP, the whole contract in docs/DATA-MODEL.md
+internal/judge/      Claude: daily verdicts, vision diagnosis, consultations, autopsies
+internal/agent/      The only commands a model may run, and the hook that enforces it
 internal/job/        Scheduled work
 internal/photos/     S3/MinIO object storage
 internal/seed/       The sabbatical plants, as shipped data
 docs/                The data model, the friend's care sheet, the HA side
 adr/                 Decisions worth not re-arguing
-deploy/              Kubernetes manifests, not yet applied
+deploy/              Kubernetes manifests, mirrored into the Flux repo
 design/              UI concept, screen specs, SwiftUI prototype, logo
 ios/                 The app
 ```
