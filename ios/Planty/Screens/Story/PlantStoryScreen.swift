@@ -5,12 +5,24 @@ import SwiftUI
 struct PlantStoryScreen: View {
     @State var store: PlantStoryStore
     @Environment(AppSession.self) private var session
+    @State private var isEditing = false
+    @State private var isLoggingCare = false
+    @State private var isHarvesting = false
+    @State private var isConfirmingDeath = false
+    @State private var deathError: PlantyError?
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 currentState
+
+                if let deathError {
+                    deathCard(deathError)
+                }
+                if store.plant.status == .dead {
+                    postmortemCard
+                }
 
                 if let error = store.error {
                     chapterErrorCard(error)
@@ -35,15 +47,77 @@ struct PlantStoryScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await store.load() }
         .task { await store.load() }
-        .safeAreaInset(edge: .bottom) {
-            Button("Take today's photo") {
-                session.beginCapture(for: store.plant)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Button {
+                        isEditing = true
+                    } label: {
+                        Label("Edit plant", systemImage: "pencil")
+                    }
+                    if !store.plant.status.isRetired {
+                        Button(role: .destructive) {
+                            isConfirmingDeath = true
+                        } label: {
+                            Label("It died\u{2026}", systemImage: "xmark.seal")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .accessibilityLabel("Plant actions")
             }
-            .buttonStyle(PrimaryButtonStyle())
-            .padding(.horizontal, 20)
-            .padding(.vertical, 10)
-            .background(.ultraThinMaterial)
         }
+        .sheet(isPresented: $isEditing) {
+            EditPlantSheet(plant: store.plant) { patch in
+                let failure = await store.saveEdits(patch)
+                if failure == nil { session.library.apply(store.plant) }
+                return failure
+            }
+        }
+        .sheet(isPresented: $isLoggingCare) {
+            CareLogSheet(plantName: store.plant.commonName) { kind, note in
+                await store.record(kind, note: note)
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $isHarvesting) {
+            HarvestSheet(plantName: store.plant.commonName) { quantity, unit, notes in
+                await store.logHarvest(quantity: quantity, unit: unit, notes: notes)
+            }
+            .presentationDetents([.medium, .large])
+        }
+        .confirmationDialog(
+            "Record that \(store.plant.commonName) died?",
+            isPresented: $isConfirmingDeath,
+            titleVisibility: .visible
+        ) {
+            Button("It died", role: .destructive) {
+                Task { await recordDeath() }
+            }
+            Button("Not yet", role: .cancel) {}
+        } message: {
+            Text("""
+                The story and photos stay, and Planty can still say what went \
+                wrong. But this cannot be undone from the app.
+                """)
+        }
+        .safeAreaInset(edge: .bottom) {
+            if !store.plant.status.isRetired {
+                Button("Take today's photo") {
+                    session.beginCapture(for: store.plant)
+                }
+                .buttonStyle(PrimaryButtonStyle())
+                .padding(.horizontal, 20)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial)
+            }
+        }
+    }
+
+    private func recordDeath() async {
+        deathError = await store.markDead()
+        if deathError == nil { session.library.apply(store.plant) }
     }
 
     /// Asking needs no photograph, which is why it sits here rather than
@@ -93,8 +167,41 @@ struct PlantStoryScreen: View {
                 .foregroundStyle(PlantyColor.green)
             }
             plantActions
+            if !store.plant.status.isRetired {
+                careActions
+            }
             shelterControl
         }
+    }
+
+    /// Care gets recorded where the plant lives, not by telling the chat. The
+    /// harvest button only exists where a harvest can.
+    private var careActions: some View {
+        HStack(spacing: 10) {
+            Button {
+                isLoggingCare = true
+            } label: {
+                Label("Log care", systemImage: "checkmark.circle.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(SecondaryButtonStyle())
+            .accessibilityLabel("Log care for \(store.plant.commonName)")
+
+            if isEdible {
+                Button {
+                    isHarvesting = true
+                } label: {
+                    Label("Harvest", systemImage: "basket.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .accessibilityLabel("Log a harvest from \(store.plant.commonName)")
+            }
+        }
+    }
+
+    private var isEdible: Bool {
+        store.plant.domain == .edibleIndoor || store.plant.domain == .edibleOutdoor
     }
 
     /// Only a plant with a cold threshold was ever asked to come in. The row
@@ -172,6 +279,68 @@ struct PlantStoryScreen: View {
         ) {
             Button("Take the first photo") { session.beginCapture(for: store.plant) }
                 .buttonStyle(PrimaryButtonStyle())
+        }
+    }
+
+    /// The lesson gets the loudest type in the card: it is the reason a dead
+    /// plant keeps its record at all.
+    private var postmortemCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Eyebrow(text: "Postmortem", color: PlantyColor.purple)
+
+            if let postmortem = store.postmortem {
+                Text(postmortem.likelyCause)
+                    .font(.headline)
+                Text(postmortem.narrative)
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.secondaryText)
+                if let lesson = postmortem.lesson {
+                    Label("Next time", systemImage: "lightbulb.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(PlantyColor.yellow)
+                        .padding(.top, 4)
+                    Text(lesson)
+                        .font(.title3.weight(.bold))
+                }
+            } else if store.isAskingPostmortem {
+                HStack(alignment: .top, spacing: 12) {
+                    ProgressView()
+                    Text("""
+                        Planty is reading the whole story back before it \
+                        answers. This can take a minute.
+                        """)
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.secondaryText)
+                }
+                .accessibilityElement(children: .combine)
+            } else {
+                Text("\(store.plant.commonName) is recorded as dead. The story above stays.")
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.secondaryText)
+                if let detail = store.postmortemError?.errorDescription {
+                    Text(detail)
+                        .font(.footnote)
+                        .foregroundStyle(PlantyColor.orange)
+                }
+                Button(store.postmortemError == nil ? "Ask what killed it" : "Ask again") {
+                    Task { await store.askPostmortem() }
+                }
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.purple))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .plantyCard(border: PlantyColor.purple.opacity(0.4))
+    }
+
+    private func deathCard(_ failure: PlantyError) -> some View {
+        StateMessage(
+            title: "The death was not recorded.",
+            message: failure.errorDescription ?? "The service could not be reached.",
+            accent: PlantyColor.orange,
+            icon: "exclamationmark.triangle.fill"
+        ) {
+            Button("Try again") { Task { await recordDeath() } }
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.orange))
         }
     }
 

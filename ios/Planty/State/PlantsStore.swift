@@ -43,14 +43,28 @@ final class PlantsStore {
         }
     }
 
-    func create(_ draft: NewPlant) async -> Plant? {
+    /// The failure goes back to the sheet that asked, not into `error`: that
+    /// slot repaints the whole library as a loading problem, and a create that
+    /// did not land is the sheet's news to break while the typing still exists.
+    func create(_ draft: NewPlant) async -> PlantyError? {
         do {
             let created = try await api.createPlant(draft)
             plants.append(created)
-            return created
-        } catch {
-            self.error = PlantyError.from(error)
             return nil
+        } catch {
+            return PlantyError.from(error)
+        }
+    }
+
+    /// A screen that changed one plant pushes the fresh copy in, so the list is
+    /// right without another round trip. Retired plants leave the list the same
+    /// way GET /v1/plants would drop them.
+    func apply(_ updated: Plant) {
+        guard let index = plants.firstIndex(where: { $0.id == updated.id }) else { return }
+        if updated.status.isRetired {
+            plants.remove(at: index)
+        } else {
+            plants[index] = updated.keepingPhoto(from: plants[index])
         }
     }
 
@@ -93,6 +107,18 @@ final class PlantsStore {
     var hasNoMatches: Bool { hasLoaded && !plants.isEmpty && matches.isEmpty }
 
     func clearError() { error = nil }
+}
+
+extension Plant {
+    /// Only the list endpoint sends a photo URL, so a copy that arrived from
+    /// any other call must not blank the picture already on screen.
+    func keepingPhoto(from previous: Plant) -> Plant {
+        guard photoURL == nil else { return self }
+        var kept = self
+        kept.photoURL = previous.photoURL
+        kept.photoTakenAt = previous.photoTakenAt
+        return kept
+    }
 }
 
 struct PlantGroup: Sendable, Hashable, Identifiable {

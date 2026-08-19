@@ -41,10 +41,7 @@ struct PlantsLibraryScreen: View {
             }
             .sheet(isPresented: $isAdding) {
                 AddPlantSheet { draft in
-                    Task {
-                        _ = await store.create(draft)
-                        isAdding = false
-                    }
+                    await store.create(draft)
                 }
             }
             .navigationDestination(for: Plant.self) { plant in
@@ -55,6 +52,28 @@ struct PlantsLibraryScreen: View {
 
     private var list: some View {
         List {
+            // A refresh that failed with plants on screen used to say nothing,
+            // which reads as "everything loaded fine".
+            if let error = store.error {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("This list may be out of date.", systemImage: "wifi.exclamationmark")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(PlantyColor.orange)
+                        if let detail = error.errorDescription {
+                            Text(detail)
+                                .font(.footnote)
+                                .foregroundStyle(PlantyColor.secondaryText)
+                        }
+                        Button("Try again") { Task { await store.load() } }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(PlantyColor.orange)
+                            .frame(minHeight: 44)
+                            .accessibilityLabel("Reload the plant list")
+                    }
+                    .listRowBackground(PlantyColor.orange.opacity(0.12))
+                }
+            }
             ForEach(store.groups) { group in
                 Section {
                     ForEach(group.plants) { plant in

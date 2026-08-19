@@ -1,0 +1,364 @@
+import SwiftUI
+
+/// What the edit sheet holds while somebody types, and the diffing that turns
+/// it into a sparse patch. Pure so the "send only what changed" promise is
+/// testable without a screen.
+struct PlantEditForm {
+    var commonName: String
+    var botanicalName: String
+    var location: String
+    var haArea: String
+    var steward: String
+    var status: PlantStatus
+    var lightExposure: LightExposure
+    var minTempText: String
+    var wateringMethod: WateringMethod
+    var accessibility: PlantAccessibility
+    var potSizeText: String
+    var potMaterial: String
+    var drainage: DrainageChoice
+
+    enum DrainageChoice: Hashable {
+        case unrecorded
+        case drains
+        case sealed
+    }
+
+    enum EditIssue: Error, Equatable {
+        case notANumber(field: String, entered: String)
+
+        var message: String {
+            switch self {
+            case .notANumber(let field, let entered):
+                "Planty cannot read \u{201C}\(entered)\u{201D} as \(field). Digits only, like 42 or 6.5."
+            }
+        }
+    }
+
+    init(plant: Plant) {
+        commonName = plant.commonName
+        botanicalName = plant.botanicalName ?? ""
+        location = plant.location
+        haArea = plant.haArea ?? ""
+        steward = plant.steward
+        status = plant.status
+        lightExposure = plant.lightExposure ?? .unknown
+        minTempText = Self.text(plant.minTempF)
+        wateringMethod = plant.wateringMethod
+        accessibility = plant.accessibility
+        potSizeText = Self.text(plant.potSizeIn)
+        potMaterial = plant.potMaterial ?? ""
+        drainage = switch plant.hasDrainage {
+        case true?: .drains
+        case false?: .sealed
+        case nil: .unrecorded
+        }
+    }
+
+    /// Only differences from `plant` land in the patch, so an untouched form
+    /// produces an empty one and nothing goes on the wire.
+    func patch(against plant: Plant) -> Result<PlantPatch, EditIssue> {
+        var patch = PlantPatch()
+        applyNames(to: &patch, against: plant)
+        applyPlacement(to: &patch, against: plant)
+        applyChoices(to: &patch, against: plant)
+        if let issue = applyNumbers(to: &patch, against: plant) {
+            return .failure(issue)
+        }
+        applyPot(to: &patch, against: plant)
+        return .success(patch)
+    }
+
+    private func applyNames(to patch: inout PlantPatch, against plant: Plant) {
+        let name = commonName.cleaned
+        if !name.isEmpty, name != plant.commonName { patch.commonName = name }
+        setIfChanged(&patch.botanicalName, to: botanicalName, from: plant.botanicalName)
+    }
+
+    // Location and steward are never blank on a plant, so an emptied field
+    // reads as "unchanged" rather than a request to erase them.
+    private func applyPlacement(to patch: inout PlantPatch, against plant: Plant) {
+        let room = location.cleaned
+        if !room.isEmpty, room != plant.location { patch.location = room }
+        setIfChanged(&patch.haArea, to: haArea, from: plant.haArea)
+        let keeper = steward.cleaned
+        if !keeper.isEmpty, keeper != plant.steward { patch.steward = keeper }
+    }
+
+    private func applyChoices(to patch: inout PlantPatch, against plant: Plant) {
+        if status != plant.status { patch.status = status }
+        if lightExposure != (plant.lightExposure ?? .unknown) { patch.lightExposure = lightExposure }
+        if wateringMethod != plant.wateringMethod { patch.wateringMethod = wateringMethod }
+        if accessibility != plant.accessibility { patch.accessibility = accessibility }
+    }
+
+    private func applyNumbers(to patch: inout PlantPatch, against plant: Plant) -> EditIssue? {
+        switch number(from: minTempText, field: "the cold limit") {
+        case .failure(let issue):
+            return issue
+        case .success(let limit):
+            if let limit, limit != plant.minTempF { patch.minTempF = limit }
+        }
+        switch number(from: potSizeText, field: "the pot size") {
+        case .failure(let issue):
+            return issue
+        case .success(let size):
+            if let size, size != plant.potSizeIn { patch.potSizeIn = size }
+        }
+        return nil
+    }
+
+    private func applyPot(to patch: inout PlantPatch, against plant: Plant) {
+        setIfChanged(&patch.potMaterial, to: potMaterial, from: plant.potMaterial)
+        let drains: Bool? = switch drainage {
+        case .unrecorded: nil
+        case .drains: true
+        case .sealed: false
+        }
+        if let drains, drains != plant.hasDrainage { patch.hasDrainage = drains }
+    }
+
+    /// An emptied field clears a value the record already has; one that
+    /// started empty and stayed empty is not a change.
+    private func setIfChanged(_ slot: inout String?, to text: String, from original: String?) {
+        let trimmed = text.cleaned
+        guard trimmed != (original ?? "") else { return }
+        slot = trimmed
+    }
+
+    /// Empty means "left alone". A comma decimal is accepted because that is
+    /// what half the world's keyboards produce.
+    private func number(from text: String, field: String) -> Result<Double?, EditIssue> {
+        let trimmed = text.cleaned
+        guard !trimmed.isEmpty else { return .success(nil) }
+        guard let value = Double(trimmed.replacingOccurrences(of: ",", with: ".")) else {
+            return .failure(.notANumber(field: field, entered: trimmed))
+        }
+        return .success(value)
+    }
+
+    private static func text(_ value: Double?) -> String {
+        guard let value else { return "" }
+        return value.formatted(.number.grouping(.never))
+    }
+}
+
+/// Every field a wrong first impression can get wrong, correctable at last.
+/// Closes only on success; a failure keeps the sheet and the typing.
+struct EditPlantSheet: View {
+    let plant: Plant
+    let save: (PlantPatch) async -> PlantyError?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var form: PlantEditForm
+    @State private var error: PlantyError?
+    @State private var validation: String?
+    @State private var isSaving = false
+
+    init(plant: Plant, save: @escaping (PlantPatch) async -> PlantyError?) {
+        self.plant = plant
+        self.save = save
+        _form = State(initialValue: PlantEditForm(plant: plant))
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let error {
+                    Section {
+                        SheetErrorRow(
+                            headline: "Not saved. Your changes are still here.",
+                            error: error
+                        )
+                    }
+                }
+                if let validation {
+                    Section {
+                        Label(validation, systemImage: "exclamationmark.triangle.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(PlantyColor.orange)
+                            .listRowBackground(PlantyColor.orange.opacity(0.12))
+                    }
+                }
+
+                Section("What is it") {
+                    TextField("Common name", text: $form.commonName)
+                    TextField("Botanical name", text: $form.botanicalName)
+                }
+
+                Section {
+                    TextField("Room", text: $form.location)
+                    TextField("Home Assistant area", text: $form.haArea)
+                } header: {
+                    Text("Where it lives")
+                } footer: {
+                    Text("The area links this plant to that room's sensors.")
+                }
+
+                Section {
+                    TextField("Owner", text: $form.steward)
+                } header: {
+                    Text("Whose is it")
+                } footer: {
+                    Text("\u{201C}\(Plant.stewardSelf)\u{201D} means it is yours.")
+                }
+
+                if !plant.status.isRetired {
+                    Section("How it is doing") {
+                        Picker("Status", selection: $form.status) {
+                            ForEach(statusOptions, id: \.self) { Text($0.editLabel).tag($0) }
+                        }
+                    }
+                }
+
+                Section {
+                    Picker("Light", selection: $form.lightExposure) {
+                        ForEach(lightOptions, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    LabeledContent("Cold limit \u{00B0}F") {
+                        TextField("none", text: $form.minTempText)
+                            .keyboardType(.numbersAndPunctuation)
+                            .multilineTextAlignment(.trailing)
+                            .accessibilityLabel("Cold limit in degrees Fahrenheit")
+                    }
+                } header: {
+                    Text("Light and cold")
+                } footer: {
+                    Text("Below the cold limit, Planty asks for this plant to be brought indoors.")
+                }
+
+                Section("Watering and reach") {
+                    Picker("Watering", selection: $form.wateringMethod) {
+                        ForEach(wateringOptions, id: \.self) { Text($0.label).tag($0) }
+                    }
+                    Picker("How hard to reach", selection: $form.accessibility) {
+                        ForEach(accessibilityOptions, id: \.self) { Text($0.editLabel).tag($0) }
+                    }
+                }
+
+                Section("The pot") {
+                    LabeledContent("Size, inches") {
+                        TextField("none", text: $form.potSizeText)
+                            .keyboardType(.decimalPad)
+                            .multilineTextAlignment(.trailing)
+                            .accessibilityLabel("Pot size in inches")
+                    }
+                    TextField("Material", text: $form.potMaterial)
+                    Picker("Drainage", selection: $form.drainage) {
+                        ForEach(drainageOptions, id: \.self) { Text(drainageLabel($0)).tag($0) }
+                    }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .plantyPage()
+            .navigationTitle("Edit \(plant.commonName)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button {
+                        Task { await submit() }
+                    } label: {
+                        if isSaving {
+                            ProgressView()
+                        } else {
+                            Text("Save")
+                        }
+                    }
+                    .disabled(isSaving || form.commonName.cleaned.isEmpty)
+                    .accessibilityLabel(isSaving ? "Saving" : "Save changes")
+                }
+            }
+        }
+        .interactiveDismissDisabled(isSaving)
+    }
+
+    private func submit() async {
+        validation = nil
+        switch form.patch(against: plant) {
+        case .failure(let issue):
+            validation = issue.message
+        case .success(let patch) where patch.isEmpty:
+            dismiss()
+        case .success(let patch):
+            isSaving = true
+            defer { isSaving = false }
+            error = await save(patch)
+            if error == nil { dismiss() }
+        }
+    }
+
+    // Unknown never appears as a choice; it only stays visible when it is what
+    // the record already says, so the picker cannot lie about the start state.
+    private var statusOptions: [PlantStatus] {
+        withCurrent([.alive, .struggling, .dormant], current: plant.status)
+    }
+
+    private var lightOptions: [LightExposure] {
+        withCurrent(
+            LightExposure.allCases.filter { $0 != .unknown },
+            current: plant.lightExposure ?? .unknown
+        )
+    }
+
+    private var wateringOptions: [WateringMethod] {
+        withCurrent(
+            WateringMethod.allCases.filter { $0 != .unknown },
+            current: plant.wateringMethod
+        )
+    }
+
+    private var accessibilityOptions: [PlantAccessibility] {
+        withCurrent(
+            PlantAccessibility.allCases.filter { $0 != .unknown },
+            current: plant.accessibility
+        )
+    }
+
+    private var drainageOptions: [PlantEditForm.DrainageChoice] {
+        plant.hasDrainage == nil ? [.unrecorded, .drains, .sealed] : [.drains, .sealed]
+    }
+
+    private func drainageLabel(_ choice: PlantEditForm.DrainageChoice) -> String {
+        switch choice {
+        case .unrecorded: "Unrecorded"
+        case .drains: "Has holes"
+        case .sealed: "No holes"
+        }
+    }
+
+    private func withCurrent<T: Hashable>(_ options: [T], current: T) -> [T] {
+        options.contains(current) ? options : options + [current]
+    }
+}
+
+extension String {
+    var cleaned: String { trimmingCharacters(in: .whitespacesAndNewlines) }
+}
+
+private extension PlantStatus {
+    var editLabel: String {
+        switch self {
+        case .alive: "Alive"
+        case .struggling: "Struggling"
+        case .dormant: "Dormant"
+        case .dead: "Dead"
+        case .gone: "Gone"
+        case .unknown: "Unrecorded"
+        }
+    }
+}
+
+private extension PlantAccessibility {
+    var editLabel: String {
+        switch self {
+        case .easy: "Easy to reach"
+        case .awkward: "Awkward"
+        case .hard: "Hard to reach"
+        case .unknown: "Unrecorded"
+        }
+    }
+}

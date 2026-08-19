@@ -7,7 +7,12 @@ struct ReminderDraft: Identifiable, Sendable {
     var kind: ObservationKind
     var everyDays: Int
     var hours: Set<Int>
+    var active: Bool
     var note: String
+
+    /// Every third hour. A full 24 is a wall of toggles, and nobody schedules
+    /// a chore for 3am.
+    static let standardHours = [6, 8, 10, 12, 14, 16, 18, 20, 22]
 
     init(kind: ObservationKind) {
         self.kind = kind
@@ -15,6 +20,7 @@ struct ReminderDraft: Identifiable, Sendable {
         // it opens already saying so rather than making you find it.
         self.everyDays = 1
         self.hours = kind == .misted ? [8, 20] : [8]
+        self.active = true
         self.note = ""
     }
 
@@ -22,12 +28,21 @@ struct ReminderDraft: Identifiable, Sendable {
         self.kind = existing.kind
         self.everyDays = existing.everyDays
         self.hours = Set(existing.atHours)
+        // Dropping this is how editing a paused reminder used to resume it.
+        self.active = existing.active
         self.note = existing.note ?? ""
     }
 
     var isValid: Bool { !hours.isEmpty && (1...365).contains(everyDays) }
 
-    func asNew(active: Bool = true) -> NewReminder {
+    /// The standard grid plus whatever the reminder already holds. An hour set
+    /// outside the grid (the chat agent's 07:00) must still render, or the
+    /// sheet shows every toggle off while the hidden hour survives Save.
+    var offeredHours: [Int] {
+        Set(Self.standardHours).union(hours).sorted()
+    }
+
+    func asNew() -> NewReminder {
         NewReminder(
             kind: kind,
             everyDays: everyDays,
@@ -40,13 +55,22 @@ struct ReminderDraft: Identifiable, Sendable {
 
 struct ReminderSheet: View {
     @State var draft: ReminderDraft
-    let save: (NewReminder) -> Void
+    let save: (NewReminder) async -> PlantyError?
 
     @Environment(\.dismiss) private var dismiss
 
-    /// Every third hour. A full 24 is a wall of toggles, and nobody schedules
-    /// a chore for 3am.
-    private let choosableHours = [6, 8, 10, 12, 14, 16, 18, 20, 22]
+    /// Frozen at open: unticking an off-grid hour must not delete its row, or
+    /// there would be no way to tick it back before saving.
+    private let offeredHours: [Int]
+
+    @State private var isSaving = false
+    @State private var failure: PlantyError?
+
+    init(draft: ReminderDraft, save: @escaping (NewReminder) async -> PlantyError?) {
+        _draft = State(initialValue: draft)
+        self.save = save
+        offeredHours = draft.offeredHours
+    }
 
     var body: some View {
         NavigationStack {
@@ -60,7 +84,7 @@ struct ReminderSheet: View {
                 }
 
                 Section("At") {
-                    ForEach(choosableHours, id: \.self) { hour in
+                    ForEach(offeredHours, id: \.self) { hour in
                         Toggle(Reminder.hourLabel(hour), isOn: binding(for: hour))
                     }
                     if draft.hours.isEmpty {
@@ -74,22 +98,54 @@ struct ReminderSheet: View {
                     TextField("Anything worth remembering", text: $draft.note, axis: .vertical)
                         .lineLimit(1...3)
                 }
+
+                Section {
+                    Toggle(draft.active ? "Active" : "Paused", isOn: $draft.active)
+                } footer: {
+                    Text("Paused reminders keep their schedule but never come due.")
+                }
+
+                if let failure {
+                    Section {
+                        Label {
+                            Text(failureText(failure))
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .foregroundStyle(PlantyColor.orange)
+                    }
+                }
             }
             .navigationTitle(draft.kind.instruction)
             .navigationBarTitleDisplayMode(.inline)
+            .interactiveDismissDisabled(isSaving)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
+                        .disabled(isSaving)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        save(draft.asNew())
-                        dismiss()
+                    Button(isSaving ? "Saving…" : "Save") {
+                        Task { await attemptSave() }
                     }
-                    .disabled(!draft.isValid)
+                    .disabled(!draft.isValid || isSaving)
                 }
             }
         }
+    }
+
+    /// Dismisses only once the service has said yes. A failure keeps the sheet
+    /// and the draft on screen instead of throwing the input away.
+    private func attemptSave() async {
+        isSaving = true
+        failure = await save(draft.asNew())
+        isSaving = false
+        if failure == nil { dismiss() }
+    }
+
+    private func failureText(_ failure: PlantyError) -> String {
+        let reason = failure.errorDescription ?? "The service did not answer."
+        return "\(reason) Nothing was saved; your changes are still here."
     }
 
     private var everyDaysLabel: String {

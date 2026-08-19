@@ -88,15 +88,74 @@ final class PlantStoryStore {
         }
     }
 
-    func record(_ kind: ObservationKind, note: String? = nil) async {
+    /// Failures come back to the sheet that asked instead of landing in
+    /// `error`, which the screen reads as "the story did not load".
+    func record(_ kind: ObservationKind, note: String? = nil) async -> PlantyError? {
         do {
             let created = try await api.addObservation(
                 slug: plant.slug,
                 observation: NewObservation(kind: kind, body: note)
             )
             timeline.observations.insert(created, at: 0)
+            return nil
         } catch {
-            self.error = PlantyError.from(error)
+            return PlantyError.from(error)
+        }
+    }
+
+    /// Sends only what changed; an empty patch never touches the network.
+    func saveEdits(_ patch: PlantPatch) async -> PlantyError? {
+        guard !patch.isEmpty else { return nil }
+        do {
+            let updated = try await api.updatePlant(slug: plant.slug, patch: patch)
+            plant = updated.keepingPhoto(from: plant)
+            return nil
+        } catch {
+            return PlantyError.from(error)
+        }
+    }
+
+    /// Irreversible from the app, which is why the screen confirms first. The
+    /// local copy moves too so the page reads dead without another fetch.
+    func markDead() async -> PlantyError? {
+        do {
+            try await api.archivePlant(slug: plant.slug, status: .dead)
+            plant.status = .dead
+            plant.archivedAt = clock()
+            return nil
+        } catch {
+            return PlantyError.from(error)
+        }
+    }
+
+    func logHarvest(quantity: Double, unit: String, notes: String?) async -> PlantyError? {
+        do {
+            _ = try await api.logHarvest(
+                NewHarvest(occurredAt: clock(), quantity: quantity, unit: unit, notes: notes),
+                on: plant.slug
+            )
+            return nil
+        } catch {
+            return PlantyError.from(error)
+        }
+    }
+
+    private(set) var postmortem: Postmortem?
+    private(set) var postmortemError: PlantyError?
+    private(set) var isAskingPostmortem = false
+
+    /// The service reads the whole story before answering, so this can take a
+    /// minute. The flag is what keeps the screen honest about that.
+    func askPostmortem() async {
+        guard !isAskingPostmortem else { return }
+        isAskingPostmortem = true
+        postmortemError = nil
+        defer { isAskingPostmortem = false }
+        do {
+            postmortem = try await api.postmortem(slug: plant.slug)
+        } catch {
+            guard !PlantyError.isCancellation(error) else { return }
+            postmortemError = PlantyError.from(error)
         }
     }
 
