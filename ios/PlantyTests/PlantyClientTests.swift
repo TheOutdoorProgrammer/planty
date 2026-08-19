@@ -298,3 +298,20 @@ struct MultipartBodyTests {
         #expect(body.contentType == "multipart/form-data; boundary=TESTBOUNDARY")
     }
 }
+
+// A model call takes seven to twenty seconds before it opens a photograph or
+// runs a command; holding it to the same limit as a database read is what put
+// "The service did not answer in time" on screen over a working answer.
+@Suite("Patience")
+struct PatienceTests {
+    @Test("Waiting on a model gets longer than reading a record")
+    func modelCallsWaitLonger() {
+        #expect(Patience.model > Patience.ordinary)
+        #expect(Patience.model >= 120, "a reply that opens a photo can take a while")
+    }
+
+    @Test("An ordinary read still fails fast")
+    func ordinaryCallsFailFast() {
+        #expect(Patience.ordinary <= 30, "a hung read must become a visible error")
+    }
+}

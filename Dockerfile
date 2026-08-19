@@ -46,8 +46,10 @@ RUN set -eux; \
 FROM alpine:3.22
 
 # The CLI shells out and reads its own config, so this cannot be distroless.
+# bash specifically: the Bash tool runs bash, not busybox sh, and without it
+# every command the model tries comes back as a broken shell.
 # hadolint ignore=DL3018
-RUN apk add --no-cache ca-certificates libgcc libstdc++ \
+RUN apk add --no-cache ca-certificates libgcc libstdc++ bash \
     && adduser -D -u 65532 -h /home/planty planty
 
 # On PATH because the model runs `planty agent ...` by name, and symlinked at

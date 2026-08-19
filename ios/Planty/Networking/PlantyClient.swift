@@ -50,7 +50,8 @@ struct PlantyClient: PlantyAPI {
     }
 
     func ask(slug: String, question: PlantQuestion) async throws -> PlantAnswer {
-        try await send("POST", "/v1/plants/\(escaped(slug))/ask", body: question)
+        try await send("POST", "/v1/plants/\(escaped(slug))/ask",
+                       body: question, patience: Patience.model)
     }
 
     func reminders(slug: String) async throws -> [Reminder] {
@@ -113,7 +114,8 @@ struct PlantyClient: PlantyAPI {
         var body = MultipartBody()
         body.appendFile(name: "photo", filename: "subject.jpg", contentType: "image/jpeg", data: jpeg)
 
-        var request = try makeRequest("POST", "/v1/identify", query: query)
+        var request = try makeRequest("POST", "/v1/identify", query: query,
+                                      patience: Patience.model)
         request.setValue(body.contentType, forHTTPHeaderField: "Content-Type")
         request.httpBody = body.finished()
 
@@ -153,9 +155,10 @@ private extension PlantyClient {
     func send<Body: Encodable, T: Decodable>(
         _ method: String,
         _ path: String,
-        body: Body
+        body: Body,
+        patience: TimeInterval = Patience.ordinary
     ) async throws -> T {
-        var request = try makeRequest(method, path)
+        var request = try makeRequest(method, path, patience: patience)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try PlantyCoders.encoder().encode(body)
         return try decode(T.self, from: try await perform(request))
@@ -164,7 +167,8 @@ private extension PlantyClient {
     func makeRequest(
         _ method: String,
         _ path: String,
-        query: [URLQueryItem] = []
+        query: [URLQueryItem] = [],
+        patience: TimeInterval = Patience.ordinary
     ) throws -> URLRequest {
         guard let baseURL = configuration.baseURL else { throw PlantyError.notConfigured }
         guard var components = URLComponents(
@@ -178,7 +182,7 @@ private extension PlantyClient {
             throw PlantyError.transport("Could not build a URL for \(path).")
         }
 
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: url, timeoutInterval: patience)
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         if let token = configuration.token {
@@ -238,4 +242,17 @@ extension URLSession {
         config.waitsForConnectivity = false
         return URLSession(configuration: config)
     }()
+}
+
+/// How long a request is allowed to take. Reading a record is either quick or
+/// broken; waiting on a model is neither, and holding both to the same limit
+/// turned a working answer into "the service did not answer in time".
+enum Patience {
+    /// Fifteen seconds. Anything reading the database.
+    static let ordinary: TimeInterval = 15
+
+    /// Three minutes. Anything that waits on a model: a judgment can open a
+    /// photograph or run a command, and measured replies reach twenty seconds
+    /// before either of those.
+    static let model: TimeInterval = 180
 }

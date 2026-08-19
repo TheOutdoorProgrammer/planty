@@ -32,7 +32,9 @@ struct RemoteDiagnosisService: DiagnosisService {
 
     private func post(path: String, body: DiagnosisRequest) async throws -> DiagnosisTurn {
         guard let baseURL = configuration.baseURL else { throw PlantyError.notConfigured }
-        var request = URLRequest(url: baseURL.appendingPathComponent(path))
+        // A diagnosis reads photographs, so it is one of the slow ones.
+        var request = URLRequest(url: baseURL.appendingPathComponent(path),
+                                 timeoutInterval: Patience.model)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         if let token = configuration.token {
