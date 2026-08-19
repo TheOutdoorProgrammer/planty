@@ -361,18 +361,42 @@ func (d Deps) harvest(ctx context.Context, out io.Writer, args []string) error {
 // water runs the same surveyed, verified LetPot pass as `planty water`. The
 // decisions stay in the job: this verb adds no way to force the pump on.
 func (d Deps) water(ctx context.Context, out io.Writer, args []string) error {
-	if err := newFlags("water").Parse(args); err != nil {
+	if err := parse(newFlags("water"), args); err != nil {
 		return err
 	}
 	if d.Water == nil {
 		return errors.New("watering is not wired up in this process, so nothing was run")
 	}
+	// Counted first, because "the pass completed" reads as "water moved" and a
+	// garden with nothing on the line completes without watering anything.
+	onLine := -1
+	if d.Store != nil {
+		listed, err := d.Store.ListPlants(ctx, store.PlantFilter{
+			Status:         plant.StatusAlive,
+			WateringMethod: plant.WateringLetPot,
+		})
+		if err != nil {
+			return err
+		}
+		onLine = len(listed)
+	}
+
+	if onLine == 0 {
+		_, _ = fmt.Fprintln(out, "nothing is on the LetPot line, so there was nothing to water; "+
+			"every plant here is watered by hand")
+		return nil
+	}
+
 	if err := d.Water(ctx); err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintln(out, "the LetPot watering pass ran to completion: it waters only when "+
-		"a calibrated probe reads dry and nothing on the line is soaked, and it verifies "+
-		"afterwards that water reached the soil; its decisions are in the log lines above")
+	subject := "the plants on the line"
+	if onLine > 0 {
+		subject = fmt.Sprintf("%d plant(s) on the line", onLine)
+	}
+	_, _ = fmt.Fprintf(out, "the LetPot pass ran over %s. It waters only where a calibrated "+
+		"probe reads dry and nothing is already soaked, and it checks afterwards that water "+
+		"reached the soil, so it may well have watered none of them\n", subject)
 	return nil
 }
 

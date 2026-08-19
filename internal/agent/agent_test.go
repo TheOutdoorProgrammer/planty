@@ -111,7 +111,7 @@ func TestWaterRunsTheConfiguredPass(t *testing.T) {
 	if !ran {
 		t.Error("the configured watering pass never ran")
 	}
-	if !strings.Contains(out, "watering pass") {
+	if !strings.Contains(out, "LetPot pass ran") {
 		t.Errorf("no confirmation was printed: %q", out)
 	}
 }
@@ -203,5 +203,18 @@ func TestAQuotedValueSurvives(t *testing.T) {
 	}
 	if *name != "Big Pothos" {
 		t.Errorf("name is %q", *name)
+	}
+}
+
+// "The pass completed" reads as "water moved", and a garden with nothing on
+// the line completes without watering anything. A model relaying that would be
+// telling somebody their plant was watered when it was not.
+func TestWateringNeverClaimsWaterMoved(t *testing.T) {
+	out, err := runVerb(t, Deps{Water: func(context.Context) error { return nil }}, "water")
+	if err != nil {
+		t.Fatalf("water: %v", err)
+	}
+	if !strings.Contains(out, "may well have watered none") {
+		t.Errorf("the report reads as a completed watering: %q", out)
 	}
 }
