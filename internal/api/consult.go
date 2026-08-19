@@ -64,7 +64,8 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	answer, err := s.judge.Consult(r.Context(), history, s.offerPhotos(r, p), ask.Message, prior)
+	answer, err := s.judge.Consult(
+		r.Context(), history, s.offerPhotos(r, p), ask.Message, prior, conversation)
 	if err != nil {
 		s.fail(w, http.StatusBadGateway, err)
 		return

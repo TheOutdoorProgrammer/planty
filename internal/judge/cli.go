@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -34,15 +35,36 @@ type envelope struct {
 }
 
 func (b *cliBackend) Judge(ctx context.Context, req Request) (string, error) {
-	// Everything for one call lives here and dies with it: the photographs the
-	// model reads, and whatever state the CLI decides to write beside them.
+	answer, err := b.run(ctx, req, req.Session != nil && req.Session.Resuming)
+	if !errors.Is(err, errSessionGone) {
+		return answer, err
+	}
+
+	// The session outlived nothing: an emptyDir goes with its pod. Starting it
+	// again from the transcript is slower and still right, which is the only
+	// acceptable way for this optimisation to fail.
+	return b.run(ctx, req, false)
+}
+
+// run performs one call, either continuing the session or establishing it.
+func (b *cliBackend) run(ctx context.Context, req Request, resuming bool) (string, error) {
+	// Dies with the call: the photographs, and whatever the CLI writes beside
+	// them. Sessions are keyed by id rather than directory, so a fresh one
+	// every time still resumes.
 	dir, err := os.MkdirTemp("", "planty-judge-")
 	if err != nil {
 		return "", fmt.Errorf("scratch directory: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
 
-	prompt, err := render(dir, req.Turns)
+	// Resuming means the model already read everything above, so only the new
+	// question is sent. That is the whole saving.
+	turns := req.Turns
+	if resuming {
+		turns = turns[len(turns)-1:]
+	}
+
+	prompt, err := render(dir, turns)
 	if err != nil {
 		return "", err
 	}
@@ -51,24 +73,45 @@ func (b *cliBackend) Judge(ctx context.Context, req Request) (string, error) {
 		return "", err
 	}
 	prompt += catalogue
-	args, err := b.arguments(req)
+	args, err := b.arguments(req, resuming)
 	if err != nil {
 		return "", err
 	}
 
+	// "--" or the prompt is swallowed: --tools takes a list, so a prompt
+	// following it is read as one more tool name and the call dies asking for
+	// input it was handed.
 	var stdout, stderr bytes.Buffer
-	cmd := exec.CommandContext(ctx, b.binary, append(args, prompt)...)
+	cmd := exec.CommandContext(ctx, b.binary, append(args, "--", prompt)...)
 	cmd.Dir = dir
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	cmd.Env = environment()
 
 	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("claude: %w: %s", err, strings.TrimSpace(stderr.String()))
+		complaint := strings.TrimSpace(stderr.String())
+		if resuming && mentionsAMissingSession(complaint) {
+			return "", errSessionGone
+		}
+		return "", fmt.Errorf("claude: %w: %s", err, complaint)
 	}
 	return answerFrom(stdout.Bytes())
 }
 
-func (b *cliBackend) arguments(req Request) ([]string, error) {
+// errSessionGone reports that a session we expected to continue is not there,
+// which is ordinary rather than broken and is retried from the transcript.
+var errSessionGone = errors.New("the session is gone")
+
+func mentionsAMissingSession(complaint string) bool {
+	lowered := strings.ToLower(complaint)
+	for _, phrase := range []string{"no conversation found", "session not found", "no session"} {
+		if strings.Contains(lowered, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+func (b *cliBackend) arguments(req Request, resuming bool) ([]string, error) {
 	schema, err := json.Marshal(req.Schema)
 	if err != nil {
 		return nil, fmt.Errorf("encode schema: %w", err)
@@ -78,14 +121,27 @@ func (b *cliBackend) arguments(req Request) ([]string, error) {
 		"--print",
 		"--output-format", "json",
 		"--model", b.model,
-		"--system-prompt", req.System,
 		"--json-schema", string(schema),
 		// Without this the judgment inherits whatever CLAUDE.md, hooks and MCP
 		// servers happen to sit above the working directory, which for a plant
 		// verdict is contamination rather than context.
 		"--safe-mode",
-		"--no-session-persistence",
 	}
+
+	switch {
+	case req.Session == nil:
+		// One-shot work has nothing to continue, and a session per daily
+		// verdict is a disk filling up for no reason.
+		args = append(args, "--no-session-persistence", "--system-prompt", req.System)
+	case resuming:
+		// The system prompt is already in the session, and passing it again
+		// would put a second copy of it in the context being paid for.
+		args = append(args, "--resume", req.Session.ID.String())
+	default:
+		args = append(args, "--session-id", req.Session.ID.String(),
+			"--system-prompt", req.System)
+	}
+
 	if req.Effort != "" {
 		args = append(args, "--effort", string(req.Effort))
 	}

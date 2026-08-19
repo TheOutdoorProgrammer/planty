@@ -1,6 +1,10 @@
 package judge
 
-import "context"
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
 
 // Backend performs one judgment call and returns the model's JSON answer. Two
 // exist because the same judgment is bought either metered through the API or
@@ -26,8 +30,9 @@ const (
 	EffortHigh   Effort = "high"
 )
 
-// Request is one call: a system prompt, a conversation, and the shape the
-// answer has to take. Every backend must return JSON matching Schema.
+// Request is one call. Turns carries the whole conversation even when Session
+// could resume it, because only one backend can resume and both have to be
+// able to answer the same Request.
 type Request struct {
 	System    string
 	Turns     []Turn
@@ -35,6 +40,20 @@ type Request struct {
 	Schema    map[string]any
 	Effort    Effort
 	MaxTokens int64
+	Session   *Session
+}
+
+// Session lets a backend continue a conversation instead of re-reading it.
+// Nil for one-shot work: a daily verdict has nothing to continue, and keeping
+// a session per verdict would fill a disk to no purpose.
+type Session struct {
+	// ID doubles as the conversation's own id. One identifier for one
+	// conversation is what keeps the two from ever disagreeing.
+	ID uuid.UUID
+
+	// Resuming is false for the first turn, which is the one that has to
+	// establish the session rather than continue it.
+	Resuming bool
 }
 
 // Offer is a photograph the model may look at and is not obliged to. Attaching

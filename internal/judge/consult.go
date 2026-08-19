@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
@@ -49,10 +51,11 @@ type PriorAnswer struct {
 	Reply Answer
 }
 
-// Consult answers a question about a plant from its record, with photographs
-// offered rather than attached.
+// Consult answers a question about a plant from its record, photographs
+// offered rather than attached. The conversation's id doubles as the model
+// session's, so a follow-up continues rather than re-reading everything.
 func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
-	asked string, prior []PriorAnswer) (Answer, error) {
+	asked string, prior []PriorAnswer, conversation uuid.UUID) (Answer, error) {
 	if strings.TrimSpace(asked) == "" {
 		return Answer{}, fmt.Errorf("no question was asked")
 	}
@@ -78,6 +81,7 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 		Offered:   offered,
 		Schema:    schema,
 		MaxTokens: 2048,
+		Session:   &Session{ID: conversation, Resuming: len(prior) > 0},
 		// A conversation is answered rather than deliberated over, and a slow
 		// reply to "is this normal" is a worse answer than a quick one.
 		Effort: EffortMedium,

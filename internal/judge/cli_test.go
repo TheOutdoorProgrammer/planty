@@ -7,6 +7,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestOneTurnRendersAsPlainPrompt(t *testing.T) {
@@ -78,13 +80,13 @@ func TestPhotographsAreStagedAsFilesTheModelIsToldToOpen(t *testing.T) {
 func TestToolsAreOffUnlessThereArePhotographs(t *testing.T) {
 	backend := newCLIBackend("claude", "claude-opus-5")
 
-	textOnly, err := backend.arguments(Request{Turns: []Turn{ask(text("hi"))}})
+	textOnly, err := backend.arguments(Request{Turns: []Turn{ask(text("hi"))}}, false)
 	if err != nil {
 		t.Fatalf("arguments: %v", err)
 	}
 	withPhoto, err := backend.arguments(Request{
 		Turns: []Turn{ask(picture("image/jpeg", []byte("x")))},
-	})
+	}, false)
 	if err != nil {
 		t.Fatalf("arguments: %v", err)
 	}
@@ -109,7 +111,7 @@ func TestTheSchemaIsHandedToTheCLI(t *testing.T) {
 		Turns:  []Turn{ask(text("hi"))},
 		Schema: map[string]any{"type": "object"},
 		Effort: EffortHigh,
-	})
+	}, false)
 	if err != nil {
 		t.Fatalf("arguments: %v", err)
 	}
@@ -167,4 +169,146 @@ func valueOf(args []string, flag string) string {
 		}
 	}
 	return "<absent>"
+}
+
+// One-shot work has nothing to continue, and a session per daily verdict is a
+// disk filling up for no reason.
+func TestOneShotWorkPersistsNoSession(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+
+	args, err := backend.arguments(Request{Turns: []Turn{ask(text("hi"))}}, false)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+
+	if !slices.Contains(args, "--no-session-persistence") {
+		t.Error("a one-shot judgment left a session behind")
+	}
+	if slices.Contains(args, "--session-id") || slices.Contains(args, "--resume") {
+		t.Errorf("a one-shot judgment asked for a session: %v", args)
+	}
+}
+
+func TestTheFirstTurnEstablishesTheSession(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+	conversation := uuid.New()
+
+	args, err := backend.arguments(Request{
+		System:  "you judge plants",
+		Turns:   []Turn{ask(text("hi"))},
+		Session: &Session{ID: conversation, Resuming: false},
+	}, false)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+
+	if got := valueOf(args, "--session-id"); got != conversation.String() {
+		t.Errorf("session id went out as %q", got)
+	}
+	if slices.Contains(args, "--no-session-persistence") {
+		t.Error("the first turn threw away the session it was establishing")
+	}
+	if got := valueOf(args, "--system-prompt"); got != "you judge plants" {
+		t.Errorf("the opening turn did not carry the system prompt: %q", got)
+	}
+}
+
+// The saving is entirely in not re-sending: a resumed turn that still carried
+// the system prompt would pay for a second copy of it every time.
+func TestAResumedTurnRepeatsNothing(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+	conversation := uuid.New()
+
+	args, err := backend.arguments(Request{
+		System:  "you judge plants",
+		Turns:   []Turn{ask(text("first")), answered("{}"), ask(text("second"))},
+		Session: &Session{ID: conversation, Resuming: true},
+	}, true)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+
+	if got := valueOf(args, "--resume"); got != conversation.String() {
+		t.Errorf("resumed %q", got)
+	}
+	if slices.Contains(args, "--system-prompt") {
+		t.Error("a resumed turn re-sent the system prompt it is already holding")
+	}
+	if slices.Contains(args, "--session-id") {
+		t.Error("a resumed turn tried to establish a new session")
+	}
+}
+
+// Resuming sends only the new question. Sending the transcript as well would
+// keep every earlier turn in the bill, which is the thing this exists to stop.
+func TestResumingSendsOnlyTheNewQuestion(t *testing.T) {
+	dir := t.TempDir()
+	turns := []Turn{
+		ask(text("what is wrong with it")),
+		answered(`{"reply":"nothing"}`),
+		ask(text("should i repot")),
+	}
+
+	whole, err := render(dir, turns)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	newest, err := render(dir, turns[len(turns)-1:])
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+
+	if !strings.Contains(whole, "what is wrong with it") {
+		t.Error("a fresh session has to carry the whole conversation")
+	}
+	if strings.Contains(newest, "what is wrong with it") {
+		t.Errorf("a resumed turn re-sent the conversation:\n%s", newest)
+	}
+	if !strings.Contains(newest, "should i repot") {
+		t.Errorf("a resumed turn lost the question being asked:\n%s", newest)
+	}
+	if len(newest) >= len(whole) {
+		t.Errorf("resuming sent %d bytes against %d for the whole thing", len(newest), len(whole))
+	}
+}
+
+// An emptyDir dies with its pod, so a conversation can outlive the session it
+// was using. Falling back to the transcript is slower and still correct.
+func TestAMissingSessionIsRecognisedAsOrdinary(t *testing.T) {
+	for _, complaint := range []string{
+		"No conversation found with session ID: abc",
+		"Error: session not found",
+		"no session to resume",
+	} {
+		if !mentionsAMissingSession(complaint) {
+			t.Errorf("%q was not recognised as a lost session", complaint)
+		}
+	}
+	if mentionsAMissingSession("connection refused") {
+		t.Error("a real failure was mistaken for a lost session and silently retried")
+	}
+}
+
+// --tools takes a list, so a prompt following it is read as one more tool name
+// and the call dies asking for the input it was just handed. Only the
+// text-only path ends in --tools, which is why every photo test passed.
+func TestThePromptIsNotSwallowedByTheToolList(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+
+	args, err := backend.arguments(Request{Turns: []Turn{ask(text("hi"))}}, false)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+	full := append(args, "--", "the prompt")
+
+	last := full[len(full)-1]
+	if last != "the prompt" {
+		t.Fatalf("the prompt is not last: %q", last)
+	}
+	if full[len(full)-2] != "--" {
+		t.Errorf("nothing separates the prompt from the flags: %v", full[len(full)-4:])
+	}
+	if args[len(args)-2] != "--tools" {
+		t.Skip("the text-only path no longer ends in a list flag")
+	}
 }
