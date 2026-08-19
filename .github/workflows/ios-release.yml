@@ -110,9 +110,10 @@ jobs:
           dry-run: ${{ inputs.dry-run }}
           publish: fledge
           fledge-server: ${{ secrets.FLEDGE_URL }}
-          # Passed so the archive is checked before the tag is cut. Without it
-          # a missing archive fails afterwards and burns the version number.
-          fledge-ipa: ${{ runner.temp }}/export/*.ipa
+          # Checked before the tag is cut, so a missing archive does not burn
+          # the version. Named, never globbed: this path is opened verbatim,
+          # and `*.ipa` is simply a filename that does not exist.
+          fledge-ipa: ${{ runner.temp }}/export/Planty.ipa
 
       - name: Where it landed
         if: steps.release.outputs.page-url != ''
