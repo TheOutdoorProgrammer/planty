@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -146,5 +147,43 @@ func TestAStaleDryReadingDoesNotTurnOnThePump(t *testing.T) {
 	}
 	if len(f.services) != 0 {
 		t.Fatalf("stale evidence called Home Assistant services: %v", f.services)
+	}
+}
+
+func TestAnyCalibratedProbeCanConfirmWaterArrived(t *testing.T) {
+	s, ctx := testStore(t)
+	p := onTheLine(t, s, ctx, "Two probe tomato")
+	started := time.Now().Add(-time.Hour)
+
+	for index, readings := range [][]float64{{20, 20}, {20, 30}} {
+		link, err := s.LinkSensor(ctx, plant.SensorLink{
+			PlantID:    &p.ID,
+			HAEntityID: fmt.Sprintf("sensor.two_probe_%d_%d", index, time.Now().UnixNano()),
+			Role:       plant.RoleSoilMoisture,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		link, err = s.Calibrate(ctx, link.ID, 10, 50)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for offset, value := range readings {
+			if err := s.RecordReading(ctx, plant.Reading{
+				SensorLinkID: link.ID,
+				Value:        value,
+				TakenAt:      started.Add(time.Duration(offset*10-1) * time.Minute),
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+
+	rose, err := (Ingest{Store: s}).VerifyWatering(ctx, p, started)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !rose {
+		t.Fatal("the first flat probe hid the second probe's confirmed rise")
 	}
 }

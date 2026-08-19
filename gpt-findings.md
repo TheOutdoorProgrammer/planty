@@ -82,9 +82,10 @@ An item is checked only after the implementation, regression test, commit, and p
   `DELETE ...?status=alive` creates an archived plant that still claims to be alive, while unknown enums can surface as 500.
   Fixed with one domain validator shared by HTTP, agent CLI, and store boundaries, plus unit and Postgres-backed regression tests.
 
-- [ ] **PNT-015 — Verification reads only the first soil probe.**
+- [x] **PNT-015 — Verification reads only the first soil probe.**
   Watering considers every calibrated soil link and lets the driest drive the line, but `internal/job/ingest.go:75-88` returns after the first soil link.
   Probe creation order can therefore decide whether delivery is called successful or clogged.
+  Fixed by evaluating every calibrated soil probe: any rise confirms delivery, every measured probe staying flat fails it, and no measurable result remains unknown.
 
 - [ ] **PNT-016 — Photo deduplication races under concurrent retries.**
   `internal/store/photos.go:27-41` does a separate lookup and insert despite unique indexes.

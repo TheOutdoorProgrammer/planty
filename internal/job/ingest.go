@@ -2,6 +2,7 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -78,11 +79,25 @@ func (i Ingest) VerifyWatering(ctx context.Context, p plant.Plant, claimedAt tim
 	if err != nil {
 		return false, err
 	}
+	measured := false
 	for _, link := range links {
-		if link.Role != plant.RoleSoilMoisture {
+		if link.Role != plant.RoleSoilMoisture || !link.Calibrated() {
 			continue
 		}
-		return i.Store.MoistureRoseAfter(ctx, link.ID, claimedAt, WateringWindow)
+		rose, err := i.Store.MoistureRoseAfter(ctx, link.ID, claimedAt, WateringWindow)
+		if errors.Is(err, store.ErrNotFound) {
+			continue
+		}
+		if err != nil {
+			return false, err
+		}
+		measured = true
+		if rose {
+			return true, nil
+		}
+	}
+	if measured {
+		return false, nil
 	}
 	// ErrNotFound: cannot-tell must not read as did-not-work.
 	return false, store.ErrNotFound
