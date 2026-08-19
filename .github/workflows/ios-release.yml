@@ -65,6 +65,8 @@ jobs:
           TEAM: ${{ secrets.APPLE_TEAM_ID }}
           PLANTY_BASE_URL: ${{ secrets.PLANTY_BASE_URL }}
           FLEDGE_BASE_URL: ${{ secrets.FLEDGE_URL }}
+          # Monotonic and never reused, which is all a build number owes anyone.
+          BUILD_NUMBER: ${{ github.run_number }}
         run: |
           set -euo pipefail
           auth=(
@@ -74,12 +76,17 @@ jobs:
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
           )
 
+          # The build number comes from the run, not the project file. Hand
+          # editing it meant a release could ship a build indistinguishable
+          # from the one before it, which is what happened: fledge listed two
+          # different builds as 1.0 (5) and the update check offered neither.
           xcodebuild archive \
             -scheme Planty \
             -archivePath "$RUNNER_TEMP/Planty.xcarchive" \
             -destination 'generic/platform=iOS' \
             "${auth[@]}" \
             DEVELOPMENT_TEAM="$TEAM" \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             PLANTY_BASE_URL="$PLANTY_BASE_URL" \
             FLEDGE_BASE_URL="$FLEDGE_BASE_URL"
 
