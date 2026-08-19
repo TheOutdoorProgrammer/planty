@@ -731,3 +731,21 @@ func TestAutopsyIsUnavailableWithoutAJudge(t *testing.T) {
 		t.Errorf("got %d, want 503 when nothing can answer", rec.Code)
 	}
 }
+
+// Diagnosis needs photographs; a question about a plant does not, and demanding
+// one to ask anything is what made this awkward from a phone.
+func TestAskNeedsNoPhotographButStillNeedsAQuestion(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{"common_name": unique("Ask subject")})
+
+	rec, _ := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/ask",
+		map[string]any{"message": "does this need water?"})
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("got %d, want 503 when nothing can answer", rec.Code)
+	}
+
+	rec, _ = do(t, h, http.MethodPost, "/v1/plants/"+slug+"/ask", map[string]any{"message": ""})
+	if rec.Code == http.StatusOK {
+		t.Error("an empty question was accepted")
+	}
+}

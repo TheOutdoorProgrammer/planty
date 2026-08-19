@@ -34,6 +34,7 @@ Good:
 - The subscription pays, and the metered key can be deleted from the cluster.
 - The API backend still exists and is one environment variable away, so this is reversible without a rewrite.
 - `--safe-mode` and `--tools ""` mean a judgment is a completion, not an agent: no ambient `CLAUDE.md`, no hooks, no MCP servers leaking into a plant verdict.
+- Photographs can be **offered rather than attached**, which the API cannot do at all. Staged as files with the `Read` tool available, the model opens one only when it would change the answer: asked when a plant was last watered it answers from the log in seven seconds and reports looking at nothing, and asked what colour the leaves are it opens the photo and takes twice as long. Through the API an image block sent is an image block read and paid for, so that backend names the photographs and says it has not seen them.
 
 Bad, and accepted:
 

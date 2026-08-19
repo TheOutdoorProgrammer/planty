@@ -170,6 +170,7 @@ POST   /v1/plants/{slug}/harvests       log a harvest, with quantity and unit
 POST   /v1/plants/{slug}/photos         upload; raw bytes or multipart, both accepted
 GET    /v1/plants/{slug}/timeline       photos oldest first, with short-lived links
 POST   /v1/plants/{slug}/diagnosis      read the photo timeline and report what changed
+POST   /v1/plants/{slug}/ask            ask about it from its record; no photo needed; {message, conversation_id}
 POST   /v1/plants/{slug}/postmortem     ask what killed it, now, rather than waiting for the sweep
 
 GET    /v1/plants/{slug}/reminders      what is set, and what is owed right now
@@ -208,6 +209,15 @@ It answers `{plant, candidates, photo}` so the app can show what else was consid
 
 Owning three pothos is ordinary and slugs are unique, so the second one becomes `golden-pothos-2`.
 If the photograph fails to store the plant still exists, and the reply carries `photo_error` rather than unwinding a record you can see was created.
+
+**`/ask` needs no photograph, and that is the point.** Diagnosis exists to compare frames over time and refuses without them; most questions are not about a picture at all, and requiring one to ask anything is what made this awkward to use.
+It reads the last 45 days of the record: what was done, what the probes saw, what earlier photographs were found to show.
+Long enough for a season to turn and a watering rhythm to be visible, short enough that a plant's whole life is not re-read to answer "are these leaves normal".
+
+**Photographs are offered to `/ask`, not attached.** The recent ones are put where the model can open them, with a line per photo saying when it was taken, and it opens one only if seeing it would change the answer.
+The reply carries `looked_at` so you can tell whether it did.
+Asked "when did I last water this", it answers from the log in about seven seconds and reports looking at nothing; asked what colour the leaves are, it opens the photo and takes twice as long.
+Only the CLI backend can genuinely offer: through the API an image block sent is an image block read and paid for, so that path names the photographs instead and says it has not seen them.
 
 **Reminders are two fields because misting is not watering.** `every_days` says how often a day qualifies and `at_hours` says when on that day, so a mushroom kit is `{every_days: 1, at_hours: [8, 20]}` and a pothos is `{every_days: 10, at_hours: [8]}`.
 An interval expressed only in days cannot say the first one, and misting twice a day is the common case rather than the exotic one.

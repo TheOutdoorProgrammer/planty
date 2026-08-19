@@ -31,9 +31,19 @@ const (
 type Request struct {
 	System    string
 	Turns     []Turn
+	Offered   []Offer
 	Schema    map[string]any
 	Effort    Effort
 	MaxTokens int64
+}
+
+// Offer is a photograph the model may look at and is not obliged to. Attaching
+// a month of a plant's photos to every question is expensive and mostly
+// wasted, and the model is the thing best placed to say whether it needs one.
+type Offer struct {
+	Label string
+	Media string
+	Bytes []byte
 }
 
 // Turn is one message in the conversation.

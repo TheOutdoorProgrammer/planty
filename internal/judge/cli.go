@@ -46,6 +46,11 @@ func (b *cliBackend) Judge(ctx context.Context, req Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	catalogue, err := stage(dir, req.Offered)
+	if err != nil {
+		return "", err
+	}
+	prompt += catalogue
 	args, err := b.arguments(req)
 	if err != nil {
 		return "", err
@@ -85,7 +90,7 @@ func (b *cliBackend) arguments(req Request) ([]string, error) {
 		args = append(args, "--effort", string(req.Effort))
 	}
 
-	if req.images() == 0 {
+	if req.images() == 0 && len(req.Offered) == 0 {
 		return append(args, "--tools", ""), nil
 	}
 	// Images cannot ride inline on a CLI prompt, so they are files the model
@@ -142,6 +147,29 @@ func render(dir string, turns []Turn) (string, error) {
 	return fmt.Sprintf("Read all %d photographs named below from the current "+
 		"directory before answering. They are the evidence.\n\n%s",
 		frames, body.String()), nil
+}
+
+// stage writes the offered photographs into dir and returns the catalogue that
+// tells the model they are there. This is where "you may look" is actually
+// expressed: the files exist, nothing has been read, and it decides.
+func stage(dir string, offered []Offer) (string, error) {
+	if len(offered) == 0 {
+		return "", nil
+	}
+
+	var b strings.Builder
+	b.WriteString("\n\nPhotographs of this plant are on disk in the current " +
+		"directory. Nothing has been looked at. Open one only if seeing it " +
+		"would change your answer; most questions do not need any.\n")
+
+	for i, offer := range offered {
+		name := fmt.Sprintf("day-%02d%s", i+1, extensionFor(offer.Media))
+		if err := os.WriteFile(filepath.Join(dir, name), offer.Bytes, 0o600); err != nil {
+			return "", fmt.Errorf("stage offered photograph: %w", err)
+		}
+		fmt.Fprintf(&b, "  %s  %s\n", name, offer.Label)
+	}
+	return b.String(), nil
 }
 
 func extensionFor(media string) string {

@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -39,7 +41,7 @@ func (b *apiBackend) Judge(ctx context.Context, req Request) (string, error) {
 		Model:        anthropic.Model(b.model),
 		MaxTokens:    req.MaxTokens,
 		System:       []anthropic.TextBlockParam{{Text: req.System}},
-		Messages:     messagesFor(req.Turns),
+		Messages:     messagesFor(withOffers(req)),
 		OutputConfig: output,
 	})
 	if err != nil {
@@ -55,6 +57,26 @@ func (b *apiBackend) Judge(ctx context.Context, req Request) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no answer in the reply")
+}
+
+// withOffers names the photographs without attaching them, because an image
+// block sent is an image block read and paid for. Saying what exists beats
+// quietly turning "you may look" into "you must look at all thirty".
+func withOffers(req Request) []Turn {
+	if len(req.Offered) == 0 {
+		return req.Turns
+	}
+
+	var b strings.Builder
+	b.WriteString("Photographs exist for these days but are not attached, " +
+		"and you have not seen them. Say so if one would have changed your answer.\n")
+	for _, offer := range req.Offered {
+		fmt.Fprintf(&b, "  %s\n", offer.Label)
+	}
+
+	turns := slices.Clone(req.Turns)
+	turns = append(turns, ask(text(b.String())))
+	return turns
 }
 
 func messagesFor(turns []Turn) []anthropic.MessageParam {

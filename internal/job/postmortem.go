@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
@@ -56,7 +57,9 @@ func (p Postmortem) Run(ctx context.Context, slug string) (plant.Postmortem, err
 		return plant.Postmortem{}, err
 	}
 
-	history, err := p.gather(ctx, subject)
+	// From the beginning: the fatal mistake is usually weeks upstream of the
+	// symptom, so a death is read over the plant's whole life.
+	history, err := Gather(ctx, p.Store, subject, subject.CreatedAt)
 	if err != nil {
 		return plant.Postmortem{}, err
 	}
@@ -81,19 +84,26 @@ func (p Postmortem) Run(ctx context.Context, slug string) (plant.Postmortem, err
 	return record, nil
 }
 
-func (p Postmortem) gather(ctx context.Context, subject plant.Plant) (judge.History, error) {
+// Gather assembles what is known about a plant since a point in time. Shared
+// by the autopsy and the consultation, which want the same picture over
+// different windows: a death over a whole life, a question over weeks.
+func Gather(ctx context.Context, db *store.Store, subject plant.Plant,
+	since time.Time) (judge.History, error) {
 	history := judge.History{Plant: subject}
 
-	observations, err := p.Store.Observations(ctx, subject.ID, 100)
+	observations, err := db.Observations(ctx, subject.ID, 100)
 	if err != nil {
 		return history, err
 	}
-	// Oldest first: a death reads as a sequence, not a stack.
+	// Oldest first: a life reads as a sequence, not a stack.
 	for _, o := range slices.Backward(observations) {
+		if o.OccurredAt.Before(since) {
+			continue
+		}
 		history.Observations = append(history.Observations, o)
 	}
 
-	links, err := p.Store.SensorLinks(ctx, &subject.ID)
+	links, err := db.SensorLinks(ctx, &subject.ID)
 	if err != nil {
 		return history, err
 	}
@@ -101,7 +111,7 @@ func (p Postmortem) gather(ctx context.Context, subject plant.Plant) (judge.Hist
 		if link.Role != plant.RoleSoilMoisture || !link.Calibrated() {
 			continue
 		}
-		readings, err := p.Store.ReadingsSince(ctx, link.ID, subject.CreatedAt)
+		readings, err := db.ReadingsSince(ctx, link.ID, since)
 		if err != nil {
 			return history, err
 		}
@@ -113,13 +123,14 @@ func (p Postmortem) gather(ctx context.Context, subject plant.Plant) (judge.Hist
 		}
 	}
 
-	photos, err := p.Store.Photos(ctx, subject.ID, 30)
+	photos, err := db.Photos(ctx, subject.ID, 30)
 	if err == nil {
 		for _, shot := range photos {
-			if shot.VisionFindings != "" {
-				history.PhotoNotes = append(history.PhotoNotes,
-					strings.TrimSpace(shot.VisionFindings))
+			if shot.TakenAt.Before(since) || shot.VisionFindings == "" {
+				continue
 			}
+			history.PhotoNotes = append(history.PhotoNotes,
+				strings.TrimSpace(shot.VisionFindings))
 		}
 	}
 	return history, nil

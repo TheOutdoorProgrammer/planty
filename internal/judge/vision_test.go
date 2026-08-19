@@ -277,3 +277,31 @@ func TestTimelineIsCappedAtTheNewestFrames(t *testing.T) {
 		t.Error("too many frames and the oldest is no longer the same plant in the same pot")
 	}
 }
+
+// A consultation narrated in the postmortem's voice tells the model the plant
+// is dead, and it then answers a question about a living plant as an autopsy.
+func TestALivingPlantIsNotNarratedAsDead(t *testing.T) {
+	h := History{Plant: plant.Plant{
+		CommonName: "Golden pothos",
+		CareProfile: plant.CareProfile{OwnerSays: "it likes being ignored"},
+	}}
+
+	living := record(h, ongoing)
+	if strings.Contains(living, "is dead") {
+		t.Errorf("a living plant's record says it is dead:\n%s", living)
+	}
+	if !strings.Contains(living, "The owner says") {
+		t.Errorf("a living plant's record uses the past tense:\n%s", living)
+	}
+	if !strings.Contains(living, "What has been done to it") {
+		t.Errorf("a living plant's record closes its own story:\n%s", living)
+	}
+
+	dead := narrate(h)
+	if !strings.Contains(dead, "is dead") {
+		t.Errorf("an autopsy no longer says the plant died:\n%s", dead)
+	}
+	if !strings.Contains(dead, "The owner had said") {
+		t.Errorf("an autopsy lost its past tense:\n%s", dead)
+	}
+}

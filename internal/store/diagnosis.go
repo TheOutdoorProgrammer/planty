@@ -28,56 +28,110 @@ func (s *Store) SaveDiagnosisTurn(ctx context.Context, t DiagnosisTurn) (Diagnos
 	if err != nil {
 		return DiagnosisTurn{}, err
 	}
-	if t.ConversationID == uuid.Nil {
-		t.ConversationID = uuid.New()
+
+	saved, err := s.saveTurn(ctx, kindDiagnosis, turn{
+		PlantID:        t.PlantID,
+		ConversationID: t.ConversationID,
+		Asked:          t.Asked,
+		Reply:          reply,
+		PhotoID:        t.PhotoID,
+	})
+	if err != nil {
+		return DiagnosisTurn{}, err
 	}
-
-	row := s.pool.QueryRow(ctx, `
-		INSERT INTO diagnosis_turns (plant_id, conversation_id, asked, reply, photo_id)
-		VALUES ($1, $2, $3, $4, $5)
-		RETURNING id, plant_id, conversation_id, asked, reply, photo_id, created_at`,
-		t.PlantID, t.ConversationID, t.Asked, reply, t.PhotoID)
-
-	return scanDiagnosisTurn(row)
+	return asDiagnosis(saved)
 }
 
 // DiagnosisConversation returns a conversation's turns, oldest first.
-func (s *Store) DiagnosisConversation(ctx context.Context, conversationID uuid.UUID) ([]DiagnosisTurn, error) {
-	rows, err := s.pool.Query(ctx, `
-		SELECT id, plant_id, conversation_id, asked, reply, photo_id, created_at
-		FROM diagnosis_turns
-		WHERE conversation_id = $1
-		ORDER BY created_at`, conversationID)
+func (s *Store) DiagnosisConversation(ctx context.Context,
+	conversationID uuid.UUID) ([]DiagnosisTurn, error) {
+	turns, err := s.conversation(ctx, kindDiagnosis, conversationID)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 
-	out := []DiagnosisTurn{}
-	for rows.Next() {
-		turn, err := scanDiagnosisTurn(rows)
+	out := make([]DiagnosisTurn, 0, len(turns))
+	for _, t := range turns {
+		decoded, err := asDiagnosis(t)
 		if err != nil {
 			return nil, err
 		}
-		out = append(out, turn)
+		out = append(out, decoded)
 	}
-	return out, rows.Err()
+	return out, nil
 }
 
-func scanDiagnosisTurn(row interface {
-	Scan(dest ...any) error
-}) (DiagnosisTurn, error) {
-	var t DiagnosisTurn
-	var reply []byte
+// ConsultTurn is one exchange in a conversation about a plant's record rather
+// than about its photographs.
+type ConsultTurn struct {
+	ID             uuid.UUID    `json:"id"`
+	PlantID        uuid.UUID    `json:"plant_id"`
+	ConversationID uuid.UUID    `json:"conversation_id"`
+	Asked          string       `json:"asked"`
+	Reply          judge.Answer `json:"reply"`
+	CreatedAt      time.Time    `json:"created_at"`
+}
 
-	if err := row.Scan(&t.ID, &t.PlantID, &t.ConversationID, &t.Asked,
-		&reply, &t.PhotoID, &t.CreatedAt); err != nil {
-		return DiagnosisTurn{}, err
+// SaveConsultTurn records one question and its answer.
+func (s *Store) SaveConsultTurn(ctx context.Context, t ConsultTurn) (ConsultTurn, error) {
+	reply, err := json.Marshal(t.Reply)
+	if err != nil {
+		return ConsultTurn{}, err
 	}
-	if len(reply) > 0 {
-		if err := json.Unmarshal(reply, &t.Reply); err != nil {
+
+	saved, err := s.saveTurn(ctx, kindConsult, turn{
+		PlantID:        t.PlantID,
+		ConversationID: t.ConversationID,
+		Asked:          t.Asked,
+		Reply:          reply,
+	})
+	if err != nil {
+		return ConsultTurn{}, err
+	}
+	return asConsult(saved)
+}
+
+// Consultation returns a conversation's turns, oldest first.
+func (s *Store) Consultation(ctx context.Context,
+	conversationID uuid.UUID) ([]ConsultTurn, error) {
+	turns, err := s.conversation(ctx, kindConsult, conversationID)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]ConsultTurn, 0, len(turns))
+	for _, t := range turns {
+		decoded, err := asConsult(t)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, decoded)
+	}
+	return out, nil
+}
+
+func asDiagnosis(t turn) (DiagnosisTurn, error) {
+	out := DiagnosisTurn{
+		ID: t.ID, PlantID: t.PlantID, ConversationID: t.ConversationID,
+		Asked: t.Asked, PhotoID: t.PhotoID, CreatedAt: t.CreatedAt,
+	}
+	if len(t.Reply) > 0 {
+		if err := json.Unmarshal(t.Reply, &out.Reply); err != nil {
 			return DiagnosisTurn{}, err
 		}
 	}
-	return t, nil
+	return out, nil
+}
+
+func asConsult(t turn) (ConsultTurn, error) {
+	out := ConsultTurn{
+		ID: t.ID, PlantID: t.PlantID, ConversationID: t.ConversationID,
+		Asked: t.Asked, CreatedAt: t.CreatedAt,
+	}
+	if len(t.Reply) > 0 {
+		if err := json.Unmarshal(t.Reply, &out.Reply); err != nil {
+			return ConsultTurn{}, err
+		}
+	}
+	return out, nil
 }

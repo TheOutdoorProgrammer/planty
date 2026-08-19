@@ -79,7 +79,31 @@ func (j *Judge) Postmortem(ctx context.Context, h History) (Autopsy, error) {
 	return out, nil
 }
 
-func narrate(h History) string {
+// tense is the wording a plant's record is told in. The same facts read very
+// differently depending on whether the story has ended, and a consultation
+// narrated in the postmortem's voice tells the model the plant is dead.
+type tense struct {
+	opening   string
+	ownerSaid string
+	doneTo    string
+}
+
+var (
+	ended = tense{
+		opening:   " is dead.",
+		ownerSaid: "The owner had said",
+		doneTo:    "What was done to it",
+	}
+	ongoing = tense{
+		opening:   " is alive, and this is its record.",
+		ownerSaid: "The owner says",
+		doneTo:    "What has been done to it",
+	}
+)
+
+func narrate(h History) string { return record(h, ended) }
+
+func record(h History, voice tense) string {
 	var b strings.Builder
 	p := h.Plant
 
@@ -87,7 +111,7 @@ func narrate(h History) string {
 	if p.BotanicalName != "" {
 		fmt.Fprintf(&b, " (%s)", p.BotanicalName)
 	}
-	b.WriteString(" is dead.\n\n")
+	fmt.Fprintf(&b, "%s\n\n", voice.opening)
 
 	if p.AcquiredAt != nil {
 		fmt.Fprintf(&b, "Acquired %s ago.\n", ago(*p.AcquiredAt))
@@ -100,7 +124,7 @@ func narrate(h History) string {
 		fmt.Fprintf(&b, "%s\n", pot)
 	}
 	if p.CareProfile.OwnerSays != "" {
-		fmt.Fprintf(&b, "The owner had said: %q\n", p.CareProfile.OwnerSays)
+		fmt.Fprintf(&b, "%s: %q\n", voice.ownerSaid, p.CareProfile.OwnerSays)
 	}
 
 	b.WriteString("\nSoil readings, as a fraction of that probe's own dry-to-wet range:\n")
@@ -111,7 +135,7 @@ func narrate(h History) string {
 		fmt.Fprintf(&b, "  %s ago: %.0f%%\n", ago(s.TakenAt), s.Fraction*100)
 	}
 
-	b.WriteString("\nWhat was done to it:\n")
+	fmt.Fprintf(&b, "\n%s:\n", voice.doneTo)
 	if len(h.Observations) == 0 {
 		b.WriteString("  nothing was ever recorded\n")
 	}
