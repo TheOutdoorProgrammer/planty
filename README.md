@@ -27,7 +27,7 @@ Everything else is a way of talking to it.
 | Surface | What it is for |
 | --- | --- |
 | **Service** (Go, Kubernetes, Postgres) | Ingests readings, stores observations and photos, calls Claude for judgment, generates the daily verdict |
-| **iOS app** (SwiftUI, `ios/`) | For when you are standing in front of the plant holding a watering can. Photograph it, log what you did, edit its record, set reminders, ask it anything, and record the death of one |
+| **iOS app** (SwiftUI, `ios/`) | For when you are standing in front of the plant holding a watering can. Photograph it, log what you did, edit its record, keep notes, set reminders, ask it anything, and record the death of one |
 | **Dusk plugin** ([dusk-plugin-planty](https://github.com/NerdsWhoFish/dusk-plugin-planty)) | The same operations, for agents. Add a plant by describing it, log that you watered something, ask what needs doing |
 
 The app and the plugin call the same API and have the same powers.
