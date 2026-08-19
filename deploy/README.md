@@ -43,15 +43,15 @@ Leave it unset and the app is handed URLs on a cluster DNS name it cannot resolv
 
 ## LAN only, deliberately
 
-There is no IngressRoute in this directory, but the deployed cluster has one: `planty.stout.zone`, alongside the manifests in the Flux repo.
-Its DNS record is public and resolves to a private address, so the name works on the LAN and nowhere else.
+There is no IngressRoute in this directory, and if you add one, keep it LAN-only.
+The pattern to copy is a DNS record that resolves to a private address: the name works on the local network and nowhere else.
 
-That distinction matters because the service has **no authentication**, and while the plant data is dull, the pod holds a long-lived Home Assistant token and a credential that can spend a Claude subscription.
+That matters because the service has **no authentication**, and while the plant data is dull, the pod holds a long-lived Home Assistant token and a credential that can spend a Claude subscription.
 Anything that makes this reachable from outside has to add real auth in the same commit.
 
-`PLANTY_S3_PUBLIC_ENDPOINT` has to be reachable from wherever the app is, and no further.
-`s3.stout.zone` resolves to the same private address as `planty.stout.zone`, so photographs load exactly where the app already works.
-Pointing it at a genuinely public bucket would hand out presigned URLs to a plant photo timeline from a house.
+`PLANTY_S3_PUBLIC_ENDPOINT` has to be reachable from wherever the app runs, and no further.
+Give the bucket a name that resolves the same way the API's own name does, so photographs load exactly where the app already works.
+Pointing it at a genuinely internet-reachable bucket would hand out presigned URLs to a photo timeline from inside a house.
 
 ## Order of operations
 

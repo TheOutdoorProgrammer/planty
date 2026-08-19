@@ -10,7 +10,7 @@ import (
 	"github.com/minio/minio-go/v7"
 )
 
-const internalEndpoint = "minio.spacelift.svc.cluster.local:9000"
+const internalEndpoint = "minio.example.svc.cluster.local:9000"
 
 // presign signs one link as the deployment would, against the public host.
 func presign(t *testing.T, public string) *url.URL {
@@ -40,9 +40,9 @@ func presign(t *testing.T, public string) *url.URL {
 // The bug this exists to stop: links signed against the cluster DNS name reach
 // the pod fine and are unresolvable to the phone that has to render them.
 func TestLinksAreSignedForWhoeverFollowsThem(t *testing.T) {
-	link := presign(t, "s3.stout.zone")
+	link := presign(t, "s3.example.com")
 
-	if link.Host != "s3.stout.zone" {
+	if link.Host != "s3.example.com" {
 		t.Errorf("signed for %q, want the public host", link.Host)
 	}
 	if link.Scheme != "https" {
@@ -56,8 +56,8 @@ func TestLinksAreSignedForWhoeverFollowsThem(t *testing.T) {
 // A signature covers the host, so a link signed for one name and served under
 // another is rejected. Swapping the host afterwards is not an available fix.
 func TestTheSignatureCoversTheHost(t *testing.T) {
-	internal := presign(t, "minio.planty.svc.cluster.local:9000")
-	public := presign(t, "s3.stout.zone")
+	internal := presign(t, "minio.other.svc.cluster.local:9000")
+	public := presign(t, "s3.example.com")
 
 	if !strings.Contains(internal.Query().Get("X-Amz-SignedHeaders"), "host") {
 		t.Fatal("host is not in the signed headers, so this test proves nothing")
