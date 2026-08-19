@@ -86,3 +86,23 @@ enum StubTransport {
         StubResponder.shared.install { _ in throw URLError(error) }
     }
 }
+
+extension URLRequest {
+    /// URLProtocol is handed the body as a stream and leaves `httpBody` nil, so
+    /// asserting on what actually went out means draining it.
+    var stubbedBody: Data? {
+        if let httpBody { return httpBody }
+        guard let stream = httpBodyStream else { return nil }
+        stream.open()
+        defer { stream.close() }
+
+        var body = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while stream.hasBytesAvailable {
+            let read = stream.read(&buffer, maxLength: buffer.count)
+            guard read > 0 else { break }
+            body.append(buffer, count: read)
+        }
+        return body
+    }
+}

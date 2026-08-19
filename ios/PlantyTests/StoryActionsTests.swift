@@ -130,7 +130,7 @@ final class RecordingAPI: PlantyAPI, @unchecked Sendable {
         throw PlantyError.notFound
     }
 
-    func ask(_ question: ScratchQuestion) async throws -> ScratchAnswer {
+    func ask(_ question: ScratchQuestion) async throws -> PlantAnswer {
         throw PlantyError.notFound
     }
 

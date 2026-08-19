@@ -14,6 +14,34 @@ extension ToxicityRating {
     }
 }
 
+/// The card as a plant's page uses it. The call to action opens a chat with
+/// the question already asked, not an empty box to retype it into.
+struct PlantToxicitySection: View {
+    let plant: Plant
+    let toxicity: Toxicity
+
+    @Environment(AppSession.self) private var session
+
+    var body: some View {
+        ToxicityCard(toxicity: toxicity, plantName: plant.commonName) {
+            NavigationLink {
+                ConsultScreen(store: session.consultStore(for: plant, asking: question))
+            } label: {
+                Label(
+                    "Ask whether this is dangerous",
+                    systemImage: "bubble.left.and.text.bubble.right.fill"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(PrimaryButtonStyle(color: PlantyColor.purple))
+        }
+    }
+
+    private var question: String {
+        "Is \(plant.commonName) dangerous to cats, dogs or people?"
+    }
+}
+
 /// Who this plant is dangerous to. An unchecked rating is never a calm chip
 /// beside a green one: it is dashed, purple, and says "Not checked" in words.
 struct ToxicityCard<Ask: View>: View {
@@ -83,12 +111,17 @@ struct ToxicityCard<Ask: View>: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// A grid rather than a stack: the audience symbols differ in height, and
+    /// three chips of three heights reads as three different kinds of thing.
     private var chips: some View {
-        HStack(alignment: .top, spacing: 8) {
-            ForEach(toxicity.ratings, id: \.audience) { entry in
-                ToxicityChip(audience: entry.audience, rating: entry.rating)
+        Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+            GridRow {
+                ForEach(toxicity.ratings, id: \.audience) { entry in
+                    ToxicityChip(audience: entry.audience, rating: entry.rating)
+                }
             }
         }
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// Loudest thing after the chips on purpose: it only exists for the cases
@@ -205,7 +238,7 @@ struct ToxicityChip: View {
                 .foregroundStyle(rating.color)
                 .accessibilityHidden(true)
         }
-        .frame(maxWidth: .infinity, minHeight: 88)
+        .frame(maxWidth: .infinity, minHeight: 88, maxHeight: .infinity)
         .padding(.vertical, 10)
         .padding(.horizontal, 6)
         .background {

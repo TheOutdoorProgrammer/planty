@@ -88,19 +88,33 @@ Calm and stale are different screens with different words and different colour, 
 The asymmetry in `CareState.resolve` matters just as much: staleness can take reassurance away, never an alarm.
 A stale `none` verdict becomes `Unknown`; a stale `urgent` verdict stays `Urgent`.
 
+**And its sibling: an unknown toxicity must never render as reassurance.**
+
+`ToxicityRating.unknown` means nobody looked it up, which is not a gentler `safe`.
+Three things enforce it, and all three are tested.
+`Toxicity.init(from:)` decodes an absent or unrecognised rating to `unknown` rather than to nothing.
+`ToxicityRating.severityOrder` ranks `unknown` *above* `safe`, so `Toxicity.worst` can never headline "safe" while a column was never filled in.
+`ToxicityChip` gives it a dashed purple outline and no fill, off the green-to-red ramp entirely, labelled "Not checked" in words.
+
+Divergence gets the same treatment for the same reason.
+Nearly every houseplant reads identically for cats, dogs and people, so the rare plant that does not is exactly the one that kills something: a lily is a sore stomach for a dog and renal failure for a cat.
+`Toxicity.divergenceSentence` says so in a sentence rather than leaving somebody to notice it by comparing three chips.
+
 `FreshnessPolicy.maxAge` defaults to **36 hours**.
 `DESIGN-NOTES.md` lists "what makes a daily verdict current enough for the calm state" as an open question; 36 hours is the answer this implementation picked, because the run is daily, one missed morning is explainable and two is not.
 Change it in one place.
 
 ## Testing
 
-92 tests, Swift Testing, no network.
+255 tests, Swift Testing, no network.
 
 - `DateDecodingTests`: Go writes RFC3339 with up to nine fractional digits and none at all when zero, which no single `ISO8601DateFormatter` reads. `PlantyDateFormat` clips the fraction to three digits and tries both.
 - `ModelDecodingTests`: real Go-shaped JSON, snake_case keys, unknown enum fallback, calibration maths, and `Plant.risk` matching the Go `Plant.Risk()` it mirrors.
 - `PlantyClientTests`: a stubbed `URLProtocol` covering the auth header, query building, status-to-error mapping and malformed bodies.
 - `FreshnessTests`, `TodayPresentationTests`, `LibraryStatusTests`: the calm/stale rule from every angle.
 - `TodayStoreTests`, `CaptureStoreTests`: postponing never acknowledges, completing records before acknowledging, a failed upload never drops the photo.
+- `ToxicityTests`: the unknown rule above from every angle, plus divergence detection and the two ways a plant can have no ratings.
+- `ConsultPhotoTests`: a photo rides along with the question, a failed send keeps it, and a scratch chat creates no plant and writes to no timeline.
 
 ## Verified against a live service
 

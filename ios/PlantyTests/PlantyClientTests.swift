@@ -266,66 +266,6 @@ struct PlantyClientTests {
         )
     }
 
-    /// Both ask endpoints wait on a model, and both may carry a picture. A
-    /// wrong path here is a 404 that no unit test above would have caught.
-    @Test("Both ask endpoints post where the contract says, with the photo inline")
-    func askEndpointsCarryTheirPhoto() async throws {
-        let jpeg = Data([0xFF, 0xD8, 0xFF, 0xE0])
-
-        StubTransport.respond(json: #"""
-            {
-              "id": "4E4D4C4B-4A49-4847-4645-444342414039",
-              "conversation_id": "5F5E5D5C-5B5A-5958-5756-555453525150",
-              "answer": "That is a peace lily."
-            }
-            """#)
-        _ = try await StubTransport.client().ask(ScratchQuestion(message: "what is this?", photo: jpeg))
-
-        var request = try #require(StubResponder.shared.requests.first)
-        #expect(request.httpMethod == "POST")
-        #expect(request.url?.path == "/v1/ask")
-        #expect(request.timeoutInterval == Patience.model, "a scratch ask waits on a model")
-        var body = try #require(String(bytes: try #require(request.httpBody), encoding: .utf8))
-        #expect(body.contains("\"photo\":\"\(jpeg.base64EncodedString())\""))
-
-        StubTransport.respond(json: #"""
-            {
-              "id": "4E4D4C4B-4A49-4847-4645-444342414039",
-              "conversation_id": "5F5E5D5C-5B5A-5958-5756-555453525150",
-              "reply": "It looks fine.",
-              "confidence": 0.8,
-              "suggested_follow_ups": []
-            }
-            """#)
-        _ = try await StubTransport.client().ask(
-            slug: "mona",
-            question: PlantQuestion(message: "look here", photo: jpeg)
-        )
-
-        request = try #require(StubResponder.shared.requests.first)
-        #expect(request.url?.path == "/v1/plants/mona/ask")
-        #expect(request.timeoutInterval == Patience.model)
-        body = try #require(String(bytes: try #require(request.httpBody), encoding: .utf8))
-        #expect(body.contains("\"photo\":\"\(jpeg.base64EncodedString())\""))
-    }
-
-    @Test("A question with no photo sends no photo key at all")
-    func aQuestionWithoutAPhotoOmitsIt() async throws {
-        StubTransport.respond(json: #"""
-            {
-              "id": "4E4D4C4B-4A49-4847-4645-444342414039",
-              "conversation_id": "5F5E5D5C-5B5A-5958-5756-555453525150",
-              "answer": "Hard to say without seeing it."
-            }
-            """#)
-        _ = try await StubTransport.client().ask(ScratchQuestion(message: "what is this?"))
-
-        let request = try #require(StubResponder.shared.requests.first)
-        let body = try #require(String(bytes: try #require(request.httpBody), encoding: .utf8))
-        #expect(!body.contains("photo"))
-        #expect(!body.contains("conversation_id"), "a new conversation resumes nothing")
-    }
-
     @Test("A slug with a space still builds a usable path")
     func escapesSlug() async throws {
         StubTransport.respond(json: #"{"observations": []}"#)
@@ -334,6 +274,70 @@ struct PlantyClientTests {
         let url = try #require(StubResponder.shared.requests.first?.url?.absoluteString)
         #expect(!url.contains(" "))
     }
+
+    /// The ask tests live in this suite rather than their own because every one
+    /// of them drives the same global stub, and only this suite is serialized.
+    private var jpeg: Data { Data([0xFF, 0xD8, 0xFF, 0xE0]) }
+
+    @Test("A question with no plant behind it posts to /v1/ask")
+    func scratchAskCarriesItsPhoto() async throws {
+        StubTransport.respond(json: Self.answerJSON)
+        let answer = try await StubTransport.client()
+            .ask(ScratchQuestion(message: "what is this?", photo: jpeg))
+
+        let request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/ask")
+        #expect(request.timeoutInterval == Patience.model, "a scratch ask waits on a model")
+        #expect(answer.reply == "That is a peace lily.")
+        #expect(answer.suggestedFollowUps == ["Is it safe for cats?"])
+
+        let body = try fields(of: request)
+        #expect(body["photo"] as? String == jpeg.base64EncodedString())
+        #expect(body["message"] as? String == "what is this?")
+    }
+
+    @Test("A question about a plant posts to its own path, photo and all")
+    func plantAskCarriesItsPhoto() async throws {
+        StubTransport.respond(json: Self.answerJSON)
+        _ = try await StubTransport.client().ask(
+            slug: "mona",
+            question: PlantQuestion(message: "look here", photo: jpeg)
+        )
+
+        let request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/plants/mona/ask")
+        #expect(request.timeoutInterval == Patience.model)
+        #expect(try fields(of: request)["photo"] as? String == jpeg.base64EncodedString())
+    }
+
+    @Test("A question with no photo sends no photo key at all")
+    func aQuestionWithoutAPhotoOmitsIt() async throws {
+        StubTransport.respond(json: Self.answerJSON)
+        _ = try await StubTransport.client().ask(ScratchQuestion(message: "what is this?"))
+
+        let request = try #require(StubResponder.shared.requests.first)
+        let body = try fields(of: request)
+        #expect(body["photo"] == nil)
+        #expect(body["conversation_id"] == nil, "a new conversation resumes nothing")
+    }
+
+    private func fields(of request: URLRequest) throws -> [String: Any] {
+        let sent = try #require(request.stubbedBody)
+        return try #require(JSONSerialization.jsonObject(with: sent) as? [String: Any])
+    }
+
+    static let answerJSON = """
+        {
+          "id": "4E4D4C4B-4A49-4847-4645-444342414039",
+          "conversation_id": "5F5E5D5C-5B5A-5958-5756-555453525150",
+          "reply": "That is a peace lily.",
+          "confidence": 0.95,
+          "looked_at": "",
+          "suggested_follow_ups": ["Is it safe for cats?"]
+        }
+        """
 }
 
 @Suite("Multipart photo upload")

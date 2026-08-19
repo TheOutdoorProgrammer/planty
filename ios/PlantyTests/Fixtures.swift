@@ -132,15 +132,6 @@ extension PlantAnswer {
     }
 }
 
-extension ScratchAnswer {
-    static func fixture(
-        answer: String = "That is a peace lily, and it is not safe around cats.",
-        conversationID: UUID = UUID()
-    ) -> ScratchAnswer {
-        ScratchAnswer(id: UUID(), conversationID: conversationID, answer: answer)
-    }
-}
-
 extension Toxicity {
     /// The lily: the case the whole feature exists for, where the three
     /// audiences genuinely disagree.

@@ -191,7 +191,7 @@ struct ScratchConsultTests {
     func followUpsStayInTheSameConversation() async {
         let conversation = UUID()
         let api = FakeAPI()
-        api.scratchAnswer = .fixture(conversationID: conversation)
+        api.answer = .fixture(conversationID: conversation)
         let store = ConsultStore(api: api, plant: nil)
 
         await store.send("what is this?")
@@ -201,17 +201,20 @@ struct ScratchConsultTests {
         #expect(api.scratchAsks.last?.conversationID == conversation)
     }
 
-    @Test("The scratch answer lands in the transcript as Planty's reply")
+    /// Same response shape as a plant consultation, so the follow-ups a chat
+    /// with no plant behind it suggests are just as usable.
+    @Test("The scratch answer lands in the transcript, follow-ups and all")
     @MainActor
     func answerIsShown() async {
         let api = FakeAPI()
-        api.scratchAnswer = .fixture(answer: "That is a peace lily.")
+        api.answer = .fixture(reply: "That is a peace lily.", followUps: ["Is it safe for cats?"])
         let store = ConsultStore(api: api, plant: nil)
 
         await store.send("what is this?")
 
         #expect(store.messages.count == 2)
         #expect(store.messages.last?.text == "That is a peace lily.")
+        #expect(store.suggestedFollowUps == ["Is it safe for cats?"])
     }
 
     @Test("It says what it is without a plant to name")
