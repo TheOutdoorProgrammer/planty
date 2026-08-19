@@ -186,6 +186,26 @@ An item is checked only after the implementation, regression test, commit, and p
 - [ ] **PNT-040 — Species-identification cache entries never expire or follow configuration.**
   Disk cache keys contain only the Photos asset ID, so switching servers or improving the backend still returns an old result forever.
 
+- [ ] **PNT-049 — Linking Home Assistant entities requires memorizing internal IDs.**
+  `LinkSensorSheet` accepts a free-form value such as `sensor.monstera_soil_moisture` and explains Home Assistant's identifier syntax instead of listing what actually exists.
+  The service already has a Home Assistant client capable of fetching states, so it should expose a filtered discovery endpoint with entity ID, friendly name, domain, device class, availability, and area.
+  iOS should present a searchable entity picker, filter likely choices by the selected sensor role, and retain paste/custom entry as an explicit escape hatch without ever putting Home Assistant credentials on the phone.
+
+- [ ] **PNT-050 — Rooms, Home Assistant areas, and zones are separate free-form strings that drift.**
+  Add Plant asks for a typed location, Edit Plant separately asks for typed `Room` and `Home Assistant area`, and Link Sensor asks for another typed `Zone`.
+  Typos and variants such as `Living room`, `living-room`, and `Lounge` silently split what a person thinks is one place and can attach ambient evidence to the wrong set of plants.
+  Use a shared place catalog seeded from Home Assistant areas and existing Planty values, present a searchable selection in all three flows, and offer `Add a custom place` rather than removing the ability to name an unusual location.
+
+- [ ] **PNT-051 — Open taxonomies need managed choices plus a custom value, not bare text or database enums.**
+  Owner, room, zone, and pot material are repeated concepts but are entered from scratch each time, while stable protocol concepts such as plant domain, watering method, status, and sensor role correctly use enums.
+  Keep closed protocol values as real enums, but model user-owned vocabularies as server-provided option lists with an explicit custom entry and recently used values.
+  Turning rooms or people's names into database enums would be the wrong fix: they are household data, not protocol, and need to remain editable without schema migrations.
+
+- [ ] **PNT-052 — First-run setup is organized around implementation details rather than a successful garden.**
+  A new user must separately configure a service URL, understand a token field that currently protects nothing, add plants, know the difference between room, area, and zone, paste Home Assistant entity IDs, and later discover calibration.
+  Add a resumable setup checklist that verifies the service, explains the current security boundary honestly, imports or creates places, links discoverable sensors, and shows which plants still lack usable evidence.
+  Advanced identifiers and calibration numbers should remain inspectable, but they should not be the primary path through setup.
+
 ## P3: DRY, maintainability, and contract drift
 
 - [ ] **PNT-041 — Async sheet save/error behavior is duplicated and inconsistent.**
