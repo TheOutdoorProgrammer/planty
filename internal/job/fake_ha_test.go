@@ -31,6 +31,7 @@ type fakeHA struct {
 
 	notified  []notification
 	announced []string
+	services  []string
 }
 
 func newFakeHA(t *testing.T, entity string) *fakeHA {
@@ -71,6 +72,10 @@ func newFakeHA(t *testing.T, entity string) *fakeHA {
 			}
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			f.announced = append(f.announced, body.Variables.Message)
+			_, _ = w.Write([]byte(`[]`))
+
+		case strings.HasPrefix(r.URL.Path, "/api/services/switch/"):
+			f.services = append(f.services, r.URL.Path)
 			_, _ = w.Write([]byte(`[]`))
 
 		default:

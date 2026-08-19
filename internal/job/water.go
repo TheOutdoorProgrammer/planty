@@ -22,6 +22,10 @@ const (
 // SettleWindow is how long to wait before checking whether water arrived.
 const SettleWindow = 45 * time.Minute
 
+// MaxWateringReadingAge spans two normal 20-minute ingests with a little
+// scheduler slack. Older evidence makes the shared line blind, never dry.
+const MaxWateringReadingAge = 45 * time.Minute
+
 // Water runs the LetPot line and checks that it worked. One pump, one line, no
 // zones, so every decision is about the line as a whole.
 type Water struct {
@@ -94,6 +98,9 @@ func moisture(ctx context.Context, s *store.Store, p plant.Plant) (float64, bool
 		if err != nil {
 			continue
 		}
+		if !freshForWatering(latest, time.Now().UTC()) {
+			continue
+		}
 		fraction, err := link.Fraction(latest.Value)
 		if err != nil {
 			continue
@@ -104,6 +111,11 @@ func moisture(ctx context.Context, s *store.Store, p plant.Plant) (float64, bool
 		heard = true
 	}
 	return driest, heard
+}
+
+func freshForWatering(reading plant.Reading, now time.Time) bool {
+	age := now.Sub(reading.TakenAt)
+	return age >= 0 && age <= MaxWateringReadingAge
 }
 
 func (w Water) survey(ctx context.Context, onLine []plant.Plant) (thirsty, soaked, blind []string) {

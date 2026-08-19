@@ -20,9 +20,10 @@ An item is checked only after the implementation, regression test, commit, and p
   The normal missing post-watering reading becomes `store.ErrNotFound`, which `internal/job/water.go:198-201` silently treats as success.
   The right fix is a durable watering-attempt record that a later ingest verifies after `verify_after`; sleeping in the pump process would still lose verification on restart.
 
-- [ ] **PNT-002 — Stale moisture readings can turn the pump on.**
+- [x] **PNT-002 — Stale moisture readings can turn the pump on.**
   `internal/job/water.go:82-121` uses the latest value without checking `TakenAt`.
   A disconnected probe whose last reading was dry can therefore trigger watering indefinitely, while a stale wet reading can suppress needed water.
+  Fixed by treating readings older than two normal ingest cycles as blind, refusing the shared line, and testing both the freshness boundary and that stale dry evidence calls no Home Assistant service.
 
 - [ ] **PNT-003 — A hard process or node failure can leave the pump on indefinitely.**
   `internal/job/water.go:145-161` relies on a Go `defer` to turn the switch off, which does not run after SIGKILL, OOM, node loss, or power failure.

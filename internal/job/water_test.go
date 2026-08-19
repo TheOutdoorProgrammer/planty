@@ -36,6 +36,13 @@ func TestSettleWindowOutlastsASensorReportingInterval(t *testing.T) {
 	}
 }
 
+func TestStaleReadingsCannotDriveWatering(t *testing.T) {
+	reading := plant.Reading{TakenAt: time.Now().Add(-MaxWateringReadingAge - time.Second)}
+	if freshForWatering(reading, time.Now()) {
+		t.Fatal("a stale reading was allowed to drive the pump")
+	}
+}
+
 // Planty with no API key still has to run: the cold watch and the watering
 // line are what keep plants alive and neither needs a model. Failing here
 // would fail the digest at eight every morning, forever.
@@ -106,5 +113,38 @@ func TestPlantsOnTheLineWithNoPumpIsAFault(t *testing.T) {
 
 	if err := (Water{Store: s, Log: quietLog()}).Run(ctx); err == nil {
 		t.Fatal("plants on the line with no pump configured must be an error")
+	}
+}
+
+func TestAStaleDryReadingDoesNotTurnOnThePump(t *testing.T) {
+	s, ctx := testStore(t)
+	p := onTheLine(t, s, ctx, "Stale tomato")
+	link, err := s.LinkSensor(ctx, plant.SensorLink{
+		PlantID: &p.ID, HAEntityID: "sensor.stale_tomato", Role: plant.RoleSoilMoisture,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	link, err = s.Calibrate(ctx, link.ID, 10, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordReading(ctx, plant.Reading{
+		SensorLinkID: link.ID,
+		Value:        10,
+		TakenAt:      time.Now().Add(-MaxWateringReadingAge - time.Minute),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	f := newFakeHA(t, weatherEntity)
+	err = (Water{
+		Store: s, HA: f.client(), Log: quietLog(), PumpSwitch: "switch.letpot",
+	}).Run(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.services) != 0 {
+		t.Fatalf("stale evidence called Home Assistant services: %v", f.services)
 	}
 }
