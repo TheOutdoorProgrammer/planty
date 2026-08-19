@@ -52,6 +52,8 @@ struct ToxicityCard<Ask: View>: View {
     /// thing to offer about a plant nobody has looked up.
     @ViewBuilder var ask: Ask
 
+    @State private var showingDetail = false
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Eyebrow(text: "Toxicity", color: toxicity.worst.color)
@@ -67,8 +69,7 @@ struct ToxicityCard<Ask: View>: View {
                 if let firstAid = toxicity.firstAid {
                     firstAidCard(firstAid)
                 }
-                details
-                provenance
+                moreDisclosure
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -148,6 +149,35 @@ struct ToxicityCard<Ask: View>: View {
         .accessibilityElement(children: .combine)
     }
 
+    /// Five stacked sections of reference text buried everything under them on
+    /// a plant's page. The rating, any divergence and the first aid stay out;
+    /// the rest is there when it is wanted.
+    @ViewBuilder
+    private var moreDisclosure: some View {
+        Button {
+            withAnimation(.snappy) { showingDetail.toggle() }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: showingDetail ? "chevron.down" : "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                Text(showingDetail ? "Less" : "What it does, and where this came from")
+                    .font(.caption)
+                Spacer()
+            }
+            .foregroundStyle(PlantyColor.secondaryText)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+
+        if showingDetail {
+            VStack(alignment: .leading, spacing: 10) {
+                details
+                provenance
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+    }
+
     @ViewBuilder
     private var details: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -225,6 +255,9 @@ struct ToxicityChip: View {
     let rating: ToxicityRating
 
     var body: some View {
+        // No severity glyph: the headline above already carries one, and the
+        // word plus the colour say it twice over. Three more made the chips
+        // tall enough to push everything else off the screen.
         VStack(spacing: 6) {
             Label(audience.label, systemImage: audience.symbol)
                 .font(.caption.weight(.semibold))
@@ -233,12 +266,8 @@ struct ToxicityChip: View {
                 .font(.footnote.weight(.bold))
                 .foregroundStyle(rating.color)
                 .multilineTextAlignment(.center)
-            Image(systemName: rating.symbol)
-                .font(.footnote.weight(.bold))
-                .foregroundStyle(rating.color)
-                .accessibilityHidden(true)
         }
-        .frame(maxWidth: .infinity, minHeight: 88, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 64, maxHeight: .infinity)
         .padding(.vertical, 10)
         .padding(.horizontal, 6)
         .background {

@@ -204,3 +204,29 @@ struct ThinkingRow: View {
         .accessibilityElement(children: .combine)
     }
 }
+
+/// The face of a button sharing a row with others. Stacked rather than beside,
+/// because three side-by-side labels get about a third of the width each and
+/// SwiftUI answers that by hyphenating: "Reminders" shipped as "Re-minders".
+struct ActionFace: View {
+    let title: String
+    let icon: String
+
+    init(_ title: String, icon: String) {
+        self.title = title
+        self.icon = icon
+    }
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon).font(.subheadline)
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .lineLimit(1)
+                .minimumScaleFactor(0.75)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 4)
+        .accessibilityLabel(title)
+    }
+}

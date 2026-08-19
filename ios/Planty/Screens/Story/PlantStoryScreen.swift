@@ -130,24 +130,21 @@ struct PlantStoryScreen: View {
             NavigationLink {
                 ConsultScreen(store: session.consultStore(for: store.plant))
             } label: {
-                Label("Ask about this", systemImage: "bubble.left.and.text.bubble.right.fill")
-                    .frame(maxWidth: .infinity)
+                ActionFace("Ask", icon: "bubble.left.and.text.bubble.right.fill")
             }
             .buttonStyle(SecondaryButtonStyle())
 
             NavigationLink {
                 RemindersScreen(store: session.remindersStore(for: store.plant))
             } label: {
-                Label("Reminders", systemImage: "bell.fill")
-                    .frame(maxWidth: .infinity)
+                ActionFace("Reminders", icon: "bell.fill")
             }
             .buttonStyle(SecondaryButtonStyle())
 
             NavigationLink {
                 NotesScreen(store: session.notesStore(for: store.plant))
             } label: {
-                Label("Notes", systemImage: "note.text")
-                    .frame(maxWidth: .infinity)
+                ActionFace("Notes", icon: "note.text")
             }
             .buttonStyle(SecondaryButtonStyle())
         }
