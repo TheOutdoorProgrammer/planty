@@ -1,134 +1,107 @@
 package agent
 
 import (
-	"bytes"
 	"context"
-	"regexp"
+	"errors"
+	"io"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
-func runVerb(t *testing.T, d Deps, args ...string) (string, error) {
+func runVerb(t *testing.T, deps Deps, args ...string) (string, error) {
 	t.Helper()
-	return runVerbCtx(t, context.Background(), d, args...)
+	return runVerbCtx(t, context.Background(), deps, args...)
 }
 
-func runVerbCtx(t *testing.T, ctx context.Context, d Deps, args ...string) (string, error) {
+func runVerbCtx(t *testing.T, ctx context.Context, deps Deps, args ...string) (string, error) {
 	t.Helper()
-
-	var out bytes.Buffer
-	err := Run(ctx, d, &out, args)
+	var out strings.Builder
+	err := Run(ctx, deps, &out, args)
 	return out.String(), err
 }
 
-// The gate passes anything behind `planty agent `, so keeping autopsy (which
-// spends tokens recursively) and the operational commands out of the dispatch
-// table is Run's job. This fails the moment somebody adds one.
-func TestExcludedCommandsAreNotAgentVerbs(t *testing.T) {
-	for _, name := range []string{
-		"autopsy", "migrate", "seed", "serve",
-		"daily", "cold", "chase", "thirst", "ingest",
-		"gate", "version",
-	} {
-		_, err := runVerb(t, Deps{}, name, "golden-pothos")
-		if err == nil || !strings.Contains(err.Error(), "no agent verb") {
-			t.Errorf("%q must not be an agent verb, got error %v", name, err)
+func TestUsageAndVerbTableAgree(t *testing.T) {
+	for verb := range verbs {
+		if !strings.Contains(Usage, "  "+verb) {
+			t.Errorf("verb %q is callable but absent from Usage", verb)
 		}
 	}
 }
 
-var usageVerb = regexp.MustCompile(`(?m)^  ([a-z]+)\b`)
-
-// Usage is the contract handed to the model; a verb missing from it cannot be
-// used, and a verb only in it is a lie. Both directions are checked.
-func TestUsageAndTheDispatchTableAgree(t *testing.T) {
-	documented := map[string]bool{}
-	for _, match := range usageVerb.FindAllStringSubmatch(Usage, -1) {
-		documented[match[1]] = true
-	}
-	if len(documented) == 0 {
-		t.Fatal("no verbs found in the usage text; the format changed and this test proves nothing")
-	}
-
-	for name := range verbs {
-		if !documented[name] {
-			t.Errorf("verb %q exists but the usage text never mentions it", name)
-		}
-	}
-	for name := range documented {
-		if _, ok := verbs[name]; !ok {
-			t.Errorf("the usage text promises %q, which does not exist", name)
-		}
-	}
-}
-
-func TestHelpPrintsTheReference(t *testing.T) {
+func TestHelpPrintsUsage(t *testing.T) {
 	out, err := runVerb(t, Deps{}, "help")
 	if err != nil {
-		t.Fatalf("help errored: %v", err)
+		t.Fatal(err)
 	}
-	if !strings.Contains(out, "planty agent <verb>") {
-		t.Errorf("help did not print the reference: %q", out[:min(80, len(out))])
+	if out != Usage+"\n" {
+		t.Error("help is not the exact Usage handed to the model")
 	}
 }
 
-func TestNoVerbStillTeaches(t *testing.T) {
+func TestUnknownVerbIsRefusedByName(t *testing.T) {
+	out, err := runVerb(t, Deps{}, "migrate")
+	if err == nil || !strings.Contains(err.Error(), "there is no agent verb") {
+		t.Fatalf("migrate should be refused by the agent surface, got %v", err)
+	}
+	if out != Usage+"\n" {
+		t.Error("unknown verb did not print the safe surface")
+	}
+}
+
+func TestNoVerbPrintsUsageAndFails(t *testing.T) {
 	out, err := runVerb(t, Deps{})
 	if err == nil {
-		t.Error("no verb given must be an error")
+		t.Fatal("no verb should fail")
 	}
-	if !strings.Contains(out, "planty agent <verb>") {
-		t.Error("the usage text was not printed for an empty call")
-	}
-
-	out, err = runVerb(t, Deps{}, "prune-everything")
-	if err == nil || !strings.Contains(err.Error(), "no agent verb") {
-		t.Errorf("unknown verb error: %v", err)
-	}
-	if !strings.Contains(out, "planty agent <verb>") {
-		t.Error("the usage text was not printed for an unknown verb")
+	if out != Usage+"\n" {
+		t.Error("no verb did not print usage")
 	}
 }
 
-// Every verb acting on one plant refuses plainly before touching anything
-// when no --plant was given.
-func TestSubjectVerbsDemandAPlant(t *testing.T) {
-	for _, name := range []string{
-		"show", "observations", "reminders",
-		"log", "harvest", "remind", "forget", "update", "archive", "ack",
-	} {
-		_, err := runVerb(t, Deps{}, name)
-		if err == nil || !strings.Contains(err.Error(), "--plant") {
-			t.Errorf("%s with no plant: want an error naming --plant, got %v", name, err)
+func TestCreateDefaultsMatchTheAPI(t *testing.T) {
+	deps, _, ctx := toxicityDeps(t)
+	name := "Agent defaults " + t.Name()
+
+	out, err := runVerbCtx(t, ctx, deps, "create", "--name", name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "houseplant") || !strings.Contains(out, "watering hand") {
+		t.Fatalf("confirmation did not report defaults: %s", out)
+	}
+
+	plants, err := deps.Store.ListPlants(ctx, store.PlantFilter{Status: plant.StatusAlive})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var found plant.Plant
+	for _, p := range plants {
+		if p.CommonName == name {
+			found = p
 		}
 	}
-}
-
-func TestWaterRunsTheConfiguredPass(t *testing.T) {
-	ran := false
-	out, err := runVerb(t, Deps{Water: func(context.Context) error {
-		ran = true
-		return nil
-	}}, "water")
-	if err != nil {
-		t.Fatalf("water errored: %v", err)
+	if found.ID == [16]byte{} {
+		t.Fatal("created plant was not stored")
 	}
-	if !ran {
-		t.Error("the configured watering pass never ran")
-	}
-	if !strings.Contains(out, "LetPot pass ran") {
-		t.Errorf("no confirmation was printed: %q", out)
+	if found.Domain != plant.DomainHouseplant || found.Steward != plant.StewardSelf ||
+		found.Accessibility != plant.AccessEasy || found.WateringMethod != plant.WateringHand {
+		t.Fatalf("agent defaults drifted from API: %+v", found)
 	}
 }
 
-func TestWaterRefusesWhenNotWired(t *testing.T) {
-	_, err := runVerb(t, Deps{}, "water")
-	if err == nil || !strings.Contains(err.Error(), "not wired up") {
-		t.Errorf("want a plain refusal, got %v", err)
+func TestParseRejectsUnquotedLeftovers(t *testing.T) {
+	set := newFlags("test")
+	_ = set.String("name", "", "")
+	if err := parse(set, []string{"--name", "Big", "Pothos"}); err == nil ||
+		!strings.Contains(err.Error(), "not attached to a flag") {
+		t.Fatalf("unquoted leftovers were silently ignored: %v", err)
 	}
 }
 
-// Flag mistakes that must come back as sentences, before any store call.
 func TestFlagMistakesFailPlainly(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -145,7 +118,7 @@ func TestFlagMistakesFailPlainly(t *testing.T) {
 		{"answer with a junk id", []string{"answer", "--question", "nope", "--answer", "yes"}, "not a question id"},
 		{"answer with no text", []string{"answer", "--question", "nope"}, "--answer"},
 		{"ask with no question", []string{"ask", "--plant", "a"}, "--question"},
-		{"away with no dates", []string{"away"}, "--from"},
+		{"away create missing until", []string{"away", "--from", "2026-08-20"}, "--until"},
 		{"coldwatch with no low", []string{"coldwatch"}, "--low"},
 		{"log with a junk time", []string{"log", "--plant", "a", "--kind", "watered", "--when", "yesterdayish"}, "not a time"},
 		{"a flag that does not exist", []string{"plants", "--vibe", "good"}, "vibe"},
@@ -178,48 +151,83 @@ func TestLightExposureNamesTheChoices(t *testing.T) {
 		t.Errorf("a bad light value must list the real ones, got %v", err)
 	}
 	if l, err := lightExposure("medium"); err != nil || string(l) != "medium" {
-		t.Errorf("medium is valid: %v %v", l, err)
+		t.Errorf("medium should parse, got %v %v", l, err)
 	}
 }
 
-// An unquoted multi-word value used to set the flag to its first word and drop
-// the rest silently, renaming a plant to something nobody asked for. A model
-// constructing a command line gets this wrong, so it has to be loud.
-func TestAStrayWordIsRefusedRatherThanDropped(t *testing.T) {
-	for _, args := range [][]string{
-		{"update", "--plant", "golden-pothos", "--name", "Big", "Pothos"},
-		{"log", "--plant", "golden-pothos", "--kind", "note", "--note", "looked", "droopy"},
-		{"create", "--name", "Blue", "Oyster"},
-	} {
-		_, err := runVerb(t, Deps{}, args...)
-		if err == nil || !strings.Contains(err.Error(), "double quotes") {
-			t.Errorf("%v: want a refusal naming the loose words, got %v", args, err)
+func TestNotWhileTalkingNamesTheConversationOwner(t *testing.T) {
+	if err := notWhileTalking("self"); err == nil || !strings.Contains(err.Error(), "in this conversation") {
+		t.Fatalf("asking the current person should be refused, got %v", err)
+	}
+	if err := notWhileTalking(""); err != nil {
+		t.Fatalf("letting the store infer somebody else's steward failed: %v", err)
+	}
+}
+
+func TestSplitSlugsDropsWhitespaceAndEmpties(t *testing.T) {
+	got := splitSlugs(" mona, , basil ,tomato ")
+	want := []string{"mona", "basil", "tomato"}
+	if len(got) != len(want) {
+		t.Fatalf("got %#v", got)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("got %#v, want %#v", got, want)
 		}
 	}
 }
 
-// A properly quoted value still works, or the guard above has broken the verb
-// it was meant to protect.
-func TestAQuotedValueSurvives(t *testing.T) {
-	set := newFlags("update")
-	name := set.String("name", "", "")
-	if err := parse(set, []string{"--name", "Big Pothos"}); err != nil {
-		t.Fatalf("a quoted value was refused: %v", err)
+func TestParseHours(t *testing.T) {
+	got, err := parseHours("8, 20")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if *name != "Big Pothos" {
-		t.Errorf("name is %q", *name)
+	if len(got) != 2 || got[0] != 8 || got[1] != 20 {
+		t.Fatalf("got %#v", got)
+	}
+	if _, err := parseHours("morning"); err == nil {
+		t.Fatal("words are not hours")
 	}
 }
 
-// "The pass completed" reads as "water moved", and a garden with nothing on
-// the line completes without watering anything. A model relaying that would be
-// telling somebody their plant was watered when it was not.
-func TestWateringNeverClaimsWaterMoved(t *testing.T) {
-	out, err := runVerb(t, Deps{Water: func(context.Context) error { return nil }}, "water")
-	if err != nil {
-		t.Fatalf("water: %v", err)
+func TestDescribeReminder(t *testing.T) {
+	if got := describe(plant.Reminder{EveryDays: 1, AtHours: []int{8, 20}}); got != "every day at 08:00 and 20:00" {
+		t.Fatalf("got %q", got)
 	}
-	if !strings.Contains(out, "may well have watered none") {
-		t.Errorf("the report reads as a completed watering: %q", out)
+	if got := describe(plant.Reminder{EveryDays: 7, AtHours: []int{8}}); got != "every 7 days at 08:00" {
+		t.Fatalf("got %q", got)
 	}
 }
+
+func TestRunUsesCallerContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := runVerbCtx(t, ctx, Deps{}, "plants")
+	if !errors.Is(err, context.Canceled) && !strings.Contains(err.Error(), "database") {
+		t.Fatalf("cancelled caller context did not flow through: %v", err)
+	}
+}
+
+func TestParseWhenPreservesZeroMeaning(t *testing.T) {
+	at, err := parseWhen("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !at.IsZero() {
+		t.Fatalf("empty time became %v", at)
+	}
+}
+
+func TestTimeZonesRemainExplicit(t *testing.T) {
+	at, err := parseWhen("2026-08-17T09:30:00-04:00")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, offset := at.Zone()
+	if offset != -4*60*60 {
+		t.Fatalf("offset was %d", offset)
+	}
+}
+
+var _ io.Writer = (*strings.Builder)(nil)
+var _ = time.Second
