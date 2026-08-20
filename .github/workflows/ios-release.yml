@@ -110,7 +110,7 @@ jobs:
       # actually requires Xcode and hands the signed archive across the job
       # boundary as a short-lived workflow artifact.
       - id: stage
-        uses: TheOutdoorProgrammer/quill/stage@3881bcd2a15f424e26e8b252b9a5a698a4c7296f
+        uses: TheOutdoorProgrammer/quill/stage@29a071547458081a92fba383ec1d68f12656efec
         with:
           name: planty-ios-${{ github.run_id }}
           path: ${{ runner.temp }}/export/Planty.ipa
@@ -121,7 +121,7 @@ jobs:
   release:
     name: Release
     needs: ios
-    uses: TheOutdoorProgrammer/quill/.github/workflows/staged-release.yml@3881bcd2a15f424e26e8b252b9a5a698a4c7296f
+    uses: TheOutdoorProgrammer/quill/.github/workflows/staged-release.yml@29a071547458081a92fba383ec1d68f12656efec
     with:
       artifact-name: ${{ needs.ios.outputs.artifact-name }}
       fledge-ipa: Planty.ipa
