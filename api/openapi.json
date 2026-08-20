@@ -89,7 +89,8 @@
       "SensorRole": {"type": "string", "enum": ["soil_moisture", "ambient_temp", "ambient_humidity", "illuminance"]},
       "APIError": {
         "type": "object",
-        "required": ["error", "code", "request_id"],
+        "x-swift-name": "APIErrorBody",
+        "required": ["error"],
         "properties": {
           "error": {"type": "string"},
           "code": {"type": "string"},
