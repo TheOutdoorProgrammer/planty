@@ -50,7 +50,7 @@ func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prior, conversation, err := s.priorScratchAnswers(r, req.ConversationID)
+	prior, conversation, err := s.conversationHistory(r.Context(), uuid.Nil, req.ConversationID)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
@@ -79,37 +79,7 @@ func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The same shape a plant consultation returns, so one client decoder
-	// covers both conversations rather than two that drift.
-	s.ok(w, http.StatusOK, map[string]any{
-		"id":                   saved.ID,
-		"conversation_id":      saved.ConversationID,
-		"reply":                answer.Reply,
-		"confidence":           answer.Confidence,
-		"looked_at":            answer.LookedAt,
-		"suggested_follow_ups": answer.Suggestions,
-		"steps":                answer.Steps,
-	})
-}
-
-// priorScratchAnswers reads back a conversation about nothing in particular.
-func (s *Server) priorScratchAnswers(r *http.Request,
-	conversationID *uuid.UUID) ([]judge.PriorAnswer, uuid.UUID, error) {
-	if conversationID == nil {
-		return nil, uuid.New(), nil
-	}
-	turns, err := s.store.Consultation(r.Context(), *conversationID, uuid.Nil)
-	if err != nil {
-		return nil, uuid.Nil, err
-	}
-
-	prior := make([]judge.PriorAnswer, 0, len(turns))
-	for _, turn := range turns {
-		prior = append(prior, judge.PriorAnswer{
-			Asked: turn.Asked, Reply: turn.Reply, PhotoID: turn.PhotoID,
-		})
-	}
-	return prior, *conversationID, nil
+	s.ok(w, http.StatusOK, conversationResponse(saved))
 }
 
 // attach stores a photograph sent with this turn and gathers the ones sent
