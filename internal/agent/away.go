@@ -13,13 +13,6 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
-// PNT-028 expands the existing away verb without adding another capability
-// name. Keeping one verb preserves the allowlist/gate contract while making
-// creation, inspection, correction, and cancellation available to the agent.
-func init() {
-	verbs["away"] = Deps.manageAway
-}
-
 func (d Deps) manageAway(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("away")
 	idRaw := set.String("id", "", "the away period id, from planty agent away")
