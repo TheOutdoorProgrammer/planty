@@ -1,25 +1,35 @@
 import SwiftUI
 
-/// Leads with the physical action, then the reason. No score, no raw moisture
-/// value, and no red unless the verdict is genuine evidence of harm.
+/// A Today card is now a visual summary and a single tap target. All choices
+/// live on the dedicated action screen so the card never makes camera capture
+/// or postponement feel mandatory.
 struct CareCard: View {
     let entry: DigestEntry
-    let imHere: () -> Void
-    let notNow: () -> Void
 
     private var state: CareState { CareState.from(action: entry.verdict.action) }
     private var accent: Color { state.color }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
+            PlantPhotoView(plant: entry.plant, height: 156, opensFullScreen: false)
+                .allowsHitTesting(false)
+
             header
             name
             Text(entry.verdict.action.instruction)
                 .font(.headline)
                 .foregroundStyle(PlantyColor.foreground)
             reasoning
-            evidence
-            buttons
+
+            HStack(spacing: 8) {
+                Text("Tap for options")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(PlantyColor.secondaryText)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right")
+                    .font(.footnote.weight(.bold))
+                    .foregroundStyle(PlantyColor.secondaryText)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .plantyCard(border: accent.opacity(entry.plant.isFriends ? 0.0 : 0.45))
@@ -29,8 +39,9 @@ struct CareCard: View {
                     .stroke(PlantyColor.purple.opacity(0.6), lineWidth: 1.5)
             }
         }
-        .accessibilityElement(children: .contain)
+        .accessibilityElement(children: .combine)
         .accessibilityLabel(accessibilitySummary)
+        .accessibilityHint("Opens actions for \(entry.plant.commonName)")
     }
 
     private var header: some View {
@@ -73,44 +84,6 @@ struct CareCard: View {
         }
     }
 
-    @ViewBuilder
-    private var evidence: some View {
-        if !entry.verdict.evidence.isEmpty {
-            DisclosureGroup("Why Planty thinks this") {
-                EvidenceDetail(verdict: entry.verdict)
-                    .padding(.top, 8)
-            }
-            .font(.footnote.weight(.semibold))
-            .tint(PlantyColor.cyan)
-        }
-    }
-
-    /// No swipe actions on purpose: accidental completion has real consequences.
-    private var buttons: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 12) {
-                imHereButton
-                notNowButton
-            }
-            VStack(spacing: 10) {
-                imHereButton
-                notNowButton
-            }
-        }
-    }
-
-    private var imHereButton: some View {
-        Button("I'm here", action: imHere)
-            .buttonStyle(PrimaryButtonStyle(color: accent))
-            .accessibilityHint("Opens the camera with \(entry.plant.commonName) selected")
-    }
-
-    private var notNowButton: some View {
-        Button("Not now", action: notNow)
-            .buttonStyle(SecondaryButtonStyle())
-            .accessibilityHint("Postpones this card. It is never marked done.")
-    }
-
     private var accessibilitySummary: String {
         var parts = [entry.plant.commonName, state.label, entry.verdict.action.instruction]
         if entry.plant.isFriends {
@@ -120,7 +93,8 @@ struct CareCard: View {
     }
 }
 
-/// The sensor evidence, folded away. Charts are never the default view.
+/// The sensor evidence, folded away on the action screen. Charts are never the
+/// default view.
 struct EvidenceDetail: View {
     let verdict: Verdict
 

@@ -1,13 +1,28 @@
 import PhotosUI
 import SwiftUI
 
-/// One photograph for the message being written. Reuses the shared acquisition
-/// state, so camera permission, library import and failures behave like Snap.
+/// One photograph acquired with the shared camera/library state. Callers supply
+/// framing copy and decide what the bytes mean once a photo exists.
 struct PhotoAttachSheet: View {
+    let title: String
+    let guidance: String
+    let footnote: String
     let attach: (Data) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var acquisition = PhotoAcquisition()
+
+    init(
+        title: String = "Add a photo",
+        guidance: String = "Frame whatever Planty asked to see.",
+        footnote: String = "A close-up is fine. One photo per message.",
+        attach: @escaping (Data) -> Void
+    ) {
+        self.title = title
+        self.guidance = guidance
+        self.footnote = footnote
+        self.attach = attach
+    }
 
     var body: some View {
         NavigationStack {
@@ -19,7 +34,10 @@ struct PhotoAttachSheet: View {
                             .foregroundStyle(PlantyColor.orange)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .padding(12)
-                            .background(PlantyColor.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+                            .background(
+                                PlantyColor.orange.opacity(0.12),
+                                in: RoundedRectangle(cornerRadius: 14)
+                            )
                     }
                     stage
                 }
@@ -27,7 +45,7 @@ struct PhotoAttachSheet: View {
                 .padding(.vertical, 16)
             }
             .plantyPage()
-            .navigationTitle("Add a photo")
+            .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -51,13 +69,11 @@ struct PhotoAttachSheet: View {
         case .unavailable:
             NoCameraCard(photoItem: photoItemBinding)
         case .ready, .unknown:
-            // Not the whole-plant framing Snap asks for: this exists for the
-            // turn where Planty asked to see one specific thing up close.
             CameraStage(
                 camera: acquisition.camera,
                 photoItem: photoItemBinding,
-                guidance: "Frame whatever Planty asked to see.",
-                footnote: "A close-up is fine. One photo per message.",
+                guidance: guidance,
+                footnote: footnote,
                 shutter: { Task { await shoot() } }
             )
         }
