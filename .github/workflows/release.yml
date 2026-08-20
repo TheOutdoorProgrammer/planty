@@ -1,8 +1,6 @@
 name: Release
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       scope:
@@ -24,67 +22,8 @@ permissions:
   contents: read
 
 jobs:
-  # Keep main useful between releases. The Dockerfile consumes GoReleaser's
-  # dist tree, so snapshots build that tree first rather than compiling Go a
-  # second time inside Docker.
-  snapshot:
-    name: Backend snapshot
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Build GoReleaser assets
-        uses: goreleaser/goreleaser-action@v7
-        with:
-          version: "~> v2"
-          args: release --snapshot --clean --skip=publish
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-
-      - uses: docker/setup-qemu-action@v3
-      - uses: docker/setup-buildx-action@v3
-
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/${{ github.repository }}
-          tags: |
-            type=ref,event=branch
-            type=sha,format=long
-            # deploy/*.yaml reference :latest, so main snapshots keep it fresh.
-            type=raw,value=latest,enable={{is_default_branch}}
-
-      # arm64 matters here: the cluster is Mac minis.
-      - uses: docker/build-push-action@v6
-        with:
-          context: .
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-
   ios:
     name: iOS archive
-    if: github.event_name == 'workflow_dispatch'
     # Xcode 26 is the default here, which the iOS 26 deployment target needs.
     runs-on: macos-26
     steps:
@@ -180,7 +119,6 @@ jobs:
 
   release:
     name: Release
-    if: github.event_name == 'workflow_dispatch'
     needs: ios
     uses: TheOutdoorProgrammer/quill/.github/workflows/staged-release.yml@v1
     with:
