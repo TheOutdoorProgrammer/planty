@@ -2,19 +2,20 @@ import SwiftUI
 
 extension View {
     func plantyCard(
-        border: Color = PlantyColor.quietDecoration.opacity(0.45),
-        padding: CGFloat = 18
+        border: Color = PlantyColor.quietDecoration.opacity(0.16),
+        padding: CGFloat = 16
     ) -> some View {
         self
             .padding(padding)
             .background(
                 PlantyColor.surface,
-                in: RoundedRectangle(cornerRadius: 24, style: .continuous)
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
             )
             .overlay {
-                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     .stroke(border, lineWidth: 1)
             }
+            .shadow(color: Color.black.opacity(0.035), radius: 8, y: 3)
     }
 
     func plantyPage() -> some View {
@@ -27,12 +28,12 @@ extension View {
 
 struct Eyebrow: View {
     let text: String
-    var color = PlantyColor.cyan
+    var color = PlantyColor.green
 
     var body: some View {
         Text(text.uppercased())
-            .font(.caption.weight(.bold))
-            .tracking(1.1)
+            .font(.caption2.weight(.bold))
+            .tracking(0.8)
             .foregroundStyle(color)
     }
 }
@@ -48,10 +49,10 @@ struct OwnershipBadge: View {
             Label(plant.ownershipLabel, systemImage: plant.isFriends ? "person.2.fill" : "person.fill")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(plant.isFriends ? PlantyColor.purple : PlantyColor.secondaryText)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 7)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 5)
                 .background(
-                    (plant.isFriends ? PlantyColor.purple : PlantyColor.secondaryText).opacity(0.14),
+                    (plant.isFriends ? PlantyColor.purple : PlantyColor.secondaryText).opacity(0.12),
                     in: Capsule()
                 )
                 .accessibilityLabel(plant.ownershipAccessibilityLabel)
@@ -65,26 +66,30 @@ struct StatusPill: View {
 
     var body: some View {
         Label(state.label, systemImage: state.symbol)
-            .font(.caption.weight(.bold))
+            .font(.caption.weight(.semibold))
             .foregroundStyle(state.color)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(state.color.opacity(0.14), in: Capsule())
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
+            .background(state.color.opacity(0.11), in: Capsule())
             .accessibilityLabel("\(state.label). \(state.sentence)")
     }
 }
 
 struct PrimaryButtonStyle: ButtonStyle {
-    var color = PlantyColor.pink
+    var color = PlantyColor.green
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
             .foregroundStyle(PlantyColor.background)
             .frame(maxWidth: .infinity, minHeight: 52)
-            .padding(.horizontal, 18)
-            .background(color.opacity(configuration.isPressed ? 0.78 : 1), in: Capsule())
-            .contentShape(Capsule())
+            .padding(.horizontal, 16)
+            .background(
+                color.opacity(configuration.isPressed ? 0.78 : 1),
+                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
+            )
+            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
@@ -94,20 +99,23 @@ struct SecondaryButtonStyle: ButtonStyle {
             .font(.headline)
             .foregroundStyle(PlantyColor.foreground)
             .frame(maxWidth: .infinity, minHeight: 50)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
             .background(
-                PlantyColor.surface.opacity(configuration.isPressed ? 0.7 : 1),
-                in: Capsule()
+                PlantyColor.surface.opacity(configuration.isPressed ? 0.72 : 1),
+                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
             )
             .overlay {
-                Capsule().stroke(PlantyColor.quietDecoration.opacity(0.55), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .stroke(PlantyColor.quietDecoration.opacity(0.2), lineWidth: 1)
             }
-            .contentShape(Capsule())
+            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
+            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
 /// A headline plus body plus buttons, which is the shape of nearly every state
-/// screen in SCREENS.md.
+/// screen. The icon and title share one line so routine messages do not feel
+/// like full-screen alerts.
 struct StateMessage<Actions: View>: View {
     let title: String
     let message: String
@@ -117,22 +125,24 @@ struct StateMessage<Actions: View>: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            if let icon {
-                Image(systemName: icon)
-                    .font(.title2.weight(.semibold))
-                    .foregroundStyle(accent)
-                    .accessibilityHidden(true)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                if let icon {
+                    Image(systemName: icon)
+                        .font(.headline.weight(.semibold))
+                        .foregroundStyle(accent)
+                        .accessibilityHidden(true)
+                }
+                Text(title)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(PlantyColor.foreground)
             }
-            Text(title)
-                .font(.title2.weight(.bold))
-                .foregroundStyle(accent)
             Text(message)
                 .font(.body)
                 .foregroundStyle(PlantyColor.secondaryText)
             actions
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .plantyCard(border: accent.opacity(0.4))
+        .plantyCard(border: accent.opacity(0.22))
     }
 }
 
@@ -152,33 +162,48 @@ struct SaveToast: View {
 
 struct SectionHeading: View {
     let text: String
+    var detail: String?
+
+    init(text: String, detail: String? = nil) {
+        self.text = text
+        self.detail = detail
+    }
+
+    init(_ text: String, detail: String? = nil) {
+        self.init(text: text, detail: detail)
+    }
 
     var body: some View {
-        Text(text)
-            .font(.title3.weight(.bold))
-            .foregroundStyle(PlantyColor.foreground)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        VStack(alignment: .leading, spacing: 3) {
+            Text(text)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(PlantyColor.foreground)
+            if let detail {
+                Text(detail)
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.secondaryText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
-/// SecondaryButtonStyle's geometry in destructive colour. Belongs next to the
-/// styles it mirrors in DesignSystem; parked here because this change was
-/// scoped away from that directory.
 struct DestructiveButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
             .foregroundStyle(PlantyColor.red)
             .frame(maxWidth: .infinity, minHeight: 50)
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 14)
             .background(
-                PlantyColor.surface.opacity(configuration.isPressed ? 0.7 : 1),
-                in: Capsule()
+                PlantyColor.red.opacity(configuration.isPressed ? 0.16 : 0.08),
+                in: RoundedRectangle(cornerRadius: 15, style: .continuous)
             )
             .overlay {
-                Capsule().stroke(PlantyColor.red.opacity(0.5), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 15, style: .continuous)
+                    .stroke(PlantyColor.red.opacity(0.24), lineWidth: 1)
             }
-            .contentShape(Capsule())
+            .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
     }
 }
 
@@ -205,29 +230,39 @@ struct ThinkingRow: View {
     }
 }
 
-/// The face of a button sharing a row with others. Stacked rather than beside,
-/// because three side-by-side labels get about a third of the width each and
-/// SwiftUI answers that by hyphenating: "Reminders" shipped as "Re-minders".
+/// A compact face for navigation and action tiles. Text leads; the icon helps
+/// scanning but never becomes the only explanation of what a control does.
 struct ActionFace: View {
     let title: String
     let icon: String
+    var detail: String?
 
-    init(_ title: String, icon: String) {
+    init(_ title: String, icon: String, detail: String? = nil) {
         self.title = title
         self.icon = icon
+        self.detail = detail
     }
 
     var body: some View {
-        VStack(spacing: 4) {
-            Image(systemName: icon).font(.subheadline)
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.75)
+        HStack(spacing: 10) {
+            Image(systemName: icon)
+                .font(.body.weight(.semibold))
+                .frame(width: 24)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(2)
+                if let detail {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(PlantyColor.secondaryText)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 0)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 4)
-        .accessibilityLabel(title)
+        .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+        .accessibilityElement(children: .combine)
     }
 }
 

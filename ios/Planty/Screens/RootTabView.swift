@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Four tabs, with Snap kept prominent. Diagnosis is deliberately not one of them:
-/// it only makes sense with a plant and a photo already in hand.
+/// The tabs use task names rather than internal product concepts. The existing
+/// Garden feature remains intact behind More; Capture says what Snap actually
+/// does and keeps the camera one tap away from everywhere.
 struct RootTabView: View {
     @Environment(AppSession.self) private var session
 
@@ -9,20 +10,20 @@ struct RootTabView: View {
         @Bindable var session = session
 
         TabView(selection: $session.selectedTab) {
-            Tab("Today", systemImage: "sun.max.fill", value: AppTab.today) {
+            Tab("Today", systemImage: "checkmark.circle.fill", value: AppTab.today) {
                 TodayScreen()
             }
-            Tab("Snap", systemImage: "camera.fill", value: AppTab.snap) {
+            Tab("Capture", systemImage: "camera.fill", value: AppTab.snap) {
                 SnapScreen()
             }
             Tab("Plants", systemImage: "leaf.fill", value: AppTab.plants) {
                 PlantsLibraryScreen()
             }
-            Tab("Garden", systemImage: "sparkles", value: AppTab.garden) {
+            Tab("More", systemImage: "square.grid.2x2.fill", value: AppTab.garden) {
                 GardenScreen()
             }
         }
-        .tint(PlantyColor.pink)
+        .tint(PlantyColor.green)
         .sheet(isPresented: $session.isShowingSettings) {
             SettingsScreen()
         }

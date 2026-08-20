@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// A searchable visual list grouped by owner. No sensor gauges anywhere.
+/// A searchable visual library. Camera is a visible action on every plant;
+/// users no longer need to discover a hidden swipe gesture to take a photo.
 struct PlantsLibraryScreen: View {
     @Environment(AppSession.self) private var session
     @State private var isAdding = false
@@ -23,7 +24,7 @@ struct PlantsLibraryScreen: View {
                 } else if store.hasNoMatches {
                     scrollWrapped { noResultsCard }
                 } else {
-                    list
+                    library
                 }
             }
             .plantyPage()
@@ -50,61 +51,60 @@ struct PlantsLibraryScreen: View {
         }
     }
 
-    private var list: some View {
-        List {
-            // A refresh that failed with plants on screen used to say nothing,
-            // which reads as "everything loaded fine".
-            if let error = store.error {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Label("This list may be out of date.", systemImage: "wifi.exclamationmark")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(PlantyColor.orange)
-                        if let detail = error.errorDescription {
-                            Text(detail)
-                                .font(.footnote)
+    private var library: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 22) {
+                if let error = store.error {
+                    partialError(error)
+                }
+
+                ForEach(store.groups) { group in
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack {
+                            Text(group.title)
+                                .font(.headline)
+                                .foregroundStyle(group.isFriendOwned ? PlantyColor.purple : PlantyColor.foreground)
+                            Spacer()
+                            Text(group.plants.count.formatted())
+                                .font(.caption.weight(.semibold))
                                 .foregroundStyle(PlantyColor.secondaryText)
                         }
-                        Button("Try again") { Task { await store.load() } }
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(PlantyColor.orange)
-                            .frame(minHeight: 44)
-                            .accessibilityLabel("Reload the plant list")
-                    }
-                    .listRowBackground(PlantyColor.orange.opacity(0.12))
-                }
-            }
-            ForEach(store.groups) { group in
-                Section {
-                    ForEach(group.plants) { plant in
-                        NavigationLink(value: plant) {
-                            PlantLibraryRow(plant: plant, state: state(for: plant))
-                        }
-                        .listRowBackground(PlantyColor.surface)
-                        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                            Button {
+
+                        ForEach(group.plants) { plant in
+                            PlantLibraryRow(plant: plant, state: state(for: plant)) {
                                 session.beginCapture(for: plant)
-                            } label: {
-                                Label("Take photo", systemImage: "camera.fill")
                             }
-                            .tint(PlantyColor.pink)
                         }
                     }
-                } header: {
-                    Text(group.title)
-                        .font(.headline)
-                        .foregroundStyle(
-                            group.isFriendOwned ? PlantyColor.purple : PlantyColor.secondaryText
-                        )
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
         }
-        .listStyle(.insetGrouped)
-        .scrollContentBackground(.hidden)
     }
 
-    /// Without the digest every row honestly reads Unknown, so fetch it even
-    /// when the user opened this tab first.
+    private func partialError(_ error: PlantyError) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "wifi.exclamationmark")
+                .foregroundStyle(PlantyColor.orange)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("This list may be out of date")
+                    .font(.subheadline.weight(.semibold))
+                if let detail = error.errorDescription {
+                    Text(detail)
+                        .font(.caption)
+                        .foregroundStyle(PlantyColor.secondaryText)
+                }
+            }
+            Spacer(minLength: 4)
+            Button("Retry") { Task { await store.load() } }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(PlantyColor.orange)
+                .frame(minHeight: 44)
+        }
+        .plantyCard(border: PlantyColor.orange.opacity(0.2), padding: 14)
+    }
+
     private func loadWithStatuses() async {
         await store.load()
         if session.today.digest == nil {
@@ -124,33 +124,27 @@ struct PlantsLibraryScreen: View {
     private func scrollWrapped<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
         ScrollView {
             content()
-                .padding(.horizontal, 20)
-                .padding(.vertical, 24)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 20)
         }
     }
 
     private var emptyCard: some View {
-        VStack(spacing: 18) {
-            PlantyMascot(wobbles: false)
-            StateMessage(
-                title: "No plants yet.",
-                message: """
-                    Start with a photo. You can name the plant now, let Planty \
-                    suggest one, or just call it "the dramatic one."
-                    """,
-                accent: PlantyColor.pink,
-                icon: "leaf.fill"
-            ) {
-                Button("Add the first plant") { isAdding = true }
-                    .buttonStyle(PrimaryButtonStyle())
-            }
+        StateMessage(
+            title: "Add your first plant",
+            message: "Start with a photo. Name it now, let Planty suggest one, or keep the nickname you actually use.",
+            accent: PlantyColor.green,
+            icon: "leaf.fill"
+        ) {
+            Button("Add a plant") { isAdding = true }
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.green))
         }
     }
 
     private var noResultsCard: some View {
         StateMessage(
-            title: "No plant by that name.",
-            message: "Try a room or species, or add this plant with a photo.",
+            title: "No matches",
+            message: "Try a room, owner, species, or a different name.",
             accent: PlantyColor.cyan,
             icon: "magnifyingglass"
         ) {
@@ -161,8 +155,8 @@ struct PlantsLibraryScreen: View {
 
     private func errorCard(_ error: PlantyError) -> some View {
         StateMessage(
-            title: "The plant list did not load.",
-            message: "Planty will keep trying. Today's saved photos are still safe.",
+            title: "The plant list did not load",
+            message: "Saved photos are still safe. Try loading the library again.",
             accent: PlantyColor.orange,
             icon: "arrow.trianglehead.clockwise"
         ) {
@@ -177,37 +171,50 @@ struct PlantsLibraryScreen: View {
     }
 }
 
-/// Status words are more prominent than the species, and there is no gauge.
 struct PlantLibraryRow: View {
     let plant: Plant
     let state: CareState
+    let takePhoto: () -> Void
 
     var body: some View {
-        HStack(spacing: 14) {
-            // A tap on this row means "open the plant", so the thumbnail must
-            // not steal it to show one picture full screen.
-            PlantPhotoView(plant: plant, height: 64, opensFullScreen: false)
-                .frame(width: 64)
+        HStack(spacing: 12) {
+            NavigationLink(value: plant) {
+                HStack(spacing: 12) {
+                    PlantPhotoView(plant: plant, height: 72, opensFullScreen: false)
+                        .frame(width: 72)
 
-            VStack(alignment: .leading, spacing: 5) {
-                Text(plant.commonName)
-                    .font(.headline)
-                    .foregroundStyle(PlantyColor.foreground)
-                StatusPill(state: state)
-                if let species = plant.displaySpecies {
-                    Text(species)
-                        .font(.caption)
-                        .foregroundStyle(PlantyColor.secondaryText)
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(plant.commonName)
+                            .font(.headline)
+                            .foregroundStyle(PlantyColor.foreground)
+                        StatusPill(state: state)
+                        Text(metadata)
+                            .font(.caption)
+                            .foregroundStyle(PlantyColor.secondaryText)
+                            .lineLimit(2)
+                    }
+                    Spacer(minLength: 2)
                 }
-                Text(plant.location)
-                    .font(.caption)
-                    .foregroundStyle(PlantyColor.secondaryText)
-                OwnershipBadge(plant: plant)
             }
+            .buttonStyle(.plain)
 
-            Spacer(minLength: 4)
+            Button(action: takePhoto) {
+                Image(systemName: "camera.fill")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(PlantyColor.pink)
+                    .frame(width: 44, height: 44)
+                    .background(PlantyColor.pink.opacity(0.1), in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Take a photo of \(plant.commonName)")
         }
-        .padding(.vertical, 6)
-        .accessibilityElement(children: .combine)
+        .plantyCard(padding: 12)
+    }
+
+    private var metadata: String {
+        [plant.location, plant.isFriends ? plant.ownershipLabel : nil, plant.displaySpecies]
+            .compactMap { $0 }
+            .filter { !$0.isEmpty }
+            .joined(separator: " · ")
     }
 }
