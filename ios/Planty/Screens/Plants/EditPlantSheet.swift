@@ -34,7 +34,7 @@ struct PlantEditForm {
         var message: String {
             switch self {
             case .notANumber(let field, let entered):
-                "Planty cannot read \u{201C}\(entered)\u{201D} as \(field). Digits only, like 42 or 6.5."
+                "Planty cannot read “\(entered)” as \(field). Digits only, like 42 or 6.5."
             }
         }
     }
@@ -42,7 +42,7 @@ struct PlantEditForm {
     init(plant: Plant) {
         commonName = plant.commonName
         botanicalName = plant.botanicalName ?? ""
-        location = plant.location
+        location = plant.haArea?.cleaned.isEmpty == false ? plant.haArea! : plant.location
         haArea = plant.haArea ?? ""
         steward = plant.steward
         status = plant.status
@@ -80,12 +80,16 @@ struct PlantEditForm {
         setIfChanged(&patch.botanicalName, to: botanicalName, from: plant.botanicalName)
     }
 
-    // Location and steward are never blank on a plant, so an emptied field
-    // reads as "unchanged" rather than a request to erase them.
+    // Existing records may already have a room and HA area that differ. An
+    // untouched form preserves that legacy data. Selecting a new Place in the
+    // UI updates both fields, so new edits cannot create more drift.
     private func applyPlacement(to patch: inout PlantPatch, against plant: Plant) {
         let room = location.cleaned
-        if !room.isEmpty, room != plant.location { patch.location = room }
-        setIfChanged(&patch.haArea, to: haArea, from: plant.haArea)
+        let originalPlace = (plant.haArea?.cleaned.isEmpty == false ? plant.haArea! : plant.location).cleaned
+        if !room.isEmpty, room != originalPlace {
+            patch.location = room
+            patch.haArea = room
+        }
         let keeper = steward.cleaned
         if !keeper.isEmpty, keeper != plant.steward { patch.steward = keeper }
     }
@@ -152,6 +156,7 @@ struct PlantEditForm {
 /// Closes only on success; a failure keeps the sheet and the typing.
 struct EditPlantSheet: View {
     let plant: Plant
+    let choices: ManagedChoicesStore
     let save: (PlantPatch) async -> PlantyError?
 
     /// Separate because shelter has its own endpoint, and moving it here is
@@ -166,10 +171,12 @@ struct EditPlantSheet: View {
 
     init(
         plant: Plant,
+        choices: ManagedChoicesStore,
         save: @escaping (PlantPatch) async -> PlantyError?,
         setSheltered: @escaping (Bool) async -> PlantyError? = { _ in nil }
     ) {
         self.plant = plant
+        self.choices = choices
         self.save = save
         self.setSheltered = setSheltered
         _form = State(initialValue: PlantEditForm(plant: plant))
@@ -201,20 +208,31 @@ struct EditPlantSheet: View {
                 }
 
                 Section {
-                    TextField("Room", text: $form.location)
-                    TextField("Home Assistant area", text: $form.haArea)
+                    ManagedChoiceField(
+                        title: "Place",
+                        emptyLabel: "Choose a place",
+                        customLabel: "Add a custom place",
+                        choices: choices.catalog.places,
+                        value: $form.location
+                    )
                 } header: {
                     Text("Where it lives")
                 } footer: {
-                    Text("The area links this plant to that room's sensors.")
+                    Text("One Place is shared with Home Assistant areas and ambient sensor zones.")
                 }
 
                 Section {
-                    TextField("Owner", text: $form.steward)
+                    ManagedChoiceField(
+                        title: "Owner",
+                        emptyLabel: "Choose an owner",
+                        customLabel: "Add a custom owner",
+                        choices: choices.catalog.owners,
+                        value: $form.steward
+                    )
                 } header: {
                     Text("Whose is it")
                 } footer: {
-                    Text("\u{201C}\(Plant.stewardSelf)\u{201D} means it is yours.")
+                    Text("“\(Plant.stewardSelf)” means it is yours.")
                 }
 
                 if !plant.status.isRetired {
@@ -229,7 +247,7 @@ struct EditPlantSheet: View {
                     Picker("Light", selection: $form.lightExposure) {
                         ForEach(lightOptions, id: \.self) { Text($0.label).tag($0) }
                     }
-                    LabeledContent("Cold limit \u{00B0}F") {
+                    LabeledContent("Cold limit °F") {
                         TextField("none", text: $form.minTempText)
                             .keyboardType(.numbersAndPunctuation)
                             .multilineTextAlignment(.trailing)
@@ -271,7 +289,13 @@ struct EditPlantSheet: View {
                             .multilineTextAlignment(.trailing)
                             .accessibilityLabel("Pot size in inches")
                     }
-                    TextField("Material", text: $form.potMaterial)
+                    ManagedChoiceField(
+                        title: "Material",
+                        emptyLabel: "Not recorded",
+                        customLabel: "Add a custom material",
+                        choices: choices.catalog.potMaterials,
+                        value: $form.potMaterial
+                    )
                     Picker("Drainage", selection: $form.drainage) {
                         ForEach(drainageOptions, id: \.self) { Text(drainageLabel($0)).tag($0) }
                     }
@@ -300,6 +324,7 @@ struct EditPlantSheet: View {
                     .accessibilityLabel(isSaving ? "Saving" : "Save changes")
                 }
             }
+            .task { await choices.loadIfNeeded() }
         }
         .interactiveDismissDisabled(isSaving)
     }
@@ -332,6 +357,7 @@ struct EditPlantSheet: View {
             error = await setSheltered(form.sheltered)
             if error != nil { return }
         }
+        await choices.load()
         dismiss()
     }
 
@@ -378,5 +404,3 @@ struct EditPlantSheet: View {
         options.contains(current) ? options : options + [current]
     }
 }
-
-

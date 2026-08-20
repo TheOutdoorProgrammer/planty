@@ -69,7 +69,7 @@ struct PlantStoryScreen: View {
                         Button(role: .destructive) {
                             isConfirmingDeath = true
                         } label: {
-                            Label("It died\u{2026}", systemImage: "xmark.seal")
+                            Label("It died…", systemImage: "xmark.seal")
                         }
                     }
                 } label: {
@@ -79,7 +79,7 @@ struct PlantStoryScreen: View {
             }
         }
         .sheet(isPresented: $isEditing) {
-            EditPlantSheet(plant: store.plant) { patch in
+            EditPlantSheet(plant: store.plant, choices: session.choices) { patch in
                 let failure = await store.saveEdits(patch)
                 if failure == nil { session.library.apply(store.plant) }
                 return failure
@@ -228,7 +228,6 @@ struct PlantStoryScreen: View {
     private var isEdible: Bool {
         store.plant.domain == .edibleIndoor || store.plant.domain == .edibleOutdoor
     }
-
 
     private var comparison: PhotoComparison {
         PhotoComparison(store.timeline.photos)

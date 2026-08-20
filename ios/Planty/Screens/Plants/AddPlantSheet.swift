@@ -1,14 +1,17 @@
 import SwiftUI
 
 /// Photo-first in spirit: a name is the only required field, and everything
-/// else can be corrected later. No numeric care entry anywhere.
+/// else can be corrected later. Open household vocabularies come from the
+/// server and always retain an explicit custom-value escape hatch.
 struct AddPlantSheet: View {
+    let choices: ManagedChoicesStore
     let create: (NewPlant) async -> PlantyError?
 
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
-    @State private var location = ""
+    @State private var place = ""
     @State private var owner = ""
+    @State private var potMaterial = ""
     @State private var domain = PlantDomain.houseplant
     @State private var watering = WateringMethod.hand
     @State private var error: PlantyError?
@@ -27,10 +30,22 @@ struct AddPlantSheet: View {
                 }
                 Section("What is it") {
                     TextField("Common name", text: $name)
-                    TextField("Where it lives", text: $location)
+                    ManagedChoiceField(
+                        title: "Place",
+                        emptyLabel: "Choose a place",
+                        customLabel: "Add a custom place",
+                        choices: choices.catalog.places,
+                        value: $place
+                    )
                 }
                 Section("Whose is it") {
-                    TextField("Owner's name, or leave blank for yours", text: $owner)
+                    ManagedChoiceField(
+                        title: "Owner",
+                        emptyLabel: "Yours",
+                        customLabel: "Add a custom owner",
+                        choices: choices.catalog.owners,
+                        value: $owner
+                    )
                 }
                 Section("How it grows") {
                     Picker("Kind", selection: $domain) {
@@ -43,6 +58,15 @@ struct AddPlantSheet: View {
                             Text($0.label).tag($0)
                         }
                     }
+                }
+                Section("The pot") {
+                    ManagedChoiceField(
+                        title: "Material",
+                        emptyLabel: "Not recorded",
+                        customLabel: "Add a custom material",
+                        choices: choices.catalog.potMaterials,
+                        value: $potMaterial
+                    )
                 }
             }
             .scrollContentBackground(.hidden)
@@ -68,6 +92,7 @@ struct AddPlantSheet: View {
                     .accessibilityLabel(isSaving ? "Saving" : "Add the plant")
                 }
             }
+            .task { await choices.loadIfNeeded() }
         }
         .interactiveDismissDisabled(isSaving)
     }
@@ -79,15 +104,25 @@ struct AddPlantSheet: View {
         isSaving = true
         defer { isSaving = false }
         error = await create(draft)
-        if error == nil { dismiss() }
+        if error == nil {
+            await choices.load()
+            dismiss()
+        }
     }
 
     private var draft: NewPlant {
         var draft = NewPlant(commonName: name.trimmingCharacters(in: .whitespaces))
-        let trimmedLocation = location.trimmingCharacters(in: .whitespaces)
-        draft.location = trimmedLocation.isEmpty ? nil : trimmedLocation
-        let trimmedOwner = owner.trimmingCharacters(in: .whitespaces)
+        let selectedPlace = place.cleaned
+        if !selectedPlace.isEmpty {
+            // One place drives both legacy storage fields so new records cannot
+            // split a room from the Home Assistant area that represents it.
+            draft.location = selectedPlace
+            draft.haArea = selectedPlace
+        }
+        let trimmedOwner = owner.cleaned
         draft.steward = trimmedOwner.isEmpty ? nil : trimmedOwner
+        let trimmedMaterial = potMaterial.cleaned
+        draft.potMaterial = trimmedMaterial.isEmpty ? nil : trimmedMaterial
         draft.domain = domain
         draft.wateringMethod = watering
         return draft

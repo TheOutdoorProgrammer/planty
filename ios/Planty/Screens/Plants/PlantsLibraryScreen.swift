@@ -40,7 +40,7 @@ struct PlantsLibraryScreen: View {
                 }
             }
             .sheet(isPresented: $isAdding) {
-                AddPlantSheet { draft in
+                AddPlantSheet(choices: session.choices) { draft in
                     await store.create(draft)
                 }
             }
