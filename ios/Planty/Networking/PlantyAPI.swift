@@ -15,6 +15,7 @@ protocol PlantyAPI: Sendable {
     func acknowledge(verdictID: UUID) async throws
     func sensors() async throws -> [SensorLink]
     func homeAssistantEntities() async throws -> [HomeAssistantEntity]
+    func managedChoices() async throws -> ManagedChoices
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest
     func harvests(slug: String?) async throws -> [Harvest]
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink
@@ -50,6 +51,8 @@ extension PlantyAPI {
     func homeAssistantEntities() async throws -> [HomeAssistantEntity] {
         throw PlantyError.server(status: 503, message: "Home Assistant discovery is unavailable from this client.")
     }
+
+    func managedChoices() async throws -> ManagedChoices { .empty }
 
     // Defaults keep lightweight test doubles source-compatible. Production
     // PlantyClient implements all three and GardenStore treats an empty list as
@@ -87,7 +90,9 @@ struct NewPlant: Codable, Sendable, Hashable {
     var commonName: String
     var botanicalName: String?
     var location: String?
+    var haArea: String?
     var steward: String?
+    var potMaterial: String?
     var domain: PlantDomain?
     var wateringMethod: WateringMethod?
     var accessibility: PlantAccessibility?
@@ -95,7 +100,11 @@ struct NewPlant: Codable, Sendable, Hashable {
     enum CodingKeys: String, CodingKey {
         case commonName = "common_name"
         case botanicalName = "botanical_name"
-        case location, steward, domain
+        case location
+        case haArea = "ha_area"
+        case steward
+        case potMaterial = "pot_material"
+        case domain
         case wateringMethod = "watering_method"
         case accessibility
     }
