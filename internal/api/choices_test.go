@@ -38,11 +38,14 @@ func TestManagedChoicesMergeEquivalentPlacesAndHomeAssistantAreas(t *testing.T) 
 	}
 }
 
-func TestManagedChoiceKeyDoesNotInventSynonyms(t *testing.T) {
-	if managedChoiceKey("Living-room") != managedChoiceKey("living_room") {
+func TestManagedPlaceKeyDoesNotInventSynonyms(t *testing.T) {
+	if managedPlaceKey("Living-room") != managedPlaceKey("living_room") {
 		t.Fatal("punctuation variants should collapse")
 	}
-	if managedChoiceKey("Living Room") == managedChoiceKey("Lounge") {
+	if managedPlaceKey("Living Room") == managedPlaceKey("Lounge") {
 		t.Fatal("different names must not be guessed to mean the same place")
+	}
+	if textChoiceKey("Mary-Jane") == textChoiceKey("Mary Jane") {
+		t.Fatal("punctuation in owner names must remain meaningful")
 	}
 }
