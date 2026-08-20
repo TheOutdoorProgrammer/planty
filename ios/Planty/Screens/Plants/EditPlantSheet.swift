@@ -165,9 +165,8 @@ struct EditPlantSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var form: PlantEditForm
-    @State private var error: PlantyError?
     @State private var validation: String?
-    @State private var isSaving = false
+    @State private var action = AsyncSheetAction()
 
     init(
         plant: Plant,
@@ -185,7 +184,7 @@ struct EditPlantSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let error {
+                if let error = action.error {
                     Section {
                         SheetErrorRow(
                             headline: "Not saved. Your changes are still here.",
@@ -308,25 +307,25 @@ struct EditPlantSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
+                        .disabled(action.isRunning)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         Task { await submit() }
                     } label: {
-                        if isSaving {
+                        if action.isRunning {
                             ProgressView()
                         } else {
                             Text("Save")
                         }
                     }
-                    .disabled(isSaving || form.commonName.cleaned.isEmpty)
-                    .accessibilityLabel(isSaving ? "Saving" : "Save changes")
+                    .disabled(action.isRunning || form.commonName.cleaned.isEmpty)
+                    .accessibilityLabel(action.isRunning ? "Saving" : "Save changes")
                 }
             }
             .task { await choices.loadIfNeeded() }
         }
-        .interactiveDismissDisabled(isSaving)
+        .interactiveDismissDisabled(action.isRunning)
     }
 
     private func submit() async {
@@ -344,19 +343,18 @@ struct EditPlantSheet: View {
             return
         }
 
-        isSaving = true
-        defer { isSaving = false }
-
-        if !patch.isEmpty {
-            error = await save(patch)
-            if error != nil { return }
+        let succeeded = await action.perform {
+            if !patch.isEmpty, let failure = await save(patch) {
+                return failure
+            }
+            // Its own endpoint, so both dependent writes live inside one action
+            // lifecycle: one spinner, one retained failure, no double submit.
+            if shelterChanged, let failure = await setSheltered(form.sheltered) {
+                return failure
+            }
+            return nil
         }
-        // Its own endpoint, so a failure here must not read as the edit having
-        // failed when the edit already landed.
-        if shelterChanged {
-            error = await setSheltered(form.sheltered)
-            if error != nil { return }
-        }
+        guard succeeded else { return }
         await choices.load()
         dismiss()
     }
