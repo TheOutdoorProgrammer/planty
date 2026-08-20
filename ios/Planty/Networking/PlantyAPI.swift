@@ -1,7 +1,8 @@
 import Foundation
 
-/// The whole HTTP contract from docs/DATA-MODEL.md, as one seam. Screens talk
-/// to this, never to URLSession, which is what makes the state logic testable.
+/// The app-facing service seam. Raw HTTP paths and closed wire enums come from
+/// api/openapi.json; screens talk to this protocol rather than URLSession so
+/// state logic stays testable.
 protocol PlantyAPI: Sendable {
     func today() async throws -> Digest
     func plants(filter: PlantFilter) async throws -> [Plant]
@@ -172,35 +173,7 @@ struct NewSensorLink: Codable, Sendable, Hashable {
 
 extension PlantyClient {
     func homeAssistantEntities() async throws -> [HomeAssistantEntity] {
-        guard let baseURL = configuration.baseURL else { throw PlantyError.notConfigured }
-        let url = baseURL.appendingPathComponent("/v1/home-assistant/entities")
-        var request = URLRequest(url: url, timeoutInterval: Patience.ordinary)
-        request.httpMethod = "GET"
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        if let token = configuration.token {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-        let data: Data
-        let response: URLResponse
-        do {
-            (data, response) = try await session.data(for: request)
-        } catch {
-            throw PlantyError.from(error)
-        }
-        guard let http = response as? HTTPURLResponse else {
-            throw PlantyError.transport("The service answered with no status.")
-        }
-        guard (200..<300).contains(http.statusCode) else {
-            switch http.statusCode {
-            case 401, 403: throw PlantyError.unauthorized
-            case 404: throw PlantyError.notFound
-            default: throw PlantyError.server(status: http.statusCode, message: nil)
-            }
-        }
-        do {
-            return try JSONDecoder().decode(HomeAssistantEntityListResponse.self, from: data).entities
-        } catch {
-            throw PlantyError.from(error)
-        }
+        let response: HomeAssistantEntityListResponse = try await get(APIPath.listHomeAssistantEntities)
+        return response.entities
     }
 }
