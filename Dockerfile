@@ -1,18 +1,3 @@
-FROM golang:1.26-alpine AS build
-
-WORKDIR /src
-
-# Cached separately so a source-only change does not re-download the module graph.
-COPY go.mod go.sum ./
-RUN go mod download
-
-COPY . .
-
-ARG VERSION=dev
-RUN CGO_ENABLED=0 go build -trimpath \
-    -ldflags "-s -w -X main.version=${VERSION}" \
-    -o /out/planty ./cmd/planty
-
 # Claude Code ships a native musl build, so the judge backend costs one static
 # binary rather than a Node runtime.
 FROM alpine:3.22 AS claude
@@ -52,9 +37,14 @@ FROM alpine:3.22
 RUN apk add --no-cache ca-certificates libgcc libstdc++ bash \
     && adduser -D -u 65532 -h /home/planty planty
 
+# GoReleaser already built the exact binary being published. BuildKit sets
+# TARGETARCH for each platform, and GoReleaser includes the Go architecture
+# variant in its per-target dist directory (for example amd64_v1 or arm64_v8.0).
+ARG TARGETARCH
+COPY dist/planty_linux_${TARGETARCH}_*/planty /usr/local/bin/planty
+
 # On PATH because the model runs `planty agent ...` by name, and symlinked at
 # the old absolute path so existing manifests and runbooks keep working.
-COPY --from=build /out/planty /usr/local/bin/planty
 RUN ln -s /usr/local/bin/planty /planty
 
 COPY --from=claude /out/claude /usr/local/bin/claude
