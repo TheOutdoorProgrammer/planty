@@ -1,44 +1,55 @@
-# Orchestrate versioned artifacts from the iOS release
+# Orchestrate versioned artifacts through a staged Quill release
 
 ## Context and Problem Statement
 
 Planty publishes an iOS app, a Go CLI, and a multi-architecture backend image from the same source tree.
-The iOS workflow used Quill to create the version tag with the repository `GITHUB_TOKEN`, while a separate workflow expected that tag push to start the CLI and image release.
-GitHub intentionally does not start new workflow runs for events created with a workflow's `GITHUB_TOKEN`, so the app shipped without a matching versioned backend image or CLI release.
+The iOS archive requires Xcode on macOS, while the backend image requires Docker on Linux.
+A composite action cannot change runners between steps, and splitting the publishers into separate release jobs weakens Quill's guarantees around pre-tag validation, cleanup, and publisher ordering.
 
-Every release surface needs the same version without relying on recursive workflow events.
-The backend image must also remain on a Linux runner because GitHub's macOS runners do not provide the Docker engine required by Buildx.
+The Docker image also used to compile the Go binary again even though GoReleaser had already built the exact release binary.
+That duplicated work and allowed the downloadable CLI and the binary inside the image to differ.
+
+Every versioned release surface should come from one Quill release transaction, while platform-specific build work stays on the runner that supports it.
+Ordinary pushes to `main` should still publish `main`, `latest`, and commit-SHA backend snapshots.
 
 ## Considered Options
 
-- Keep the tag-triggered workflow and create tags with a personal access token or GitHub App token.
-- Publish the CLI, IPA, and image directly through Quill in the macOS job.
-- Let Quill publish the CLI and IPA, then pass its version output to the backend workflow as a reusable Linux job.
+- Keep the iOS release and backend image as separate workflows.
+- Move all iOS build logic into Quill.
+- Stage the signed IPA from macOS, then let Quill publish everything from Linux.
 
 ## Decision Outcome
 
-Chosen: **let Quill publish the CLI and IPA, then pass its version output to the backend workflow as a reusable Linux job**.
+Chosen: **stage the signed IPA from macOS, then let Quill publish everything from Linux**.
 
-The manually dispatched iOS workflow is the release orchestrator.
-Quill calculates and creates one version, publishes the CLI and IPA, and exposes that version to a dependent job.
-The dependent job calls the backend image workflow directly and publishes semver tags from the supplied version.
-Ordinary pushes to `main` continue to invoke the same backend workflow independently for `main`, `latest`, and commit-SHA snapshot tags.
+`.github/workflows/release.yml` is the only release workflow.
+For a manually dispatched release, its macOS job owns Xcode testing, signing, archive, and export, then uploads `Planty.ipa` with `TheOutdoorProgrammer/quill/stage@v1`.
+A dependent job calls Quill's `staged-release.yml@v1`, which downloads the IPA onto Ubuntu and runs GoReleaser, Fledge, and Docker in Quill's fixed order.
 
-Using a stronger token to manufacture another workflow event was rejected because event recursion is implicit orchestration and adds a long-lived credential solely to bypass a GitHub safety boundary.
-Publishing Docker from the macOS job was rejected because Quill's Docker publisher uses Buildx and the hosted macOS runner has no Docker engine.
+GoReleaser builds `dist/` before Docker runs.
+The Dockerfile copies the matching Linux binary from that tree for each BuildKit target instead of invoking `go build` itself.
+The image therefore contains the same binary Quill built for the release.
+
+Ordinary pushes to `main` remain snapshot image builds.
+They run a GoReleaser snapshot first to produce the same `dist/` layout, then build and push the image with `main`, `latest`, and commit-SHA tags.
+
+Using a stronger token to manufacture another workflow event was rejected because event recursion is implicit orchestration and adds a credential solely to bypass a GitHub safety boundary.
+Moving repository-specific Xcode and signing commands into Quill was rejected because those steps belong to the application, not the release tool.
 
 ### Consequences
 
 Good:
 
 - The iOS app, CLI, and backend image use one version selected by Quill.
-- A release does not depend on GitHub turning a workflow-created tag into another workflow event.
-- The backend image remains on a native Linux runner with multi-architecture Buildx support.
-- The backend workflow remains reusable for both release images and per-commit snapshots.
-- A dry run never invokes the publishing backend job.
+- Docker runs on Linux without separating it from GoReleaser's release transaction.
+- Quill's Docker dry run happens before the tag is cut.
+- A failed Docker publish participates in Quill's tag cleanup instead of leaving a partially completed release behind.
+- The image packages the GoReleaser-built binary instead of rebuilding Go independently.
+- There is one Planty release workflow to understand and maintain.
+- Main-branch snapshot images keep their existing tags and cadence.
 
 Bad, and accepted:
 
-- The backend image starts only after Quill has published the downloadable artifacts, so the three surfaces do not become available at exactly the same instant.
-- If image publishing fails, the release already exists and must be completed by rerunning the failed backend job rather than cutting another version.
-- The iOS workflow is now the sole entry point for versioned releases, even when a change affects only the backend.
+- The signed IPA crosses a workflow-artifact boundary before publishing.
+- Building the Dockerfile directly now requires a GoReleaser `dist/` tree to exist first.
+- Main snapshots run a GoReleaser build before Docker, adding some work that the old Dockerfile did internally anyway.
