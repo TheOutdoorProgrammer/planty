@@ -39,6 +39,40 @@ jobs:
 
       - run: go test -race ./...
 
+  # The image packages GoReleaser's dist binary rather than running go build.
+  # Exercise that handoff on every change so a dist-layout or Dockerfile change
+  # fails before the release workflow sees it.
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build GoReleaser assets
+        uses: goreleaser/goreleaser-action@v7
+        with:
+          version: "~> v2"
+          args: release --snapshot --clean --skip=publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image from dist
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: false
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
   ios:
     runs-on: macos-26
     steps:
