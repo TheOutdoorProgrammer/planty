@@ -52,22 +52,7 @@ func (d Deps) create(ctx context.Context, out io.Writer, args []string) error {
 		PotMaterial:    *potMaterial,
 		SoilMix:        *soil,
 	}
-	// The same defaults the API applies to a sparse create, so a plant named in
-	// one sentence still validates. (Mirrors api.applyPlantDefaults, which is
-	// unexported there.)
-	if p.Domain == "" {
-		p.Domain = plant.DomainHouseplant
-	}
-	p.Status = plant.StatusAlive
-	if p.Steward == "" {
-		p.Steward = plant.StewardSelf
-	}
-	if p.Accessibility == "" {
-		p.Accessibility = plant.AccessEasy
-	}
-	if p.WateringMethod == "" {
-		p.WateringMethod = plant.WateringHand
-	}
+	plant.ApplyDefaults(&p)
 
 	seen := given(set)
 	if seen["dripper"] {
