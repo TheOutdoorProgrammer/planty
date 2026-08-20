@@ -54,10 +54,12 @@ func (s *Store) ChoiceCandidates(ctx context.Context) ([]ChoiceCandidate, error)
 
 	out := []ChoiceCandidate{}
 	for rows.Next() {
+		var kind string
 		var candidate ChoiceCandidate
-		if err := rows.Scan(&candidate.Kind, &candidate.Value, &candidate.Source, &candidate.UsedAt); err != nil {
+		if err := rows.Scan(&kind, &candidate.Value, &candidate.Source, &candidate.UsedAt); err != nil {
 			return nil, err
 		}
+		candidate.Kind = ChoiceKind(kind)
 		out = append(out, candidate)
 	}
 	return out, rows.Err()
