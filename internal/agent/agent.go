@@ -238,9 +238,13 @@ Verdicts and owners:
                 --people mild --basis derived --identified-as "Lilium longiflorum"
                 --principle "unidentified nephrotoxin" --source www.aspca.org
 
-  away        record a period nobody is home, with a backup contact
+  away        list, create, change, or cancel periods nobody is home
+              planty agent away
               planty agent away --from <date> --until <date> [--contact <name>] [--notify <service>] [--note <text>]
-              example: planty agent away --from 2026-08-20 --until 2026-08-27 --contact "Sam"`
+              planty agent away --id <id> [--from <date>] [--until <date>] [--contact <name>] [--notify <service>] [--note <text>]
+              planty agent away --id <id> --cancel
+              ids come from the no-flag list; blank contact, notify, or note values clear those fields
+              example: planty agent away --id 6f0dd1c2-6b3a-4e0e-9d3f-2a4b8c9d0e1f --contact "Maya"`
 
 // verbs is the dispatch table. A name absent here is refused by name in Run
 // rather than falling through to the rest of the CLI, and a test keeps this
@@ -280,7 +284,7 @@ var verbs = map[string]func(Deps, context.Context, io.Writer, []string) error{
 	"ack":    Deps.ack,
 	"ask":    Deps.ask,
 	"answer": Deps.answer,
-	"away":   Deps.away,
+	"away":   Deps.manageAway,
 }
 
 // Run performs one verb. Anything unlisted — autopsy above all — is refused
