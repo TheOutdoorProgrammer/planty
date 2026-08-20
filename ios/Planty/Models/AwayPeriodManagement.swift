@@ -41,4 +41,8 @@ extension AwayPeriod {
     func covers(_ date: Date) -> Bool {
         date >= startsAt && date < endsAt
     }
+
+    func Covers(_ date: Date) -> Bool {
+        covers(date)
+    }
 }
