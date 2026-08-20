@@ -153,3 +153,4 @@ enum WateringMethod: String, FallbackDecodable, CaseIterable {
 
     static let fallback = WateringMethod.unknown
 }
+
