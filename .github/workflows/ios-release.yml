@@ -22,20 +22,12 @@ permissions:
   contents: read
 
 jobs:
-  release:
+  ios:
+    name: iOS archive
     # Xcode 26 is the default here, which the iOS 26 deployment target needs.
     runs-on: macos-26
-    permissions:
-      contents: write
-      # Publishing with a workload identity token, so no upload token is
-      # stored in this repository at all.
-      id-token: write
     steps:
       - uses: actions/checkout@v5
-        with:
-          # Not optional: quill reads the tag list to work out the next version
-          # and refuses a shallow checkout rather than restarting from zero.
-          fetch-depth: 0
 
       - uses: actions/setup-go@v6
         with:
@@ -114,43 +106,39 @@ jobs:
 
           ls -la "$RUNNER_TEMP/export"
 
-      - uses: TheOutdoorProgrammer/quill@v1
-        id: release
+      # Quill publishes on Linux now. The macOS job owns only the work that
+      # actually requires Xcode and hands the signed archive across the job
+      # boundary as a short-lived workflow artifact.
+      - id: stage
+        uses: TheOutdoorProgrammer/quill/stage@3881bcd2a15f424e26e8b252b9a5a698a4c7296f
         with:
-          bump: ${{ inputs.bump }}
-          scope: ${{ inputs.scope }}
-          dry-run: ${{ inputs.dry-run }}
-          # Quill owns the tag and publishes both downloadable artifacts with
-          # one version. The Linux-only image build consumes that version in
-          # the reusable job below after Quill succeeds.
-          publish: goreleaser, fledge
-          fledge-server: ${{ secrets.FLEDGE_URL }}
-          # Checked before the tag is cut, so a missing archive does not burn
-          # the version. Named, never globbed: this path is opened verbatim,
-          # and `*.ipa` is simply a filename that does not exist.
-          fledge-ipa: ${{ runner.temp }}/export/Planty.ipa
-          # The tap lives in another repository. Quill mints a scoped,
-          # hour-long App token rather than storing a broad PAT.
-          tap-app-id: ${{ secrets.TAP_APP_ID }}
-          tap-private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
-
-      - name: Where it landed
-        if: steps.release.outputs.page-url != ''
-        run: |
-          echo "Install page: ${{ steps.release.outputs.page-url }}" >> "$GITHUB_STEP_SUMMARY"
+          name: planty-ios-${{ github.run_id }}
+          path: ${{ runner.temp }}/export/Planty.ipa
 
     outputs:
-      version: ${{ steps.release.outputs.version }}
-      prerelease: ${{ steps.release.outputs.prerelease }}
+      artifact-name: ${{ steps.stage.outputs.artifact-name }}
 
-  backend:
-    name: Backend image
-    needs: release
-    if: inputs.dry-run != true
-    uses: ./.github/workflows/release.yml
+  release:
+    name: Release
+    needs: ios
+    uses: TheOutdoorProgrammer/quill/.github/workflows/staged-release.yml@3881bcd2a15f424e26e8b252b9a5a698a4c7296f
     with:
-      version: ${{ needs.release.outputs.version }}
-      prerelease: ${{ needs.release.outputs.prerelease == 'true' }}
+      artifact-name: ${{ needs.ios.outputs.artifact-name }}
+      fledge-ipa: Planty.ipa
+      bump: ${{ inputs.bump }}
+      scope: ${{ inputs.scope }}
+      dry-run: ${{ inputs.dry-run }}
+      # GoReleaser and Docker deliberately share this Ubuntu job. Docker can
+      # consume anything GoReleaser leaves in dist/ without another handoff.
+      publish: goreleaser,fledge,docker
+      docker-platforms: linux/amd64,linux/arm64
+    secrets:
+      fledge-server: ${{ secrets.FLEDGE_URL }}
+      tap-app-id: ${{ secrets.TAP_APP_ID }}
+      tap-private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
     permissions:
-      contents: read
+      contents: write
       packages: write
+      # Fledge authenticates with a workload identity token, so no upload
+      # token is stored in this repository.
+      id-token: write
