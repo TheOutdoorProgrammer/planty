@@ -66,24 +66,25 @@ func mergeManagedChoices(candidates []store.ChoiceCandidate, entities []ha.Entit
 
 	for _, candidate := range candidates {
 		target := places
+		placeIdentity := true
 		switch candidate.Kind {
 		case store.ChoiceOwner:
-			target = owners
+			target, placeIdentity = owners, false
 		case store.ChoicePotMaterial:
-			target = materials
+			target, placeIdentity = materials, false
 		case store.ChoicePlace:
 		default:
 			continue
 		}
-		addManagedChoice(target, candidate.Value, candidate.Source, candidate.UsedAt)
+		addManagedChoice(target, candidate.Value, candidate.Source, candidate.UsedAt, placeIdentity)
 	}
 
 	// `self` is a protocol default but also a valid household-owned label, so a
 	// brand-new garden can choose it before any plant row exists.
-	addManagedChoice(owners, "self", "default", time.Time{})
+	addManagedChoice(owners, "self", "default", time.Time{}, false)
 	for _, entity := range entities {
 		if strings.TrimSpace(entity.Area) != "" {
-			addManagedChoice(places, entity.Area, "home_assistant", time.Time{})
+			addManagedChoice(places, entity.Area, "home_assistant", time.Time{}, true)
 		}
 	}
 
@@ -94,9 +95,12 @@ func mergeManagedChoices(candidates []store.ChoiceCandidate, entities []ha.Entit
 	}
 }
 
-func addManagedChoice(target map[string]*choiceAccumulator, value, source string, usedAt time.Time) {
+func addManagedChoice(target map[string]*choiceAccumulator, value, source string, usedAt time.Time, placeIdentity bool) {
 	value = strings.TrimSpace(value)
-	key := managedChoiceKey(value)
+	key := textChoiceKey(value)
+	if placeIdentity {
+		key = managedPlaceKey(value)
+	}
 	if key == "" {
 		return
 	}
@@ -150,10 +154,15 @@ func finalizeManagedChoices(values map[string]*choiceAccumulator) managedChoiceL
 	return managedChoiceList{Recent: recent, All: all}
 }
 
-// Punctuation and whitespace are presentation, not identity. This collapses
-// Living Room, living-room and living_room without pretending unrelated names
-// such as Lounge are synonyms.
-func managedChoiceKey(value string) string {
+func textChoiceKey(value string) string {
+	return strings.ToLower(strings.Join(strings.Fields(value), " "))
+}
+
+// Place punctuation is presentation, not identity. This collapses Living Room,
+// living-room and living_room without pretending unrelated names such as
+// Lounge are synonyms. Other vocabularies keep punctuation because it can be
+// meaningful in a person's name or a material label.
+func managedPlaceKey(value string) string {
 	fields := strings.FieldsFunc(strings.ToLower(strings.TrimSpace(value)), func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
 	})
