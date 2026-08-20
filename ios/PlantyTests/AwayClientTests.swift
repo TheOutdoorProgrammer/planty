@@ -7,8 +7,9 @@ import Testing
 struct AwayClientTests {
     @Test("Away coverage lists from the management route")
     func listsAwayPeriods() async throws {
+        let stub = IsolatedStubTransport()
         let id = UUID()
-        StubTransport.respond(json: """
+        stub.respond(json: """
             {"away_periods":[{
               "id":"\(id.uuidString)",
               "starts_at":"2103-03-01T12:00:00Z",
@@ -18,8 +19,8 @@ struct AwayClientTests {
             }],"count":1}
             """)
 
-        let periods = try await StubTransport.client().awayPeriods()
-        let request = try #require(StubResponder.shared.requests.first)
+        let periods = try await stub.client().awayPeriods()
+        let request = try #require(stub.requests.first)
 
         #expect(request.httpMethod == "GET")
         #expect(request.url?.path == "/v1/away")
@@ -29,8 +30,9 @@ struct AwayClientTests {
 
     @Test("Editing sends every field so blank values clear old coverage metadata")
     func editsAwayPeriod() async throws {
+        let stub = IsolatedStubTransport()
         let id = UUID()
-        StubTransport.respond(json: """
+        stub.respond(json: """
             {
               "id":"\(id.uuidString)",
               "starts_at":"2103-04-01T12:00:00Z",
@@ -42,15 +44,15 @@ struct AwayClientTests {
         let starts = try #require(formatter.date(from: "2103-04-01T12:00:00Z"))
         let ends = try #require(formatter.date(from: "2103-04-05T12:00:00Z"))
 
-        _ = try await StubTransport.client().updateAway(
+        _ = try await stub.client().updateAway(
             id: id,
             draft: NewAwayPeriod(startsAt: starts, endsAt: ends)
         )
 
-        let request = try #require(StubResponder.shared.requests.first)
+        let request = try #require(stub.requests.first)
         #expect(request.httpMethod == "PATCH")
         #expect(request.url?.path == "/v1/away/\(id.uuidString)")
-        let data = try #require(request.httpBody)
+        let data = try #require(request.stubbedBody)
         let body = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
         #expect(body["backup_contact"] as? String == "")
         #expect(body["backup_notify"] as? String == "")
@@ -59,12 +61,13 @@ struct AwayClientTests {
 
     @Test("Cancelling uses DELETE on the period id")
     func cancelsAwayPeriod() async throws {
+        let stub = IsolatedStubTransport()
         let id = UUID()
-        StubTransport.respond(status: 204, json: "")
+        stub.respond(status: 204, json: "")
 
-        try await StubTransport.client().cancelAway(id: id)
+        try await stub.client().cancelAway(id: id)
 
-        let request = try #require(StubResponder.shared.requests.first)
+        let request = try #require(stub.requests.first)
         #expect(request.httpMethod == "DELETE")
         #expect(request.url?.path == "/v1/away/\(id.uuidString)")
     }
