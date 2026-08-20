@@ -7,7 +7,9 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"os"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
@@ -18,16 +20,21 @@ import (
 //
 // There is no authentication by deliberate choice; keep it on the LAN.
 type Server struct {
-	store  *store.Store
-	log    *slog.Logger
-	photos *photos.Store
-	judge  *judge.Judge
+	store         *store.Store
+	log           *slog.Logger
+	photos        *photos.Store
+	judge         *judge.Judge
+	homeAssistant homeAssistantDiscoverer
 }
 
 // New builds a server. Photo storage and the judge are optional: without them
 // the photo routes report unavailable rather than the whole service failing.
 func New(s *store.Store, log *slog.Logger) *Server {
-	return &Server{store: s, log: log}
+	server := &Server{store: s, log: log}
+	if baseURL, token := os.Getenv("PLANTY_HA_URL"), os.Getenv("PLANTY_HA_TOKEN"); baseURL != "" && token != "" {
+		server.homeAssistant = ha.New(baseURL, token)
+	}
+	return server
 }
 
 // WithPhotos enables the photo timeline and vision diagnosis routes.
@@ -81,6 +88,8 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc("GET /v1/today", s.today)
 	mux.HandleFunc("POST /v1/verdicts/{id}/ack", s.ackVerdict)
+
+	mux.HandleFunc("GET /v1/home-assistant/entities", s.discoverHomeAssistantEntities)
 
 	mux.HandleFunc("GET /v1/sensors", s.listSensors)
 	mux.HandleFunc("POST /v1/sensors", s.linkSensor)
