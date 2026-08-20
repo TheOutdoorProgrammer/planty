@@ -5,9 +5,8 @@ import SwiftUI
 /// top as a chip and never blocks the shutter.
 struct SnapScreen: View {
     @Environment(AppSession.self) private var session
-    @State private var camera = CameraController()
+    @State private var acquisition = PhotoAcquisition()
     @State private var isPickingPlant = false
-    @State private var photoItem: PhotosPickerItem?
     @State private var isConfirmingDiscard = false
     @State private var route: [SnapRoute] = []
 
@@ -18,6 +17,7 @@ struct SnapScreen: View {
             ScrollView {
                 VStack(spacing: 18) {
                     PlantChip(plant: store.selectedPlant) { isPickingPlant = true }
+                    acquisitionError
                     stage
                 }
                 .padding(.horizontal, 20)
@@ -53,9 +53,10 @@ struct SnapScreen: View {
                 }
             }
             .task(id: session.selectedTab) { await prepareIfVisible() }
-            .onDisappear { camera.stop() }
-            .onChange(of: photoItem) { _, item in
-                Task { await load(item) }
+            .onDisappear { acquisition.stop() }
+            .onChange(of: acquisition.photoItem) { _, item in
+                guard item != nil else { return }
+                Task { await importPhoto() }
             }
             .confirmationDialog(
                 "Discard this photo?",
@@ -95,15 +96,15 @@ struct SnapScreen: View {
 
     @ViewBuilder
     private var readyState: some View {
-        switch camera.availability {
+        switch acquisition.camera.availability {
         case .denied:
-            CameraPermissionCard(photoItem: $photoItem)
+            CameraPermissionCard(photoItem: photoItemBinding)
         case .unavailable:
-            NoCameraCard(photoItem: $photoItem)
+            NoCameraCard(photoItem: photoItemBinding)
         case .ready, .unknown:
             CameraStage(
-                camera: camera,
-                photoItem: $photoItem,
+                camera: acquisition.camera,
+                photoItem: photoItemBinding,
                 shutter: { Task { await shoot() } }
             )
         }
@@ -128,6 +129,24 @@ struct SnapScreen: View {
     }
 
     @ViewBuilder
+    private var acquisitionError: some View {
+        if let error = acquisition.error {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundStyle(PlantyColor.orange)
+                Text(error)
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.foreground)
+                Spacer()
+                Button("Dismiss") { acquisition.clearError() }
+                    .font(.caption.weight(.semibold))
+            }
+            .padding(12)
+            .background(PlantyColor.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+        }
+    }
+
+    @ViewBuilder
     private var toast: some View {
         if let message = store.toast {
             SaveToast(message: message)
@@ -139,11 +158,18 @@ struct SnapScreen: View {
         }
     }
 
+    private var photoItemBinding: Binding<PhotosPickerItem?> {
+        Binding(
+            get: { acquisition.photoItem },
+            set: { acquisition.photoItem = $0 }
+        )
+    }
+
     /// TabView builds neighbouring tabs eagerly, and asking for the camera
     /// before the user has opened Snap is how permission prompts get denied.
     private func prepareIfVisible() async {
         guard session.selectedTab == .snap else {
-            camera.stop()
+            acquisition.stop()
             return
         }
         await prepare()
@@ -160,27 +186,22 @@ struct SnapScreen: View {
         if session.library.plants.isEmpty {
             await session.library.load()
         }
-        await camera.prepare()
+        await acquisition.prepare()
     }
 
     private func shoot() async {
-        guard let jpeg = try? await camera.capture() else { return }
-        store.accept(jpeg: jpeg)
-
-        // A fresh capture has no asset, so it identifies but never caches.
-        await session.identification.identify(jpeg: jpeg, assetID: nil)
+        guard let acquired = await acquisition.takePhoto() else { return }
+        await accept(acquired)
     }
 
-    private func load(_ item: PhotosPickerItem?) async {
-        guard let item,
-              let data = try? await item.loadTransferable(type: Data.self)
-        else { return }
-        store.accept(jpeg: data)
-        photoItem = nil
+    private func importPhoto() async {
+        guard let acquired = await acquisition.importSelectedPhoto() else { return }
+        await accept(acquired)
+    }
 
-        // itemIdentifier is the PHAsset localIdentifier, and the only thread
-        // back to the original file's EXIF and GPS.
-        await session.identification.identify(jpeg: data, assetID: item.itemIdentifier)
+    private func accept(_ acquired: AcquiredPhoto) async {
+        store.accept(jpeg: acquired.jpeg)
+        await session.identification.identify(jpeg: acquired.jpeg, assetID: acquired.assetID)
     }
 
     /// A candidate names a species, not one of your pots, so this only offers a
