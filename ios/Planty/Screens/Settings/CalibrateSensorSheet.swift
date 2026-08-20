@@ -10,8 +10,7 @@ struct CalibrateSensorSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var dry = ""
     @State private var wet = ""
-    @State private var isSaving = false
-    @State private var failure: PlantyError?
+    @State private var action = AsyncSheetAction()
 
     var body: some View {
         NavigationStack {
@@ -68,7 +67,7 @@ struct CalibrateSensorSheet: View {
                     }
                 }
 
-                if let failure {
+                if let failure = action.error {
                     Section {
                         Label {
                             Text("""
@@ -86,17 +85,17 @@ struct CalibrateSensorSheet: View {
             .plantyPage()
             .navigationTitle("Calibrate")
             .navigationBarTitleDisplayMode(.inline)
-            .interactiveDismissDisabled(isSaving)
+            .interactiveDismissDisabled(action.isRunning)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
+                        .disabled(action.isRunning)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Saving…" : "Save") {
+                    Button(action.isRunning ? "Saving…" : "Save") {
                         Task { await attemptSave() }
                     }
-                    .disabled(proposed?.readsTheRightWayRound != true || isSaving)
+                    .disabled(proposed?.readsTheRightWayRound != true || action.isRunning)
                 }
             }
         }
@@ -106,10 +105,8 @@ struct CalibrateSensorSheet: View {
     /// the sheet open with both readings intact.
     private func attemptSave() async {
         guard let ready = proposed, ready.readsTheRightWayRound else { return }
-        isSaving = true
-        failure = await save(ready)
-        isSaving = false
-        if failure == nil { dismiss() }
+        guard await action.perform({ await save(ready) }) else { return }
+        dismiss()
     }
 
     private var proposed: SensorCalibration? {
