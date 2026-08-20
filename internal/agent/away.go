@@ -32,12 +32,12 @@ func (d Deps) manageAway(ctx context.Context, out io.Writer, args []string) erro
 	if err := parse(set, args); err != nil {
 		return err
 	}
-	if d.Store == nil {
-		return errors.New("planty has no database to read")
-	}
 
 	seen := given(set)
 	if len(seen) == 0 {
+		if d.Store == nil {
+			return errors.New("planty has no database to read")
+		}
 		return d.listAway(ctx, out)
 	}
 
@@ -55,6 +55,9 @@ func (d Deps) manageAway(ctx context.Context, out io.Writer, args []string) erro
 		ends, err := parseWhen(*until)
 		if err != nil {
 			return err
+		}
+		if d.Store == nil {
+			return errors.New("planty has no database to write")
 		}
 		saved, err := d.Store.GoAway(ctx, plant.AwayPeriod{
 			StartsAt:      starts,
@@ -79,6 +82,9 @@ func (d Deps) manageAway(ctx context.Context, out io.Writer, args []string) erro
 		if len(seen) != 2 || !seen["id"] || !seen["cancel"] {
 			return errors.New("--cancel cannot be combined with edits; cancel it or change it, not both")
 		}
+		if d.Store == nil {
+			return errors.New("planty has no database to write")
+		}
 		if err := d.Store.DeleteAway(ctx, id); errors.Is(err, store.ErrNotFound) {
 			return errors.New("no away period has that id; planty agent away lists current coverage")
 		} else if err != nil {
@@ -86,6 +92,24 @@ func (d Deps) manageAway(ctx context.Context, out io.Writer, args []string) erro
 		}
 		_, _ = fmt.Fprintf(out, "cancelled away period %s\n", id)
 		return nil
+	}
+
+	changed := seen["from"] || seen["until"] || seen["contact"] || seen["notify"] || seen["note"]
+	if !changed {
+		return errors.New("nothing to change; pass a field with --id, or --cancel")
+	}
+	if seen["from"] {
+		if _, err := parseWhen(*from); err != nil {
+			return err
+		}
+	}
+	if seen["until"] {
+		if _, err := parseWhen(*until); err != nil {
+			return err
+		}
+	}
+	if d.Store == nil {
+		return errors.New("planty has no database to write")
 	}
 
 	current, err := d.Store.AwayPeriod(ctx, id)
@@ -96,35 +120,20 @@ func (d Deps) manageAway(ctx context.Context, out io.Writer, args []string) erro
 		return err
 	}
 
-	changed := false
 	if seen["from"] {
-		current.StartsAt, err = parseWhen(*from)
-		if err != nil {
-			return err
-		}
-		changed = true
+		current.StartsAt, _ = parseWhen(*from)
 	}
 	if seen["until"] {
-		current.EndsAt, err = parseWhen(*until)
-		if err != nil {
-			return err
-		}
-		changed = true
+		current.EndsAt, _ = parseWhen(*until)
 	}
 	if seen["contact"] {
 		current.BackupContact = *contact
-		changed = true
 	}
 	if seen["notify"] {
 		current.BackupNotify = *notify
-		changed = true
 	}
 	if seen["note"] {
 		current.Note = *note
-		changed = true
-	}
-	if !changed {
-		return errors.New("nothing to change; pass a field with --id, or --cancel")
 	}
 
 	saved, err := d.Store.UpdateAway(ctx, id, current)
