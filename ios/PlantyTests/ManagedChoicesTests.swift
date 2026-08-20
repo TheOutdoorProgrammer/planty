@@ -7,7 +7,8 @@ import Testing
 struct ManagedChoicesTests {
     @Test("The client loads the server catalog from one route")
     func clientLoadsCatalog() async throws {
-        StubTransport.respond(json: """
+        let stub = IsolatedStubTransport()
+        stub.respond(json: """
             {
               "places": {
                 "recent": [{"value":"Living Room","sources":["plant_location"],"last_used_at":"2026-08-20T01:00:00Z"}],
@@ -21,8 +22,8 @@ struct ManagedChoicesTests {
             }
             """)
 
-        let catalog = try await StubTransport.client().managedChoices()
-        let request = try #require(StubResponder.shared.requests.first)
+        let catalog = try await stub.client().managedChoices()
+        let request = try #require(stub.requests.first)
 
         #expect(request.httpMethod == "GET")
         #expect(request.url?.path == "/v1/choices")
