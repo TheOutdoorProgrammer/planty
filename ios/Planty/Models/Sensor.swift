@@ -1,5 +1,92 @@
 import Foundation
 
+/// Sanitized metadata for one Home Assistant entity. Home Assistant's token
+/// stays on the Planty service; the phone receives only what a picker needs.
+struct HomeAssistantEntity: Codable, Sendable, Hashable, Identifiable {
+    let entityID: String
+    let friendlyName: String
+    let domain: String
+    let deviceClass: String?
+    let available: Bool
+    let area: String?
+
+    var id: String { entityID }
+
+    enum CodingKeys: String, CodingKey {
+        case entityID = "entity_id"
+        case friendlyName = "friendly_name"
+        case domain
+        case deviceClass = "device_class"
+        case available
+        case area
+    }
+
+    var metadataLabel: String? {
+        let parts = [area, deviceClass?.replacingOccurrences(of: "_", with: " ").capitalized]
+            .compactMap { value -> String? in
+                guard let value, !value.isEmpty else { return nil }
+                return value
+            }
+        return parts.isEmpty ? nil : parts.joined(separator: " • ")
+    }
+
+    func matches(search query: String) -> Bool {
+        let query = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return true }
+        return [entityID, friendlyName, domain, deviceClass ?? "", area ?? ""]
+            .contains { $0.localizedCaseInsensitiveContains(query) }
+    }
+
+    func isLikely(for role: SensorRole) -> Bool {
+        let deviceClass = deviceClass?.lowercased()
+        let tokens = discoveryTokens
+        switch role {
+        case .soilMoisture:
+            return deviceClass == "moisture" || tokens.containsAny("soil", "moisture", "wetness", "substrate", "miflora")
+        case .ambientTemp:
+            return deviceClass == "temperature" || tokens.containsAny("temperature", "temp")
+        case .ambientHumidity:
+            return deviceClass == "humidity" || tokens.containsAny("humidity", "humid")
+        case .illuminance:
+            return deviceClass == "illuminance" || tokens.containsAny("illuminance", "lux", "light", "brightness")
+        case .unknown:
+            return true
+        }
+    }
+
+    private var discoveryTokens: Set<String> {
+        let text = [entityID, friendlyName, deviceClass ?? ""].joined(separator: " ")
+        return Set(text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty })
+    }
+}
+
+private extension Set where Element == String {
+    func containsAny(_ candidates: String...) -> Bool { candidates.contains(where: contains) }
+}
+
+struct HomeAssistantEntityListResponse: Decodable, Sendable {
+    let entities: [HomeAssistantEntity]
+}
+
+enum HomeAssistantEntityFilter {
+    static func all(in entities: [HomeAssistantEntity], matching query: String = "") -> [HomeAssistantEntity] {
+        ordered(entities.filter { $0.matches(search: query) })
+    }
+
+    static func likely(in entities: [HomeAssistantEntity], for role: SensorRole, matching query: String = "") -> [HomeAssistantEntity] {
+        all(in: entities, matching: query).filter { $0.isLikely(for: role) }
+    }
+
+    private static func ordered(_ entities: [HomeAssistantEntity]) -> [HomeAssistantEntity] {
+        entities.sorted { left, right in
+            if left.available != right.available { return left.available }
+            let nameOrder = left.friendlyName.localizedCaseInsensitiveCompare(right.friendlyName)
+            if nameOrder != .orderedSame { return nameOrder == .orderedAscending }
+            return left.entityID.localizedCaseInsensitiveCompare(right.entityID) == .orderedAscending
+        }
+    }
+}
+
 /// A Home Assistant entity tied to a plant, or to a zone when plantID is nil.
 /// Calibration lives here because it belongs to a probe in a pot, not a plant.
 struct SensorLink: Codable, Sendable, Hashable, Identifiable {
@@ -28,23 +115,17 @@ struct SensorLink: Codable, Sendable, Hashable, Identifiable {
         case createdAt = "created_at"
     }
 
-    /// An uncalibrated link may report but must never drive a decision: a
-    /// confident wrong alert is worse than no alert.
     var isCalibrated: Bool {
         guard let dry = dryBaseline, let wet = wetBaseline else { return false }
         return wet > dry
     }
 
-    /// Maps a raw reading onto 0...1 between this probe's own baselines. Two
-    /// probes' absolute numbers are never comparable.
     func fraction(of raw: Double) -> Double? {
         guard let dry = dryBaseline, let wet = wetBaseline, wet > dry else { return nil }
         return min(max((raw - dry) / (wet - dry), 0), 1)
     }
 }
 
-/// What calibration sends. A probe's numbers are its own scale, so these two
-/// readings are the only thing that makes any of them mean something.
 struct SensorCalibration: Codable, Sendable, Hashable {
     var dryBaseline: Double
     var wetBaseline: Double
@@ -54,12 +135,8 @@ struct SensorCalibration: Codable, Sendable, Hashable {
         case wetBaseline = "wet_baseline"
     }
 
-    /// The rule the service enforces too. Backwards baselines would read a
-    /// soaked pot as bone dry and water it again.
     var readsTheRightWayRound: Bool { wetBaseline > dryBaseline }
 
-    /// Builds one from what was typed. Nil when either box is not a number,
-    /// which is what keeps Save disabled rather than sending nonsense.
     init?(dry: String, wet: String) {
         guard let dryValue = Double(dry.trimmingCharacters(in: .whitespaces)),
               let wetValue = Double(wet.trimmingCharacters(in: .whitespaces))
@@ -73,7 +150,6 @@ struct SensorCalibration: Codable, Sendable, Hashable {
     }
 }
 
-/// One sample, keyed on the link because the plant a probe serves can change.
 struct Reading: Codable, Sendable, Hashable, Identifiable {
     let id: UUID
     let sensorLinkID: UUID
@@ -90,21 +166,16 @@ struct Reading: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// A link plus its recent samples, which is what the evidence disclosure draws.
 struct SensorSeries: Sendable, Hashable, Identifiable {
     let link: SensorLink
     let readings: [Reading]
 
     var id: UUID { link.id }
 
-    var latest: Reading? {
-        readings.max { $0.takenAt < $1.takenAt }
-    }
+    var latest: Reading? { readings.max { $0.takenAt < $1.takenAt } }
 
     var span: ClosedRange<Double>? {
-        guard let low = readings.map(\.value).min(),
-              let high = readings.map(\.value).max()
-        else { return nil }
+        guard let low = readings.map(\.value).min(), let high = readings.map(\.value).max() else { return nil }
         return low == high ? (low - 1)...(high + 1) : low...high
     }
 }
