@@ -9,8 +9,7 @@ struct CareLogSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var kind = ObservationKind.watered
     @State private var note = ""
-    @State private var error: PlantyError?
-    @State private var isSaving = false
+    @State private var action = AsyncSheetAction()
 
     private static let kinds: [ObservationKind] = [
         .watered, .misted, .fertilized, .pruned, .repotted, .moved, .note, .symptom
@@ -19,7 +18,7 @@ struct CareLogSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let error {
+                if let error = action.error {
                     Section {
                         SheetErrorRow(
                             headline: "Not recorded. Your note is still here.",
@@ -51,24 +50,24 @@ struct CareLogSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
+                        .disabled(action.isRunning)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         Task { await submit() }
                     } label: {
-                        if isSaving {
+                        if action.isRunning {
                             ProgressView()
                         } else {
                             Text("Save")
                         }
                     }
-                    .disabled(isSaving || needsWords)
-                    .accessibilityLabel(isSaving ? "Saving" : "Save this entry")
+                    .disabled(action.isRunning || needsWords)
+                    .accessibilityLabel(action.isRunning ? "Saving" : "Save this entry")
                 }
             }
         }
-        .interactiveDismissDisabled(isSaving)
+        .interactiveDismissDisabled(action.isRunning)
     }
 
     /// A bare "note" or "symptom" entry says nothing; those two require words.
@@ -94,10 +93,10 @@ struct CareLogSheet: View {
     }
 
     private func submit() async {
-        isSaving = true
-        defer { isSaving = false }
         let trimmed = note.cleaned
-        error = await record(kind, trimmed.isEmpty ? nil : trimmed)
-        if error == nil { dismiss() }
+        guard await action.perform({
+            await record(kind, trimmed.isEmpty ? nil : trimmed)
+        }) else { return }
+        dismiss()
     }
 }
