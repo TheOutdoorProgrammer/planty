@@ -60,7 +60,7 @@ final class PhotoAcquisition {
             error = nil
             return AcquiredPhoto(jpeg: jpeg, assetID: item.itemIdentifier)
         } catch {
-            error = "Planty could not read that photo. Try another one."
+            self.error = "Planty could not read that photo. Try another one."
             return nil
         }
     }
