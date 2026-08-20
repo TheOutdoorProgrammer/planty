@@ -55,7 +55,7 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	prior, conversation, err := s.priorAnswers(r, p.ID, ask.ConversationID)
+	prior, conversation, err := s.conversationHistory(r.Context(), p.ID, ask.ConversationID)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
@@ -104,33 +104,7 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.ok(w, http.StatusOK, map[string]any{
-		"id":                   saved.ID,
-		"conversation_id":      saved.ConversationID,
-		"reply":                answer.Reply,
-		"confidence":           answer.Confidence,
-		"looked_at":            answer.LookedAt,
-		"suggested_follow_ups": answer.Suggestions,
-		"steps":                answer.Steps,
-	})
-}
-
-func (s *Server) priorAnswers(r *http.Request, plantID uuid.UUID,
-	conversationID *uuid.UUID) ([]judge.PriorAnswer, uuid.UUID, error) {
-	if conversationID == nil {
-		return nil, uuid.New(), nil
-	}
-
-	turns, err := s.store.Consultation(r.Context(), *conversationID, plantID)
-	if err != nil {
-		return nil, uuid.Nil, err
-	}
-
-	prior := make([]judge.PriorAnswer, 0, len(turns))
-	for _, turn := range turns {
-		prior = append(prior, judge.PriorAnswer{Asked: turn.Asked, Reply: turn.Reply})
-	}
-	return prior, *conversationID, nil
+	s.ok(w, http.StatusOK, conversationResponse(saved))
 }
 
 // offerPhotos hands over recent photographs without attaching any, so the

@@ -63,8 +63,7 @@ struct ReminderSheet: View {
     /// there would be no way to tick it back before saving.
     private let offeredHours: [Int]
 
-    @State private var isSaving = false
-    @State private var failure: PlantyError?
+    @State private var action = AsyncSheetAction()
 
     init(draft: ReminderDraft, save: @escaping (NewReminder) async -> PlantyError?) {
         _draft = State(initialValue: draft)
@@ -105,7 +104,7 @@ struct ReminderSheet: View {
                     Text("Paused reminders keep their schedule but never come due.")
                 }
 
-                if let failure {
+                if let failure = action.error {
                     Section {
                         Label {
                             Text(failureText(failure))
@@ -118,17 +117,17 @@ struct ReminderSheet: View {
             }
             .navigationTitle(draft.kind.instruction)
             .navigationBarTitleDisplayMode(.inline)
-            .interactiveDismissDisabled(isSaving)
+            .interactiveDismissDisabled(action.isRunning)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
+                        .disabled(action.isRunning)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Saving…" : "Save") {
+                    Button(action.isRunning ? "Saving…" : "Save") {
                         Task { await attemptSave() }
                     }
-                    .disabled(!draft.isValid || isSaving)
+                    .disabled(!draft.isValid || action.isRunning)
                 }
             }
         }
@@ -137,10 +136,8 @@ struct ReminderSheet: View {
     /// Dismisses only once the service has said yes. A failure keeps the sheet
     /// and the draft on screen instead of throwing the input away.
     private func attemptSave() async {
-        isSaving = true
-        failure = await save(draft.asNew())
-        isSaving = false
-        if failure == nil { dismiss() }
+        guard await action.perform({ await save(draft.asNew()) }) else { return }
+        dismiss()
     }
 
     private func failureText(_ failure: PlantyError) -> String {

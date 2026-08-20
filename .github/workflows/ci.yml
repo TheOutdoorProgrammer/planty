@@ -19,6 +19,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Verify generated API contract
+        run: |
+          go run ./cmd/contractgen
+          git diff --exit-code -- \
+            internal/api/contract_generated.go \
+            ios/Planty/Networking/APIContract.generated.swift
+
       - name: Verify formatting
         run: |
           unformatted=$(gofmt -l ./cmd ./internal)
@@ -31,6 +38,21 @@ jobs:
       - run: go build ./...
 
       - run: go test -race ./...
+
+  ios:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Toolchain
+        run: xcodebuild -version
+
+      - name: Test
+        working-directory: ios
+        run: |
+          xcodebuild test \
+            -scheme Planty \
+            -destination 'platform=iOS Simulator,name=iPhone 17'
 
   # Unit tests and the compiler both accepted a digest query that Postgres
   # rejected outright, so the schema and every query run against a real server.

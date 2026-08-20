@@ -86,7 +86,7 @@ func (s *Server) createPlant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	applyPlantDefaults(&p)
+	plant.ApplyDefaults(&p)
 
 	created, err := s.store.CreatePlant(r.Context(), p)
 	if err != nil {
@@ -94,26 +94,6 @@ func (s *Server) createPlant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.ok(w, http.StatusCreated, created)
-}
-
-// applyPlantDefaults fills the fields an agent describing a plant in
-// conversation will rarely supply, so a sparse create still validates.
-func applyPlantDefaults(p *plant.Plant) {
-	if p.Domain == "" {
-		p.Domain = plant.DomainHouseplant
-	}
-	if p.Status == "" {
-		p.Status = plant.StatusAlive
-	}
-	if p.Steward == "" {
-		p.Steward = plant.StewardSelf
-	}
-	if p.Accessibility == "" {
-		p.Accessibility = plant.AccessEasy
-	}
-	if p.WateringMethod == "" {
-		p.WateringMethod = plant.WateringHand
-	}
 }
 
 func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {

@@ -1,7 +1,7 @@
 import Foundation
 
 /// A server that learns a new enum case must not blank the whole list, so every
-/// wire enum decodes an unrecognised value into an explicit unknown.
+/// generated wire enum decodes an unrecognised value into an explicit unknown.
 protocol FallbackDecodable: RawRepresentable, Codable, Sendable, Hashable
 where RawValue == String {
     static var fallback: Self { get }
@@ -14,14 +14,9 @@ extension FallbackDecodable {
     }
 }
 
-enum PlantDomain: String, FallbackDecodable, CaseIterable {
-    case houseplant
-    case edibleIndoor = "edible_indoor"
-    case edibleOutdoor = "edible_outdoor"
-    case unknown
-
-    static let fallback = PlantDomain.unknown
-
+// The enum cases themselves are generated from api/openapi.json. Everything
+// below is presentation behavior and deliberately remains handwritten.
+extension PlantDomain {
     var label: String {
         switch self {
         case .houseplant: "Houseplant"
@@ -32,27 +27,23 @@ enum PlantDomain: String, FallbackDecodable, CaseIterable {
     }
 }
 
-enum PlantStatus: String, FallbackDecodable, CaseIterable {
-    case alive
-    case struggling
-    case dormant
-    case dead
-    case gone
-    case unknown
-
-    static let fallback = PlantStatus.unknown
-
+extension PlantStatus {
     /// Archived plants stay in the record but drop out of the daily rounds.
     var isRetired: Bool { self == .dead || self == .gone }
+
+    var editLabel: String {
+        switch self {
+        case .alive: "Alive"
+        case .struggling: "Struggling"
+        case .dormant: "Dormant"
+        case .dead: "Dead"
+        case .gone: "Gone"
+        case .unknown: "Unrecorded"
+        }
+    }
 }
 
-enum WateringMethod: String, FallbackDecodable, CaseIterable {
-    case letpot
-    case hand
-    case unknown
-
-    static let fallback = WateringMethod.unknown
-
+extension WateringMethod {
     var label: String {
         switch self {
         case .letpot: "Automatic"
@@ -62,24 +53,18 @@ enum WateringMethod: String, FallbackDecodable, CaseIterable {
     }
 }
 
-enum PlantAccessibility: String, FallbackDecodable, CaseIterable {
-    case easy
-    case awkward
-    case hard
-    case unknown
-
-    static let fallback = PlantAccessibility.unknown
+extension PlantAccessibility {
+    var editLabel: String {
+        switch self {
+        case .easy: "Easy to reach"
+        case .awkward: "Awkward"
+        case .hard: "Hard to reach"
+        case .unknown: "Unrecorded"
+        }
+    }
 }
 
-enum LightExposure: String, FallbackDecodable, CaseIterable {
-    case direct
-    case brightIndirect = "bright_indirect"
-    case medium
-    case low
-    case unknown
-
-    static let fallback = LightExposure.unknown
-
+extension LightExposure {
     var label: String {
         switch self {
         case .direct: "Direct sun"
@@ -91,36 +76,11 @@ enum LightExposure: String, FallbackDecodable, CaseIterable {
     }
 }
 
-enum VerdictAction: String, FallbackDecodable, CaseIterable {
-    case none
-    case water
-    case check
-    case urgent
-    case harvest
-    case unknown
-
-    static let fallback = VerdictAction.unknown
-
+extension VerdictAction {
     var needsAction: Bool { self != .none }
 }
 
-enum ObservationKind: String, FallbackDecodable, CaseIterable {
-    case watered
-    // Not watering: it wets leaves rather than soil, no probe ever sees it,
-    // and the two are scheduled on completely different rhythms.
-    case misted
-    case repotted
-    case fertilized
-    case pruned
-    case harvested
-    case moved
-    case symptom
-    case note
-    case died
-    case unknown
-
-    static let fallback = ObservationKind.unknown
-
+extension ObservationKind {
     var label: String {
         switch self {
         case .watered: "Watered"
@@ -154,26 +114,7 @@ enum ObservationKind: String, FallbackDecodable, CaseIterable {
     }
 }
 
-/// Whether a person, an agent or an automation recorded something. First
-/// question after a mistake is always "did I do that, or did Planty".
-enum ObservationSource: String, FallbackDecodable, CaseIterable {
-    case app
-    case agent
-    case automation
-    case unknown
-
-    static let fallback = ObservationSource.unknown
-}
-
-enum SensorRole: String, FallbackDecodable, CaseIterable {
-    case soilMoisture = "soil_moisture"
-    case ambientTemp = "ambient_temp"
-    case ambientHumidity = "ambient_humidity"
-    case illuminance
-    case unknown
-
-    static let fallback = SensorRole.unknown
-
+extension SensorRole {
     var label: String {
         switch self {
         case .soilMoisture: "Soil moisture"
@@ -181,30 +122,6 @@ enum SensorRole: String, FallbackDecodable, CaseIterable {
         case .ambientHumidity: "Humidity"
         case .illuminance: "Light"
         case .unknown: "Sensor"
-        }
-    }
-}
-
-extension PlantStatus {
-    var editLabel: String {
-        switch self {
-        case .alive: "Alive"
-        case .struggling: "Struggling"
-        case .dormant: "Dormant"
-        case .dead: "Dead"
-        case .gone: "Gone"
-        case .unknown: "Unrecorded"
-        }
-    }
-}
-
-extension PlantAccessibility {
-    var editLabel: String {
-        switch self {
-        case .easy: "Easy to reach"
-        case .awkward: "Awkward"
-        case .hard: "Hard to reach"
-        case .unknown: "Unrecorded"
         }
     }
 }

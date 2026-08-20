@@ -128,7 +128,7 @@ func describedBy(r *http.Request, candidates []judge.Candidate) (plant.Plant, er
 			"nothing in the photograph could be named: pass common_name to record it anyway")
 	}
 
-	applyPlantDefaults(&p)
+	plant.ApplyDefaults(&p)
 	return p, nil
 }
 

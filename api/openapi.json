@@ -1,0 +1,102 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Planty API",
+    "version": "1.0.0",
+    "description": "Canonical machine-readable contract for Planty's HTTP routes and closed wire enums."
+  },
+  "paths": {
+    "/healthz": {"get": {"operationId": "health"}},
+    "/v1/plants": {
+      "get": {"operationId": "listPlants"},
+      "post": {"operationId": "createPlant"}
+    },
+    "/v1/plants/from-photo": {"post": {"operationId": "createPlantFromPhoto"}},
+    "/v1/plants/{slug}": {
+      "get": {"operationId": "getPlant"},
+      "patch": {"operationId": "updatePlant"},
+      "delete": {"operationId": "archivePlant"}
+    },
+    "/v1/plants/{slug}/observations": {
+      "get": {"operationId": "listObservations"},
+      "post": {"operationId": "addObservation"}
+    },
+    "/v1/plants/{slug}/notes": {
+      "get": {"operationId": "listPlantNotes"},
+      "post": {"operationId": "addPlantNote"}
+    },
+    "/v1/notes": {
+      "get": {"operationId": "listHouseholdNotes"},
+      "post": {"operationId": "addHouseholdNote"}
+    },
+    "/v1/notes/{id}": {
+      "patch": {"operationId": "updateNote"},
+      "delete": {"operationId": "deleteNote"}
+    },
+    "/v1/harvests": {"get": {"operationId": "listHarvests"}},
+    "/v1/plants/{slug}/harvests": {
+      "get": {"operationId": "listPlantHarvests"},
+      "post": {"operationId": "addHarvest"}
+    },
+    "/v1/plants/{slug}/photos": {"post": {"operationId": "uploadPhoto"}},
+    "/v1/plants/{slug}/timeline": {"get": {"operationId": "getTimeline"}},
+    "/v1/plants/{slug}/ask": {"post": {"operationId": "askPlant"}},
+    "/v1/plants/{slug}/reminders": {
+      "get": {"operationId": "listReminders"},
+      "put": {"operationId": "setReminder"}
+    },
+    "/v1/plants/{slug}/reminders/{kind}": {"delete": {"operationId": "deleteReminder"}},
+    "/v1/ask": {"post": {"operationId": "ask"}},
+    "/v1/identify": {"post": {"operationId": "identify"}},
+    "/v1/postmortems": {"get": {"operationId": "listPostmortems"}},
+    "/v1/plants/{slug}/postmortem": {"post": {"operationId": "createPostmortem"}},
+    "/v1/today": {"get": {"operationId": "today"}},
+    "/v1/verdicts/{id}/ack": {"post": {"operationId": "ackVerdict"}},
+    "/v1/choices": {"get": {"operationId": "listChoices"}},
+    "/v1/home-assistant/entities": {"get": {"operationId": "listHomeAssistantEntities"}},
+    "/v1/sensors": {
+      "get": {"operationId": "listSensors"},
+      "post": {"operationId": "linkSensor"}
+    },
+    "/v1/sensors/{id}": {"patch": {"operationId": "calibrateSensor"}},
+    "/v1/questions": {
+      "get": {"operationId": "listQuestions"},
+      "post": {"operationId": "createQuestion"}
+    },
+    "/v1/questions/{id}/answer": {"post": {"operationId": "answerQuestion"}},
+    "/v1/away": {
+      "get": {"operationId": "listAway"},
+      "post": {"operationId": "createAway"}
+    },
+    "/v1/away/{id}": {
+      "patch": {"operationId": "updateAway"},
+      "delete": {"operationId": "deleteAway"}
+    },
+    "/v1/cold-watch": {"get": {"operationId": "coldWatch"}},
+    "/v1/shelter": {"post": {"operationId": "shelter"}},
+    "/v1/unshelter": {"post": {"operationId": "unshelter"}}
+  },
+  "components": {
+    "schemas": {
+      "PlantDomain": {"type": "string", "enum": ["houseplant", "edible_indoor", "edible_outdoor"]},
+      "PlantStatus": {"type": "string", "enum": ["alive", "struggling", "dormant", "dead", "gone"]},
+      "WateringMethod": {"type": "string", "enum": ["letpot", "hand"]},
+      "PlantAccessibility": {"type": "string", "enum": ["easy", "awkward", "hard"]},
+      "LightExposure": {"type": "string", "enum": ["direct", "bright_indirect", "medium", "low"]},
+      "VerdictAction": {"type": "string", "enum": ["none", "water", "check", "urgent", "harvest"]},
+      "ObservationKind": {"type": "string", "enum": ["watered", "misted", "repotted", "fertilized", "pruned", "harvested", "moved", "symptom", "note", "died"]},
+      "ObservationSource": {"type": "string", "enum": ["app", "agent", "automation"]},
+      "SensorRole": {"type": "string", "enum": ["soil_moisture", "ambient_temp", "ambient_humidity", "illuminance"]},
+      "APIError": {
+        "type": "object",
+        "x-swift-name": "APIErrorBody",
+        "required": ["error"],
+        "properties": {
+          "error": {"type": "string"},
+          "code": {"type": "string"},
+          "request_id": {"type": "string"}
+        }
+      }
+    }
+  }
+}

@@ -52,8 +52,7 @@ struct LinkSensorSheet: View {
     @State private var plants: [Plant] = []
     @State private var plantsError: PlantyError?
     @State private var hasLoadedPlants = false
-    @State private var isSaving = false
-    @State private var failure: PlantyError?
+    @State private var action = AsyncSheetAction()
 
     var body: some View {
         NavigationStack {
@@ -107,7 +106,7 @@ struct LinkSensorSheet: View {
                     Text("A probe in a pot serves that plant. An ambient sensor can serve a Place: one porch thermometer speaks for every pot there.")
                 }
 
-                if let failure {
+                if let failure = action.error {
                     Section {
                         Label("\(failure.errorDescription ?? "The service did not answer.") Nothing was linked; your selection is still here.", systemImage: "exclamationmark.triangle.fill")
                             .foregroundStyle(PlantyColor.orange)
@@ -118,12 +117,12 @@ struct LinkSensorSheet: View {
             .plantyPage()
             .navigationTitle("Link a sensor")
             .navigationBarTitleDisplayMode(.inline)
-            .interactiveDismissDisabled(isSaving)
+            .interactiveDismissDisabled(action.isRunning)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(isSaving) }
+                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(action.isRunning) }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(isSaving ? "Linking…" : "Link") { Task { await attemptSave() } }
-                        .disabled(draft.newLink() == nil || isSaving)
+                    Button(action.isRunning ? "Linking…" : "Link") { Task { await attemptSave() } }
+                        .disabled(draft.newLink() == nil || action.isRunning)
                 }
             }
             .sheet(isPresented: $showingEntityPicker) {
@@ -204,17 +203,10 @@ struct LinkSensorSheet: View {
 
     private func attemptSave() async {
         guard let link = draft.newLink() else { return }
-        isSaving = true
-        do {
-            let saved = try await api.linkSensor(link)
-            await session.choices.load()
-            isSaving = false
-            onLinked(saved)
-            dismiss()
-        } catch {
-            isSaving = false
-            failure = PlantyError.from(error)
-        }
+        guard let saved = await action.performThrowing({ try await api.linkSensor(link) }) else { return }
+        await session.choices.load()
+        onLinked(saved)
+        dismiss()
     }
 }
 

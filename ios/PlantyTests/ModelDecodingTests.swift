@@ -36,31 +36,6 @@ struct ModelDecodingTests {
         #expect(mine.ownershipLabel == "Mine")
     }
 
-    @Test("Risk matches the Go implementation it mirrors")
-    func riskMatchesTheService() {
-        let awkwardFriendHand = Plant.fixture(
-            steward: "Maya",
-            accessibility: .awkward,
-            wateringMethod: .hand
-        )
-        #expect(awkwardFriendHand.risk == 5)
-
-        let easyOwnAutomatic = Plant.fixture(
-            steward: "self",
-            accessibility: .easy,
-            wateringMethod: .letpot
-        )
-        #expect(easyOwnAutomatic.risk == 0)
-
-        let strugglingHardFriend = Plant.fixture(
-            steward: "Maya",
-            status: .struggling,
-            accessibility: .hard,
-            wateringMethod: .hand
-        )
-        #expect(strugglingHardFriend.risk == 7)
-    }
-
     @Test("An enum case the app has never heard of does not fail the list")
     func unknownEnumFallsBack() throws {
         let json = Self.monaJSON.replacingOccurrences(
@@ -120,10 +95,15 @@ struct ModelDecodingTests {
         #expect(detail.verdict == nil)
     }
 
-    @Test("The service's error body")
+    @Test("The service's structured error body")
     func errorBody() throws {
-        let body = try decode(APIErrorBody.self, #"{"error":"plant not found"}"#)
-        #expect(body.error == "plant not found")
+        let body = try decode(
+            APIErrorBody.self,
+            #"{"error":"The service could not complete the request.","code":"internal_error","request_id":"req-123"}"#
+        )
+        #expect(body.error == "The service could not complete the request.")
+        #expect(body.code == "internal_error")
+        #expect(body.requestId == "req-123")
     }
 
     @Test("A sensor with no baselines can never drive a decision")

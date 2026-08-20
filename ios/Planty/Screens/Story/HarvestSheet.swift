@@ -10,16 +10,15 @@ struct HarvestSheet: View {
     @State private var quantityText = ""
     @State private var unit = "oz"
     @State private var notes = ""
-    @State private var error: PlantyError?
     @State private var validation: String?
-    @State private var isSaving = false
+    @State private var action = AsyncSheetAction()
 
     private static let units = ["oz", "lb", "g", "kg", "items"]
 
     var body: some View {
         NavigationStack {
             Form {
-                if let error {
+                if let error = action.error {
                     Section {
                         SheetErrorRow(
                             headline: "Not recorded. The numbers are still here.",
@@ -61,24 +60,24 @@ struct HarvestSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
+                        .disabled(action.isRunning)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         Task { await submit() }
                     } label: {
-                        if isSaving {
+                        if action.isRunning {
                             ProgressView()
                         } else {
                             Text("Save")
                         }
                     }
-                    .disabled(isSaving || quantityText.cleaned.isEmpty)
-                    .accessibilityLabel(isSaving ? "Saving" : "Save the harvest")
+                    .disabled(action.isRunning || quantityText.cleaned.isEmpty)
+                    .accessibilityLabel(action.isRunning ? "Saving" : "Save the harvest")
                 }
             }
         }
-        .interactiveDismissDisabled(isSaving)
+        .interactiveDismissDisabled(action.isRunning)
     }
 
     private func submit() async {
@@ -88,10 +87,10 @@ struct HarvestSheet: View {
             validation = "The amount has to be a number above zero, like 3 or 0.5."
             return
         }
-        isSaving = true
-        defer { isSaving = false }
         let trimmedNotes = notes.cleaned
-        error = await log(quantity, unit, trimmedNotes.isEmpty ? nil : trimmedNotes)
-        if error == nil { dismiss() }
+        guard await action.perform({
+            await log(quantity, unit, trimmedNotes.isEmpty ? nil : trimmedNotes)
+        }) else { return }
+        dismiss()
     }
 }

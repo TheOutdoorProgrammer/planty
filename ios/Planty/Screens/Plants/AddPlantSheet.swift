@@ -14,13 +14,12 @@ struct AddPlantSheet: View {
     @State private var potMaterial = ""
     @State private var domain = PlantDomain.houseplant
     @State private var watering = WateringMethod.hand
-    @State private var error: PlantyError?
-    @State private var isSaving = false
+    @State private var action = AsyncSheetAction()
 
     var body: some View {
         NavigationStack {
             Form {
-                if let error {
+                if let error = action.error {
                     Section {
                         SheetErrorRow(
                             headline: "Not saved. Everything you typed is still here.",
@@ -76,38 +75,34 @@ struct AddPlantSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .disabled(isSaving)
+                        .disabled(action.isRunning)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button {
                         Task { await submit() }
                     } label: {
-                        if isSaving {
+                        if action.isRunning {
                             ProgressView()
                         } else {
                             Text("Add")
                         }
                     }
-                    .disabled(isSaving || name.trimmingCharacters(in: .whitespaces).isEmpty)
-                    .accessibilityLabel(isSaving ? "Saving" : "Add the plant")
+                    .disabled(action.isRunning || name.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .accessibilityLabel(action.isRunning ? "Saving" : "Add the plant")
                 }
             }
             .task { await choices.loadIfNeeded() }
         }
-        .interactiveDismissDisabled(isSaving)
+        .interactiveDismissDisabled(action.isRunning)
     }
 
     /// The sheet closes only once the plant exists. A failure keeps every
     /// field as typed, because retyping a botanical name is how plants end up
     /// never recorded at all.
     private func submit() async {
-        isSaving = true
-        defer { isSaving = false }
-        error = await create(draft)
-        if error == nil {
-            await choices.load()
-            dismiss()
-        }
+        guard await action.perform({ await create(draft) }) else { return }
+        await choices.load()
+        dismiss()
     }
 
     private var draft: NewPlant {

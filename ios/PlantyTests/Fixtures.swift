@@ -67,15 +67,18 @@ extension Verdict {
 }
 
 extension DigestEntry {
+    /// Risk is server output, not a client-side calculation. Tests pass the
+    /// value they need just as a decoded digest would.
     static func fixture(
         plant: Plant = .fixture(),
         action: VerdictAction = .water,
-        forDate: Date = .reference
+        forDate: Date = .reference,
+        risk: Int = 2
     ) -> DigestEntry {
         DigestEntry(
             plant: plant,
             verdict: .fixture(action: action, forDate: forDate, plantID: plant.id),
-            risk: plant.risk
+            risk: risk
         )
     }
 }

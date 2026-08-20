@@ -230,30 +230,5 @@ final class CaptureStore {
         }
     }
 
-    /// Uploads the photo and hands back the stored record, so a diagnosis can
-    /// name the frame it is about. Without this the model was asked to compare
-    /// a picture the service had never received.
-    func upload() async -> Photo? {
-        guard var photo = stage.photo, let plant = selectedPlant else { return nil }
-        if let already = photo.uploaded { return already }
-
-        stage = .saving(photo, nil)
-        let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
-        do {
-            let uploaded = try await api.uploadPhoto(
-                slug: plant.slug,
-                jpeg: photo.jpeg,
-                caption: trimmedNote.isEmpty ? nil : trimmedNote,
-                takenAt: photo.takenAt
-            )
-            photo.uploaded = uploaded
-            stage = .captured(photo)
-            return uploaded
-        } catch {
-            stage = .failed(photo, .save(nil), PlantyError.from(error))
-            return nil
-        }
-    }
-
     func clearToast() { toast = nil }
 }

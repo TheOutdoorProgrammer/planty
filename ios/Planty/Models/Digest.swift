@@ -92,8 +92,3 @@ struct DigestEntry: Codable, Sendable, Hashable, Identifiable {
 
     var id: UUID { verdict.id }
 }
-
-/// The service's error body: {"error": "..."}.
-struct APIErrorBody: Decodable, Sendable {
-    let error: String
-}
