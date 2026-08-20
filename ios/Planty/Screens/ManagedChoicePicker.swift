@@ -17,10 +17,10 @@ struct ManagedChoiceField: View {
         } label: {
             HStack {
                 Text(title)
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(PlantyColor.foreground)
                 Spacer()
                 Text(value.cleaned.isEmpty ? emptyLabel : value.cleaned)
-                    .foregroundStyle(value.cleaned.isEmpty ? PlantyColor.secondaryText : .primary)
+                    .foregroundStyle(value.cleaned.isEmpty ? PlantyColor.secondaryText : PlantyColor.foreground)
                     .multilineTextAlignment(.trailing)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
@@ -129,7 +129,7 @@ private struct ManagedChoicePicker: View {
             HStack {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(choice.value)
-                        .foregroundStyle(.primary)
+                        .foregroundStyle(PlantyColor.foreground)
                     if choice.sources.contains("home_assistant") {
                         Text("Home Assistant area")
                             .font(.caption)
