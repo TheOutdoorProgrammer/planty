@@ -10,7 +10,12 @@ struct AwayPeriodManagementTests {
         let start = Date(timeIntervalSince1970: 4_200_000_000)
         let end = start.addingTimeInterval(3_600)
         let period = AwayPeriod(
-            id: UUID(), startsAt: start, endsAt: end,
+            id: UUID(),
+            startsAt: start,
+            endsAt: end,
+            backupContact: nil,
+            backupNotify: nil,
+            note: nil,
             createdAt: .reference
         )
 
