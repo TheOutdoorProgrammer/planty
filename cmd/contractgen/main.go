@@ -107,7 +107,7 @@ func writeSwift(path string, routes []route, schemas map[string]schema) error {
 	b.WriteString("enum APIPath {\n")
 	for _, route := range routes {
 		if len(route.Params) == 0 {
-			fmt.Fprintf(&b, "    static let %s = %q\n", route.OperationID, route.Path)
+			fmt.Fprintf(&b, "    static let %s = %s\n", route.OperationID, swiftString(route.Path))
 			continue
 		}
 		params := make([]string, 0, len(route.Params))
@@ -118,7 +118,7 @@ func writeSwift(path string, routes []route, schemas map[string]schema) error {
 		for _, p := range route.Params {
 			expression = strings.ReplaceAll(expression, "{"+p+"}", "\\("+p+")")
 		}
-		fmt.Fprintf(&b, "    static func %s(%s) -> String { %q }\n", route.OperationID, strings.Join(params, ", "), expression)
+		fmt.Fprintf(&b, "    static func %s(%s) -> String { %s }\n", route.OperationID, strings.Join(params, ", "), swiftString(expression))
 	}
 	b.WriteString("}\n\n")
 
@@ -141,7 +141,7 @@ func writeSwift(path string, routes []route, schemas map[string]schema) error {
 				if caseName == raw {
 					fmt.Fprintf(&b, "    case %s\n", caseName)
 				} else {
-					fmt.Fprintf(&b, "    case %s = %q\n", caseName, raw)
+					fmt.Fprintf(&b, "    case %s = %s\n", caseName, swiftString(raw))
 				}
 			}
 			b.WriteString("    case unknown\n\n")
@@ -189,12 +189,16 @@ func writeSwiftObject(b *bytes.Buffer, name string, s schema) {
 			if name == field {
 				fmt.Fprintf(b, "        case %s\n", name)
 			} else {
-				fmt.Fprintf(b, "        case %s = %q\n", name, field)
+				fmt.Fprintf(b, "        case %s = %s\n", name, swiftString(field))
 			}
 		}
 		b.WriteString("    }\n")
 	}
 	b.WriteString("}\n\n")
+}
+
+func swiftString(value string) string {
+	return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
 }
 
 func swiftIdentifier(raw string) string {
