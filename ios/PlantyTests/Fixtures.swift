@@ -67,15 +67,18 @@ extension Verdict {
 }
 
 extension DigestEntry {
+    /// Risk is server output, not a client-side calculation. Tests pass the
+    /// value they need just as a decoded digest would.
     static func fixture(
         plant: Plant = .fixture(),
         action: VerdictAction = .water,
-        forDate: Date = .reference
+        forDate: Date = .reference,
+        risk: Int = 2
     ) -> DigestEntry {
         DigestEntry(
             plant: plant,
             verdict: .fixture(action: action, forDate: forDate, plantID: plant.id),
-            risk: plant.risk
+            risk: risk
         )
     }
 }
@@ -131,95 +134,8 @@ extension PlantAnswer {
             reply: reply,
             confidence: confidence,
             lookedAt: lookedAt,
-            suggestedFollowUps: followUps
-        )
-    }
-}
-
-extension Toxicity {
-    /// The lily: the case the whole feature exists for, where the three
-    /// audiences genuinely disagree.
-    static func lily() -> Toxicity {
-        Toxicity(
-            cats: .severe,
-            dogs: .mild,
-            people: .mild,
-            basis: .source,
-            identifiedAs: "Lilium longiflorum",
-            principle: "unidentified nephrotoxin",
-            signs: "vomiting, then anuria",
-            parts: ["all", "flower"],
-            routes: ["eaten", "skin"],
-            notes: "why the audiences differ",
-            firstAid: "a cat that groomed pollen goes to a vet before any sign appears",
-            source: "www.aspca.org",
-            checkedAt: .reference
-        )
-    }
-
-    /// Every aroid Planty will ever see: identical for all three, which is why
-    /// divergence is worth shouting about when it happens.
-    static func pothos() -> Toxicity {
-        Toxicity(cats: .mild, dogs: .mild, people: .mild, basis: .source, checkedAt: .reference)
-    }
-}
-
-extension Reminder {
-    static func fixture(
-        kind: ObservationKind = .misted,
-        everyDays: Int = 1,
-        atHours: [Int] = [8, 20],
-        active: Bool = true,
-        lastDone: Date? = nil,
-        due: Bool? = nil
-    ) -> Reminder {
-        Reminder(
-            id: UUID(),
-            plantID: UUID(),
-            kind: kind,
-            everyDays: everyDays,
-            atHours: atHours,
-            active: active,
-            note: nil,
-            lastDone: lastDone,
-            due: due
-        )
-    }
-}
-
-extension PlantNote {
-    static func fixture(
-        id: UUID = UUID(),
-        plantID: UUID = UUID(),
-        title: String? = nil,
-        body: String = "the cat keeps chewing this one",
-        createdAt: Date = Date(timeIntervalSince1970: 1_760_000_000),
-        updatedAt: Date? = nil
-    ) -> PlantNote {
-        PlantNote(
-            id: id,
-            plantID: plantID,
-            title: title,
-            body: body,
-            createdAt: createdAt,
-            updatedAt: updatedAt ?? createdAt
-        )
-    }
-}
-
-extension OpenQuestion {
-    static func fixture(
-        question: String = "Has it ever been repotted?",
-        askedOf: String = "self",
-        why: String? = nil
-    ) -> OpenQuestion {
-        OpenQuestion(
-            id: UUID(),
-            plantID: nil,
-            askedOf: askedOf,
-            question: question,
-            why: why,
-            createdAt: .reference
+            suggestedFollowUps: followUps,
+            steps: []
         )
     }
 }
