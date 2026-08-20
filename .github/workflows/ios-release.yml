@@ -37,6 +37,11 @@ jobs:
           # and refuses a shallow checkout rather than restarting from zero.
           fetch-depth: 0
 
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
       - name: Toolchain
         run: xcodebuild -version
 
@@ -115,14 +120,37 @@ jobs:
           bump: ${{ inputs.bump }}
           scope: ${{ inputs.scope }}
           dry-run: ${{ inputs.dry-run }}
-          publish: fledge
+          # Quill owns the tag and publishes both downloadable artifacts with
+          # one version. The Linux-only image build consumes that version in
+          # the reusable job below after Quill succeeds.
+          publish: goreleaser, fledge
           fledge-server: ${{ secrets.FLEDGE_URL }}
           # Checked before the tag is cut, so a missing archive does not burn
           # the version. Named, never globbed: this path is opened verbatim,
           # and `*.ipa` is simply a filename that does not exist.
           fledge-ipa: ${{ runner.temp }}/export/Planty.ipa
+          # The tap lives in another repository. Quill mints a scoped,
+          # hour-long App token rather than storing a broad PAT.
+          tap-app-id: ${{ secrets.TAP_APP_ID }}
+          tap-private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
 
       - name: Where it landed
         if: steps.release.outputs.page-url != ''
         run: |
           echo "Install page: ${{ steps.release.outputs.page-url }}" >> "$GITHUB_STEP_SUMMARY"
+
+    outputs:
+      version: ${{ steps.release.outputs.version }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+
+  backend:
+    name: Backend image
+    needs: release
+    if: inputs.dry-run != true
+    uses: ./.github/workflows/release.yml
+    with:
+      version: ${{ needs.release.outputs.version }}
+      prerelease: ${{ needs.release.outputs.prerelease == 'true' }}
+    permissions:
+      contents: read
+      packages: write

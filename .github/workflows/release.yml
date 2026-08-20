@@ -1,9 +1,18 @@
-name: Release
+name: Backend image
 
 on:
   push:
     branches: [main]
-    tags: ['v*']
+  workflow_call:
+    inputs:
+      version:
+        description: Semver tag produced by the release orchestrator
+        type: string
+        required: true
+      prerelease:
+        description: Do not move latest for a release candidate
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -29,13 +38,14 @@ jobs:
         with:
           images: ghcr.io/${{ github.repository }}
           tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch,enable=${{ inputs.version == '' }}
+            type=semver,pattern={{version}},value=${{ inputs.version }},enable=${{ inputs.version != '' }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }},enable=${{ inputs.version != '' }}
             type=sha,format=long
             # deploy/*.yaml reference :latest, so it has to exist or anyone
-            # following the README gets ImagePullBackOff.
-            type=raw,value=latest,enable={{is_default_branch}}
+            # following the README gets ImagePullBackOff. Release candidates
+            # must not replace the latest stable image.
+            type=raw,value=latest,enable=${{ (inputs.version == '' && github.ref == 'refs/heads/main') || (inputs.version != '' && !inputs.prerelease) }}
 
       # arm64 matters here: the cluster is Mac minis.
       - uses: docker/build-push-action@v6
@@ -45,45 +55,6 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: VERSION=${{ github.ref_name }}
+          build-args: VERSION=${{ inputs.version != '' && inputs.version || github.ref_name }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  # The CLI, for a laptop. The service runs from the image above; this is the
-  # same binary for running a command by hand against a port-forwarded database.
-  cask:
-    if: startsWith(github.ref, 'refs/tags/v')
-    runs-on: ubuntu-latest
-    # The top-level grant is read-only, for the image job. GoReleaser creates
-    # the GitHub release itself, which needs write.
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      # Publishing the cask writes to another repository, which this job's own
-      # token cannot reach. An App token is scoped to that one repo and expires
-      # in an hour, unlike a PAT that lives in settings until someone rotates it.
-      - name: Token for the tap
-        id: tap_token
-        uses: actions/create-github-app-token@v3
-        with:
-          app-id: ${{ secrets.TAP_APP_ID }}
-          private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
-          owner: ${{ github.repository_owner }}
-          repositories: homebrew-tap
-
-      - uses: goreleaser/goreleaser-action@v7
-        with:
-          version: "~> v2"
-          args: release --clean
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ steps.tap_token.outputs.token }}
