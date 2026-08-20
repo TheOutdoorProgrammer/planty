@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import PhotosUI
+import SwiftUI
 
 /// A photo as it leaves the shared acquisition layer. Asset id is present for
 /// Photos-library imports and lets Snap recover EXIF/GPS from the original.
