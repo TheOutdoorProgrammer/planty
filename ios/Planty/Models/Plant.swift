@@ -110,20 +110,9 @@ extension Plant {
     /// A due action here depends on a human remembering it happened.
     var needsChasing: Bool { wateringMethod == .hand }
 
-    /// Likelihood of neglect, not current thirst. Mirrors Plant.Risk() in Go so
-    /// the app orders a list the same way the service does.
-    var risk: Int {
-        var risk = 0
-        if needsChasing { risk += 2 }
-        switch accessibility {
-        case .hard: risk += 2
-        case .awkward: risk += 1
-        default: break
-        }
-        if isFriends { risk += 2 }
-        if status == .struggling { risk += 1 }
-        return risk
-    }
+    // Risk is deliberately not recomputed here. The service owns that business
+    // rule and sends risk on detail/digest responses; duplicating its weights in
+    // Swift made the app a second implementation that could silently drift.
 
     var displaySpecies: String? {
         if let variety, let botanicalName {
