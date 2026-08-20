@@ -36,3 +36,9 @@ struct AwayPeriodUpdate: Encodable, Sendable, Hashable {
         case note
     }
 }
+
+extension AwayPeriod {
+    func covers(_ date: Date) -> Bool {
+        date >= startsAt && date < endsAt
+    }
+}
