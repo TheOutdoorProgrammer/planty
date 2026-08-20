@@ -38,8 +38,9 @@ struct AwayClientTests {
               "created_at":"2026-08-20T00:00:00Z"
             }
             """)
-        let starts = try #require(PlantyDateFormat.date(from: "2103-04-01T12:00:00Z"))
-        let ends = try #require(PlantyDateFormat.date(from: "2103-04-05T12:00:00Z"))
+        let formatter = ISO8601DateFormatter()
+        let starts = try #require(formatter.date(from: "2103-04-01T12:00:00Z"))
+        let ends = try #require(formatter.date(from: "2103-04-05T12:00:00Z"))
 
         _ = try await StubTransport.client().updateAway(
             id: id,
