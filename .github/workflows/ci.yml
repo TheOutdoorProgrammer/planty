@@ -39,6 +39,21 @@ jobs:
 
       - run: go test -race ./...
 
+  ios:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Toolchain
+        run: xcodebuild -version
+
+      - name: Test
+        working-directory: ios
+        run: |
+          xcodebuild test \
+            -scheme Planty \
+            -destination 'platform=iOS Simulator,name=iPhone 17'
+
   # Unit tests and the compiler both accepted a digest query that Postgres
   # rejected outright, so the schema and every query run against a real server.
   integration:
