@@ -2,9 +2,10 @@ import SwiftUI
 
 /// Collection-wide tools live under More so the bottom navigation speaks in
 /// tasks users recognize. No Garden feature is removed; this is only a clearer
-/// doorway into questions, weather, travel, and history.
+/// doorway into questions, weather, travel, history, and owner updates.
 struct GardenScreen: View {
     @Environment(AppSession.self) private var session
+    @State private var ownerUpdateTarget: OwnerUpdateTarget?
 
     private var store: GardenStore { session.garden }
 
@@ -45,6 +46,7 @@ struct GardenScreen: View {
                                 Task { await store.load() }
                             }
                         }
+                        peopleRoutes
                         routes
                         settingsRoute
                     }
@@ -67,6 +69,34 @@ struct GardenScreen: View {
                 async let gardenLoad: Void = store.load()
                 async let plantLoad: Void = session.library.load()
                 _ = await (gardenLoad, plantLoad)
+            }
+            .sheet(item: $ownerUpdateTarget) { target in
+                OwnerUpdateFlow(steward: target.name, store: store)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var peopleRoutes: some View {
+        if !friendStewards.isEmpty {
+            VStack(alignment: .leading, spacing: 12) {
+                SectionHeading(
+                    "People",
+                    detail: "Send the person whose plants you're watching a real update."
+                )
+                ForEach(friendStewards, id: \.self) { steward in
+                    Button {
+                        ownerUpdateTarget = OwnerUpdateTarget(name: steward)
+                    } label: {
+                        GardenRouteCard(
+                            title: "Update \(steward)",
+                            detail: ownerDetail(steward),
+                            symbol: "message.fill",
+                            color: PlantyColor.purple
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
     }
@@ -139,6 +169,16 @@ struct GardenScreen: View {
             }
             .buttonStyle(.plain)
         }
+    }
+
+    private var friendStewards: [String] {
+        Array(Set(session.library.plants.filter(\.isFriends).map(\.steward))).sorted()
+    }
+
+    private func ownerDetail(_ steward: String) -> String {
+        let count = session.library.plants.filter { $0.isFriends && $0.steward == steward }.count
+        let noun = count == 1 ? "plant" : "plants"
+        return "Summarize the last 7 days for \(count) \(noun) and attach the latest photos"
     }
 }
 

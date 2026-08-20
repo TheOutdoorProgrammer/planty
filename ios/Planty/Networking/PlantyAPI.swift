@@ -45,6 +45,8 @@ protocol PlantyAPI: Sendable {
     func reminders(slug: String) async throws -> [Reminder]
     func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder
     func deleteReminder(slug: String, kind: ObservationKind) async throws
+    func registerPushDevice(_ device: PushDeviceRegistration) async throws
+    func ownerUpdate(steward: String) async throws -> OwnerUpdate
     func health() async throws
 }
 
@@ -56,8 +58,8 @@ extension PlantyAPI {
     func managedChoices() async throws -> ManagedChoices { .empty }
 
     // Defaults keep lightweight test doubles source-compatible. Production
-    // PlantyClient implements all three and GardenStore treats an empty list as
-    // simply having no planned coverage.
+    // PlantyClient implements these and the feature surfaces handle unavailable
+    // endpoints as normal service errors.
     func awayPeriods() async throws -> [AwayPeriod] { [] }
 
     func updateAway(id: UUID, draft: NewAwayPeriod) async throws -> AwayPeriod {
@@ -66,6 +68,14 @@ extension PlantyAPI {
 
     func cancelAway(id: UUID) async throws {
         throw PlantyError.server(status: 503, message: "Away-period cancellation is unavailable from this client.")
+    }
+
+    func registerPushDevice(_ device: PushDeviceRegistration) async throws {
+        throw PlantyError.server(status: 503, message: "Push registration is unavailable from this client.")
+    }
+
+    func ownerUpdate(steward: String) async throws -> OwnerUpdate {
+        throw PlantyError.server(status: 503, message: "Owner updates are unavailable from this client.")
     }
 }
 

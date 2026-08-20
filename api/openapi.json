@@ -74,7 +74,9 @@
     },
     "/v1/cold-watch": {"get": {"operationId": "coldWatch"}},
     "/v1/shelter": {"post": {"operationId": "shelter"}},
-    "/v1/unshelter": {"post": {"operationId": "unshelter"}}
+    "/v1/unshelter": {"post": {"operationId": "unshelter"}},
+    "/v1/push-devices": {"post": {"operationId": "registerPushDevice"}},
+    "/v1/owner-update": {"post": {"operationId": "createOwnerUpdate"}}
   },
   "components": {
     "schemas": {

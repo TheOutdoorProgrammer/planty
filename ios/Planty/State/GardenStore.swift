@@ -151,6 +151,10 @@ final class GardenStore {
         }
     }
 
+    func ownerUpdate(steward: String) async throws -> OwnerUpdate {
+        try await api.ownerUpdate(steward: steward)
+    }
+
     func clearError() { error = nil }
 }
 

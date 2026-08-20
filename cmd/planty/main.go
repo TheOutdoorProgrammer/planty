@@ -20,6 +20,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/job"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
+	"github.com/TheOutdoorProgrammer/planty/internal/push"
 	"github.com/TheOutdoorProgrammer/planty/internal/seed"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -106,25 +107,25 @@ func run(log *slog.Logger) error {
 		log.Info("migrations applied")
 		return nil
 	case "ingest":
-		return job.Ingest{Store: db, HA: homeAssistant(), Log: log}.Run(ctx)
+		return job.Ingest{Store: db, HA: homeAssistant(db, log), Log: log}.Run(ctx)
 	case "daily":
 		return daily(db, log).Run(ctx)
 	case "cold":
 		return coldWatch(db, log).Run(ctx)
 	case "away":
-		return job.Away{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
+		return job.Away{Store: db, HA: homeAssistant(db, log), Log: log, Notifier: notifier()}.Run(ctx)
 	case "chase":
-		return job.Escalate{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
+		return job.Escalate{Store: db, HA: homeAssistant(db, log), Log: log, Notifier: notifier()}.Run(ctx)
 	case "remind":
 		sent, err := job.Remind{
-			Store: db, HA: homeAssistant(), Log: log, Notifier: notifier(),
+			Store: db, HA: homeAssistant(db, log), Log: log, Notifier: notifier(),
 		}.Run(ctx)
 		if err == nil {
 			log.Info("reminders sent", "count", sent)
 		}
 		return err
 	case "thirst":
-		return job.Thirst{Store: db, HA: homeAssistant(), Log: log, Notifier: notifier()}.Run(ctx)
+		return job.Thirst{Store: db, HA: homeAssistant(db, log), Log: log, Notifier: notifier()}.Run(ctx)
 	case "water":
 		return water(ctx, db, log)
 	case "autopsy":
@@ -201,14 +202,21 @@ func photoStore(ctx context.Context) (*photos.Store, error) {
 	})
 }
 
-func homeAssistant() *ha.Client {
-	return ha.New(os.Getenv("PLANTY_HA_URL"), os.Getenv("PLANTY_HA_TOKEN"))
+// homeAssistant keeps HA as the sensor, weather and actuator bus. When APNs is
+// configured, only notifications addressed to Planty's primary notifier are
+// intercepted; named backup-person services still go to HA.
+func homeAssistant(db *store.Store, log *slog.Logger) *ha.Client {
+	client := ha.New(os.Getenv("PLANTY_HA_URL"), os.Getenv("PLANTY_HA_TOKEN"))
+	if sender := push.NewFromEnv(db, log); sender != nil {
+		client.WithNotificationTransport(notifier(), sender)
+	}
+	return client
 }
 
 func daily(db *store.Store, log *slog.Logger) job.Daily {
 	return job.Daily{
 		Store:    db,
-		HA:       homeAssistant(),
+		HA:       homeAssistant(db, log),
 		Judge:    judge.New(),
 		Log:      log,
 		Notifier: notifier(),
@@ -250,7 +258,7 @@ func coldWatch(db *store.Store, log *slog.Logger) job.ColdWatch {
 	}
 	return job.ColdWatch{
 		Store:    db,
-		HA:       homeAssistant(),
+		HA:       homeAssistant(db, log),
 		Log:      log,
 		Weather:  weather,
 		Notifier: notifier(),
@@ -264,7 +272,7 @@ func water(ctx context.Context, db *store.Store, log *slog.Logger) error {
 	}
 	return job.Water{
 		Store:      db,
-		HA:         homeAssistant(),
+		HA:         homeAssistant(db, log),
 		Log:        log,
 		Notifier:   notifier(),
 		PumpSwitch: os.Getenv("PLANTY_PUMP_SWITCH"),
