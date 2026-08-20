@@ -40,7 +40,8 @@ struct SharedInteractionStateTests {
         #expect(!second)
 
         await gate.release()
-        #expect(await first.value)
+        let firstSucceeded = await first.value
+        #expect(firstSucceeded)
     }
 
     @MainActor
