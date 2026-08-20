@@ -56,15 +56,25 @@ func filterDiscoveredEntities(entities []ha.Entity, role plant.SensorRole, query
 	query = strings.ToLower(strings.TrimSpace(query))
 	filtered := make([]ha.Entity, 0, len(entities))
 	for _, entity := range entities {
-		if entity.Domain != "sensor" { continue }
-		if role != "" && !entityLikelyForRole(entity, role) { continue }
-		if query != "" && !entityMatchesQuery(entity, query) { continue }
+		if entity.Domain != "sensor" {
+			continue
+		}
+		if role != "" && !entityLikelyForRole(entity, role) {
+			continue
+		}
+		if query != "" && !entityMatchesQuery(entity, query) {
+			continue
+		}
 		filtered = append(filtered, entity)
 	}
 	sort.SliceStable(filtered, func(i, j int) bool {
-		if filtered[i].Available != filtered[j].Available { return filtered[i].Available }
+		if filtered[i].Available != filtered[j].Available {
+			return filtered[i].Available
+		}
 		left, right := strings.ToLower(filtered[i].FriendlyName), strings.ToLower(filtered[j].FriendlyName)
-		if left == right { return filtered[i].EntityID < filtered[j].EntityID }
+		if left == right {
+			return filtered[i].EntityID < filtered[j].EntityID
+		}
 		return left < right
 	})
 	return filtered
@@ -72,7 +82,9 @@ func filterDiscoveredEntities(entities []ha.Entity, role plant.SensorRole, query
 
 func entityMatchesQuery(entity ha.Entity, query string) bool {
 	for _, value := range []string{entity.EntityID, entity.FriendlyName, entity.Domain, entity.DeviceClass, entity.Area} {
-		if strings.Contains(strings.ToLower(value), query) { return true }
+		if strings.Contains(strings.ToLower(value), query) {
+			return true
+		}
 	}
 	return false
 }
@@ -98,11 +110,17 @@ func entityDiscoveryTokens(entity ha.Entity) map[string]struct{} {
 	text := strings.Join([]string{entity.EntityID, entity.FriendlyName, entity.DeviceClass}, " ")
 	fields := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool { return !unicode.IsLetter(r) && !unicode.IsDigit(r) })
 	tokens := make(map[string]struct{}, len(fields))
-	for _, field := range fields { tokens[field] = struct{}{} }
+	for _, field := range fields {
+		tokens[field] = struct{}{}
+	}
 	return tokens
 }
 
 func hasAnyToken(tokens map[string]struct{}, wanted ...string) bool {
-	for _, token := range wanted { if _, ok := tokens[token]; ok { return true } }
+	for _, token := range wanted {
+		if _, ok := tokens[token]; ok {
+			return true
+		}
+	}
 	return false
 }
