@@ -99,7 +99,10 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /v1/questions", s.askOwner)
 	mux.HandleFunc("POST /v1/questions/{id}/answer", s.answerQuestion)
 
+	mux.HandleFunc("GET /v1/away", s.listAway)
 	mux.HandleFunc("POST /v1/away", s.goAway)
+	mux.HandleFunc("PATCH /v1/away/{id}", s.updateAway)
+	mux.HandleFunc("DELETE /v1/away/{id}", s.cancelAway)
 
 	mux.HandleFunc("GET /v1/cold-watch", s.coldWatch)
 	mux.HandleFunc("POST /v1/shelter", s.shelter)
