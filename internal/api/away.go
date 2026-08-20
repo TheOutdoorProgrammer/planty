@@ -8,8 +8,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
 type awayPatch struct {
@@ -107,8 +105,3 @@ func (s *Server) cancelAway(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
-
-// Keep the plant package in this file's dependency set explicit: malformed
-// time windows are classified as plant.ErrInvalid by the store and mapped to
-// HTTP 400 by Server.fail.
-var _ = plant.ErrInvalid
