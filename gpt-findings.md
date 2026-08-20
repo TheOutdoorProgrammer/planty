@@ -145,9 +145,10 @@ An item is checked only after the implementation, regression test, commit, and p
 - [ ] **PNT-027 — Harvest writes accept meaningless data.**
   There is no domain or database validation for positive finite quantity, a non-empty unit, plausible timestamps, or applicable plant domains, and no correction path exists.
 
-- [ ] **PNT-028 — Away periods cannot be viewed, changed, or cancelled.**
+- [x] **PNT-028 — Away periods cannot be viewed, changed, or cancelled.**
   HTTP, agent CLI, and iOS expose create only, and overlap behavior is undefined.
   A typo in dates or backup contact is permanent and the user cannot confirm what is active.
+  Fixed with list/edit/cancel across HTTP, agent, and iOS, plus serialized half-open overlap rejection and regression coverage.
 
 - [x] **PNT-029 — iOS does not have the server and agent's advertised powers.**
   `PlantyAPI` lacks away planning, cold-watch query, full question list/create, postmortem history, toxicity editing, and harvest history.
