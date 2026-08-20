@@ -8,6 +8,7 @@ final class GardenStore {
     private(set) var questions: [OpenQuestion] = []
     private(set) var postmortems: [Postmortem] = []
     private(set) var harvests: [Harvest] = []
+    private(set) var awayPeriods: [AwayPeriod] = []
     private(set) var coldWatch: ColdWatch?
     private(set) var plannedAway: AwayPeriod?
     private(set) var error: PlantyError?
@@ -32,6 +33,7 @@ final class GardenStore {
         questions = []
         postmortems = []
         harvests = []
+        awayPeriods = []
         coldWatch = nil
         plannedAway = nil
         error = nil
@@ -50,13 +52,18 @@ final class GardenStore {
         async let questionsTask = gardenResult { try await api.questions(status: status) }
         async let postmortemsTask = gardenResult { try await api.postmortems() }
         async let harvestsTask = gardenResult { try await api.harvests(slug: nil) }
-        let loaded = await (questionsTask, postmortemsTask, harvestsTask)
+        async let awayTask = gardenResult { try await api.awayPeriods() }
+        let loaded = await (questionsTask, postmortemsTask, harvestsTask, awayTask)
         guard requestID == loadID else { return }
 
         if case .success(let value) = loaded.0 { questions = value }
         if case .success(let value) = loaded.1 { postmortems = value }
         if case .success(let value) = loaded.2 { harvests = value }
-        error = [loaded.0.failure, loaded.1.failure, loaded.2.failure]
+        if case .success(let value) = loaded.3 {
+            awayPeriods = value
+            plannedAway = value.first
+        }
+        error = [loaded.0.failure, loaded.1.failure, loaded.2.failure, loaded.3.failure]
             .compactMap { $0 }
             .first { !PlantyError.isCancellation($0) }
         hasLoaded = true
@@ -98,7 +105,37 @@ final class GardenStore {
 
     func planAway(_ draft: NewAwayPeriod) async -> PlantyError? {
         do {
-            plannedAway = try await api.planAway(draft)
+            let saved = try await api.planAway(draft)
+            awayPeriods.append(saved)
+            awayPeriods.sort { $0.startsAt < $1.startsAt }
+            plannedAway = awayPeriods.first
+            return nil
+        } catch {
+            return PlantyError.from(error)
+        }
+    }
+
+    func updateAway(id: UUID, draft: NewAwayPeriod) async -> PlantyError? {
+        do {
+            let saved = try await api.updateAway(id: id, draft: draft)
+            if let index = awayPeriods.firstIndex(where: { $0.id == id }) {
+                awayPeriods[index] = saved
+            } else {
+                awayPeriods.append(saved)
+            }
+            awayPeriods.sort { $0.startsAt < $1.startsAt }
+            plannedAway = awayPeriods.first
+            return nil
+        } catch {
+            return PlantyError.from(error)
+        }
+    }
+
+    func cancelAway(id: UUID) async -> PlantyError? {
+        do {
+            try await api.cancelAway(id: id)
+            awayPeriods.removeAll { $0.id == id }
+            plannedAway = awayPeriods.first
             return nil
         } catch {
             return PlantyError.from(error)

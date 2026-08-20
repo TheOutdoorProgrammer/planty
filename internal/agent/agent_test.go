@@ -145,7 +145,7 @@ func TestFlagMistakesFailPlainly(t *testing.T) {
 		{"answer with a junk id", []string{"answer", "--question", "nope", "--answer", "yes"}, "not a question id"},
 		{"answer with no text", []string{"answer", "--question", "nope"}, "--answer"},
 		{"ask with no question", []string{"ask", "--plant", "a"}, "--question"},
-		{"away with no dates", []string{"away"}, "--from"},
+		{"away create missing until", []string{"away", "--from", "2026-08-20"}, "--until"},
 		{"coldwatch with no low", []string{"coldwatch"}, "--low"},
 		{"log with a junk time", []string{"log", "--plant", "a", "--kind", "watered", "--when", "yesterdayish"}, "not a time"},
 		{"a flag that does not exist", []string{"plants", "--vibe", "good"}, "vibe"},

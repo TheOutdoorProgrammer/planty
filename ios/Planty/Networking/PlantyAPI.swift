@@ -29,6 +29,9 @@ protocol PlantyAPI: Sendable {
     func questions(status: QuestionStatus) async throws -> [OpenQuestion]
     func createQuestion(_ draft: NewOpenQuestion) async throws -> OpenQuestion
     func planAway(_ draft: NewAwayPeriod) async throws -> AwayPeriod
+    func awayPeriods() async throws -> [AwayPeriod]
+    func updateAway(id: UUID, draft: NewAwayPeriod) async throws -> AwayPeriod
+    func cancelAway(id: UUID) async throws
     func coldWatch(forecastLowF: Double) async throws -> ColdWatch
     func notes(slug: String) async throws -> [PlantNote]
     func answerQuestion(id: UUID, answer: String) async throws
@@ -46,6 +49,19 @@ protocol PlantyAPI: Sendable {
 extension PlantyAPI {
     func homeAssistantEntities() async throws -> [HomeAssistantEntity] {
         throw PlantyError.server(status: 503, message: "Home Assistant discovery is unavailable from this client.")
+    }
+
+    // Defaults keep lightweight test doubles source-compatible. Production
+    // PlantyClient implements all three and GardenStore treats an empty list as
+    // simply having no planned coverage.
+    func awayPeriods() async throws -> [AwayPeriod] { [] }
+
+    func updateAway(id: UUID, draft: NewAwayPeriod) async throws -> AwayPeriod {
+        throw PlantyError.server(status: 503, message: "Away-period editing is unavailable from this client.")
+    }
+
+    func cancelAway(id: UUID) async throws {
+        throw PlantyError.server(status: 503, message: "Away-period cancellation is unavailable from this client.")
     }
 }
 

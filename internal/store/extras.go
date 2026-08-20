@@ -100,17 +100,7 @@ func (s *Store) GoAway(ctx context.Context, a plant.AwayPeriod) (plant.AwayPerio
 		return plant.AwayPeriod{}, fmt.Errorf(
 			"%w: ends_at must be after starts_at", plant.ErrInvalid)
 	}
-	row := s.pool.QueryRow(ctx, `
-		INSERT INTO away_periods (starts_at, ends_at, backup_contact, backup_notify, note)
-		VALUES ($1, $2, nullif($3,''), nullif($4,''), nullif($5,''))
-		RETURNING id, starts_at, ends_at, coalesce(backup_contact,''),
-		          coalesce(backup_notify,''), coalesce(note,''), created_at`,
-		a.StartsAt, a.EndsAt, a.BackupContact, a.BackupNotify, a.Note)
-
-	var out plant.AwayPeriod
-	err := row.Scan(&out.ID, &out.StartsAt, &out.EndsAt, &out.BackupContact,
-		&out.BackupNotify, &out.Note, &out.CreatedAt)
-	return out, err
+	return s.createAway(ctx, a)
 }
 
 // AwayAt returns the away period covering a moment, if there is one.

@@ -3,6 +3,8 @@ import SwiftUI
 struct AwayPlannerScreen: View {
     @Bindable var store: GardenStore
 
+    @State private var editingID: UUID?
+    @State private var pendingCancel: AwayPeriod?
     @State private var startsAt = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
     @State private var endsAt = Calendar.current.date(byAdding: .day, value: 4, to: Date()) ?? Date()
     @State private var backupContact = ""
@@ -13,22 +15,57 @@ struct AwayPlannerScreen: View {
 
     var body: some View {
         Form {
-            if let saved = store.plannedAway {
-                Section {
-                    Label("Coverage planned", systemImage: "checkmark.circle.fill")
-                        .font(.headline)
-                        .foregroundStyle(PlantyColor.green)
-                    Text("\(saved.startsAt.formatted(date: .abbreviated, time: .shortened)) to \(saved.endsAt.formatted(date: .abbreviated, time: .shortened))")
-                        .foregroundStyle(PlantyColor.secondaryText)
+            if !store.awayPeriods.isEmpty {
+                Section("Planned coverage") {
+                    ForEach(store.awayPeriods) { period in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Label(
+                                    period.Covers(Date()) ? "Active now" : "Upcoming",
+                                    systemImage: period.Covers(Date()) ? "house.fill" : "calendar"
+                                )
+                                .font(.headline)
+                                .foregroundStyle(period.Covers(Date()) ? PlantyColor.orange : PlantyColor.green)
+                                Spacer()
+                                if editingID == period.id {
+                                    Text("Editing")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(PlantyColor.cyan)
+                                }
+                            }
+                            Text("\(period.startsAt.formatted(date: .abbreviated, time: .shortened)) to \(period.endsAt.formatted(date: .abbreviated, time: .shortened))")
+                                .foregroundStyle(PlantyColor.secondaryText)
+                            if let contact = period.backupContact, !contact.isEmpty {
+                                Label(contact, systemImage: "person.fill")
+                                    .font(.subheadline)
+                            }
+                            if let note = period.note, !note.isEmpty {
+                                Text(note)
+                                    .font(.subheadline)
+                                    .foregroundStyle(PlantyColor.secondaryText)
+                            }
+                            HStack {
+                                Button("Edit") { edit(period) }
+                                    .buttonStyle(.borderless)
+                                Spacer()
+                                Button("Cancel coverage", role: .destructive) {
+                                    pendingCancel = period
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                            .font(.subheadline.weight(.semibold))
+                        }
+                        .padding(.vertical, 5)
+                    }
                 }
                 .listRowBackground(PlantyColor.surface)
             }
 
             if let failure {
-                Section { SheetErrorRow(headline: "The trip was not saved.", error: failure) }
+                Section { SheetErrorRow(headline: "The coverage change failed.", error: failure) }
             }
 
-            Section("When") {
+            Section(editingID == nil ? "New coverage" : "Edit coverage") {
                 DatePicker("Leaving", selection: $startsAt)
                 DatePicker("Returning", selection: $endsAt)
             }
@@ -45,7 +82,7 @@ struct AwayPlannerScreen: View {
             } header: {
                 Text("Backup")
             } footer: {
-                Text("Planty uses this window when it decides what needs doing before you leave and who should hear about it while you are gone.")
+                Text("Planty uses this window when it decides what needs doing before you leave and who should hear about it while you are gone. Coverage windows cannot overlap.")
             }
             .listRowBackground(PlantyColor.surface)
 
@@ -56,33 +93,88 @@ struct AwayPlannerScreen: View {
                     if saving {
                         ProgressView().tint(PlantyColor.background)
                     } else {
-                        Text("Plan coverage")
+                        Text(editingID == nil ? "Plan coverage" : "Save changes")
                     }
                 }
                 .buttonStyle(PrimaryButtonStyle(color: PlantyColor.orange))
                 .disabled(!datesAreValid || saving)
                 .listRowInsets(EdgeInsets())
                 .listRowBackground(Color.clear)
+
+                if editingID != nil {
+                    Button("Stop editing") { resetForm() }
+                        .foregroundStyle(PlantyColor.secondaryText)
+                }
             }
         }
         .plantyPage()
         .navigationTitle("Time away")
+        .confirmationDialog(
+            "Cancel this coverage?",
+            isPresented: Binding(
+                get: { pendingCancel != nil },
+                set: { if !$0 { pendingCancel = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: pendingCancel
+        ) { period in
+            Button("Cancel coverage", role: .destructive) {
+                Task { await cancel(period) }
+            }
+            Button("Keep coverage", role: .cancel) {}
+        } message: { period in
+            Text("\(period.startsAt.formatted(date: .abbreviated, time: .omitted)) to \(period.endsAt.formatted(date: .abbreviated, time: .omitted)) will be removed.")
+        }
     }
 
     private var datesAreValid: Bool { endsAt > startsAt }
 
+    private func edit(_ period: AwayPeriod) {
+        editingID = period.id
+        startsAt = period.startsAt
+        endsAt = period.endsAt
+        backupContact = period.backupContact ?? ""
+        backupNotify = period.backupNotify ?? ""
+        note = period.note ?? ""
+        failure = nil
+    }
+
+    private func resetForm() {
+        editingID = nil
+        startsAt = Calendar.current.date(byAdding: .day, value: 1, to: Date()) ?? Date()
+        endsAt = Calendar.current.date(byAdding: .day, value: 4, to: Date()) ?? Date()
+        backupContact = ""
+        backupNotify = ""
+        note = ""
+    }
+
+    private func draft() -> NewAwayPeriod {
+        NewAwayPeriod(
+            startsAt: startsAt,
+            endsAt: endsAt,
+            backupContact: backupContact.nilIfBlank,
+            backupNotify: backupNotify.nilIfBlank,
+            note: note.nilIfBlank
+        )
+    }
+
     private func save() async {
         saving = true
-        failure = await store.planAway(
-            NewAwayPeriod(
-                startsAt: startsAt,
-                endsAt: endsAt,
-                backupContact: backupContact.nilIfBlank,
-                backupNotify: backupNotify.nilIfBlank,
-                note: note.nilIfBlank
-            )
-        )
+        if let editingID {
+            failure = await store.updateAway(id: editingID, draft: draft())
+        } else {
+            failure = await store.planAway(draft())
+        }
         saving = false
+        if failure == nil { resetForm() }
+    }
+
+    private func cancel(_ period: AwayPeriod) async {
+        pendingCancel = nil
+        saving = true
+        failure = await store.cancelAway(id: period.id)
+        saving = false
+        if failure == nil, editingID == period.id { resetForm() }
     }
 }
 
