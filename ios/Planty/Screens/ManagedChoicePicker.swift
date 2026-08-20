@@ -142,7 +142,10 @@ private struct ManagedChoicePicker: View {
                         .font(.body.weight(.semibold))
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .accessibilityLabel(choice.value)
+        .accessibilityValue(choice.value == selection ? "Selected" : "")
     }
 }
