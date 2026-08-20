@@ -6,6 +6,7 @@ struct PlantDetail: Decodable, Sendable, Hashable {
     let plant: Plant
     var risk: Int?
     var observations: [PlantObservation]?
+    var observationsNextCursor: String?
     var lastWatered: Date?
     var verdict: Verdict?
     var photos: [Photo]?
@@ -20,6 +21,7 @@ struct PlantDetail: Decodable, Sendable, Hashable {
         case plant
         case risk
         case observations
+        case observationsNextCursor = "observations_next_cursor"
         case lastWatered = "last_watered"
         case verdict
         case photos
@@ -29,15 +31,16 @@ struct PlantDetail: Decodable, Sendable, Hashable {
     }
 }
 
-/// GET /v1/plants/{slug}/timeline. The endpoint promises observations, photos,
-/// readings and verdicts merged; the app does the merging so it can group them
-/// into a story rather than render a log.
+/// GET /v1/plants/{slug}/timeline. Each page contains photos plus a cursor for
+/// older photos; the app merges those pages with observation pages into one
+/// chronological story.
 struct PlantTimeline: Decodable, Sendable, Hashable {
     var observations: [PlantObservation]
     var photos: [Photo]
     var verdicts: [Verdict]
     var sensors: [SensorLink]
     var readings: [Reading]
+    var nextCursor: String?
 
     enum CodingKeys: String, CodingKey {
         case observations
@@ -45,6 +48,7 @@ struct PlantTimeline: Decodable, Sendable, Hashable {
         case verdicts
         case sensors
         case readings
+        case nextCursor = "next_cursor"
     }
 
     init(
@@ -52,13 +56,15 @@ struct PlantTimeline: Decodable, Sendable, Hashable {
         photos: [Photo] = [],
         verdicts: [Verdict] = [],
         sensors: [SensorLink] = [],
-        readings: [Reading] = []
+        readings: [Reading] = [],
+        nextCursor: String? = nil
     ) {
         self.observations = observations
         self.photos = photos
         self.verdicts = verdicts
         self.sensors = sensors
         self.readings = readings
+        self.nextCursor = nextCursor
     }
 
     init(from decoder: any Decoder) throws {
@@ -68,6 +74,8 @@ struct PlantTimeline: Decodable, Sendable, Hashable {
         verdicts = try container.decodeIfPresent([Verdict].self, forKey: .verdicts) ?? []
         sensors = try container.decodeIfPresent([SensorLink].self, forKey: .sensors) ?? []
         readings = try container.decodeIfPresent([Reading].self, forKey: .readings) ?? []
+        nextCursor = try container.decodeIfPresent(String.self, forKey: .nextCursor)
+        if nextCursor?.isEmpty == true { nextCursor = nil }
     }
 
     var isEmpty: Bool {
@@ -83,8 +91,18 @@ struct PlantTimeline: Decodable, Sendable, Hashable {
             photos: photos.isEmpty ? detail.photos ?? [] : photos,
             verdicts: verdicts.isEmpty ? [detail.verdict].compactMap { $0 } : verdicts,
             sensors: sensors.isEmpty ? detail.sensors ?? [] : sensors,
-            readings: readings.isEmpty ? detail.readings ?? [] : readings
+            readings: readings.isEmpty ? detail.readings ?? [] : readings,
+            nextCursor: nextCursor
         )
+    }
+
+    func appending(observations olderObservations: [PlantObservation], photos olderPhotos: [Photo]) -> PlantTimeline {
+        let observationIDs = Set(observations.map(\.id))
+        let photoIDs = Set(photos.map(\.id))
+        var copy = self
+        copy.observations.append(contentsOf: olderObservations.filter { !observationIDs.contains($0.id) })
+        copy.photos.append(contentsOf: olderPhotos.filter { !photoIDs.contains($0.id) })
+        return copy
     }
 
     /// Series for the "Why Planty thinks this" disclosure, newest link first.
@@ -123,4 +141,10 @@ struct ShelterResponse: Decodable, Sendable {
 
 struct ObservationListResponse: Decodable, Sendable {
     let observations: [PlantObservation]
+    var nextCursor: String?
+
+    enum CodingKeys: String, CodingKey {
+        case observations
+        case nextCursor = "next_cursor"
+    }
 }

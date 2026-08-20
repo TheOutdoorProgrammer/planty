@@ -39,10 +39,10 @@ An item is checked only after the implementation, regression test, commit, and p
   Yesterday's water instruction can remain visible and escalating after today's judgment says none or something different.
   Fixed by transactionally superseding prior verdicts, serializing concurrent judgments per plant, and enforcing one open verdict per plant with a partial unique index documented in ADR 0004.
 
-- [ ] **PNT-006 — A partially failed daily run can look fresh, complete, and all clear.**
+- [x] **PNT-006 — A partially failed daily run can look fresh, complete, and all clear.**
   `internal/job/daily.go:42-70` tolerates any partial success, while `Digest` reports every live plant as checked and derives freshness from the global newest verdict at `internal/store/verdicts.go:88-103`.
   A single successful `none` result can therefore claim the entire garden was checked while every other judgment failed.
-  This needs an ADR and a persisted judgment-run model with expected, succeeded, failed, and completion state.
+  Fixed with durable `judgment_runs` created before model work, per-plant succeeded/failed counters, explicit completion state, and Today/digest trust driven by the newest run including interrupted attempts. ADR 0006 records the invariant and tradeoffs, with Postgres regression coverage for partial and interrupted runs.
 
 - [x] **PNT-007 — Retrying a failed first-plant creation is a dead button.**
   `CaptureStore.createPlant` records a generic failed capture without the original operation at `ios/Planty/State/CaptureStore.swift:186-209`.
@@ -66,9 +66,10 @@ An item is checked only after the implementation, regression test, commit, and p
   A stale conversation ID can replay one plant's context into another and save subsequent turns under the wrong record.
   Fixed by scoping every conversation read to its plant or scratch owner and transactionally rejecting owner changes, including concurrent first turns sharing a UUID.
 
-- [ ] **PNT-011 — The unauthenticated LAN API is writable through CSRF and DNS rebinding.**
+- [x] **PNT-011 — The unauthenticated LAN API is writable through CSRF and DNS rebinding.**
   The server binds all interfaces, has no authentication or Origin/Host protection, and JSON handlers do not consistently require `application/json`.
   A hostile website opened by a LAN client can send simple blind writes even though CORS prevents it from reading responses.
+  Fixed with a write guard that rejects cross-site browser requests, requires matching Origin/Host for browser writes, restricts unsafe write content types, and allows explicit LAN DNS names through `PLANTY_ALLOWED_BROWSER_HOSTS`. Native origin-less iOS/CLI traffic is unchanged, and browser guard behavior has focused regression tests.
 
 - [x] **PNT-012 — Malformed shelter JSON can still execute a bulk move.**
   `internal/api/shelter.go:27-46` discards the decoder error and then inspects a partially populated request.
@@ -98,14 +99,15 @@ An item is checked only after the implementation, regression test, commit, and p
   `internal/store/plants.go:78-122,251-287` chooses a free slug before a separate insert.
   Concurrent same-name creates can pick the same slug and one fails instead of receiving the next suffix.
 
-- [ ] **PNT-018 — Completing a verdict is a non-atomic, non-idempotent two-call workflow.**
+- [x] **PNT-018 — Completing a verdict is a non-atomic, non-idempotent two-call workflow.**
   `TodayStore` and `CaptureStore` separately post an observation and then acknowledge the verdict.
   Failure between calls either duplicates care observations on retry or leaves completed work escalating.
-  The server needs one transactional completion command with an idempotency key.
+  Fixed with `POST /v1/verdicts/{id}/complete`, a durable idempotency-key reservation, and one Postgres transaction that writes the care observation and acknowledges the verdict. Today and Capture retain the same key across transport retries, and integration coverage proves a replay returns the original observation without duplicating care history.
 
-- [ ] **PNT-019 — Long-lived iOS stores accept stale out-of-order responses.**
+- [x] **PNT-019 — Long-lived iOS stores accept stale out-of-order responses.**
   `TodayStore`, `PlantsStore`, and `PlantStoryStore` allow overlapping loads and publish whichever response finishes last.
   `AppSession.updateConfiguration` swaps clients without invalidating in-flight operations, so old-server data can repopulate a newly configured session.
+  Fixed with request generations in all three long-lived stores, local client snapshots per load, and an AppSession API generation bound into Plant Story stores so both overlapping refreshes and old-server responses are discarded before publication.
 
 - [x] **PNT-020 — Overlapping identification can show results for the wrong photo.**
   `SnapScreen` launches unowned tasks and `IdentificationStore.identify` publishes every completion without cancellation or a photo-generation check.
@@ -127,9 +129,10 @@ An item is checked only after the implementation, regression test, commit, and p
   Denied permission and write failures therefore produce a false data-safety claim.
   Fixed by awaiting the Photos transaction, disabling duplicate saves while it runs, and reporting success only after Photos commits the asset.
 
-- [ ] **PNT-024 — Cancelling a consultation leaves an unrecoverable dangling question.**
+- [x] **PNT-024 — Cancelling a consultation leaves an unrecoverable dangling question.**
   `ConsultStore.ask` optimistically appends the question, but cancellation neither removes it nor marks it retryable.
   The transcript can retain a question with no answer, failure state, or recovery action.
+  Fixed by removing the exact optimistic bubble on cancellation and restoring its words/photo to the composer when possible, with a regression test proving cancellation is quiet, recoverable, and leaves no dangling transcript entry.
 
 - [ ] **PNT-025 — Object-storage writes are not compensated after database failure.**
   Photo and scratch attachment handlers upload the object before saving the row and do not delete it when persistence fails.
@@ -164,16 +167,18 @@ An item is checked only after the implementation, regression test, commit, and p
   The client models `include_archived`, but `PlantsStore` always loads live plants and there is no archive surface.
   A mistaken death/archive cannot be repaired from the phone.
 
-- [ ] **PNT-032 — Timeline and history routes silently truncate.**
+- [x] **PNT-032 — Timeline and history routes silently truncate.**
   Plant detail caps observations at 20 and timeline caps photos at 24 without cursors or a partial-result signal.
   Older care events and photos disappear from the app as a plant ages.
+  Fixed with opaque timestamp-plus-UUID cursors on observations and photos, explicit next-cursor response fields, tie-safe Postgres page queries, and Plant Story continuation that follows older pages without duplicates until history is exhausted.
 
 - [ ] **PNT-033 — URL validation accepts unusable schemes and hostless values.**
   Settings accepts any URL with any scheme and defers the failure to URLSession.
   It should require an HTTP or HTTPS URL with a host and explain whether LAN HTTP is intentionally allowed.
 
-- [ ] **PNT-034 — Camera and photo-import failures are silent.**
+- [x] **PNT-034 — Camera and photo-import failures are silent.**
   Snap and consultation attachment flows both use `try?` and return without visible state on capture/import errors.
+  Fixed before this audit batch by the shared `PhotoAcquisition` state: camera/import failures are captured as user-facing error text and rendered in both Snap and the consultation attachment sheet instead of being discarded with `try?`.
 
 - [ ] **PNT-035 — Core controls do not reflow at Accessibility Dynamic Type sizes.**
   Plant actions are forced into a single row with labels shrunk to 75%, and photo comparison forces two 200-point panes side by side.
@@ -189,8 +194,9 @@ An item is checked only after the implementation, regression test, commit, and p
 - [ ] **PNT-038 — The app globally overrides the user's appearance choice.**
   `PlantyApp` forces dark mode, ignoring system preference and removing a high-ambient-light option.
 
-- [ ] **PNT-039 — Notifications are still missing.**
+- [x] **PNT-039 — Notifications are still missing.**
   `CHECKLIST.md` already acknowledges that the iOS app has no push payload contract or notification implementation.
+  Fixed with APNs token registration, direct Planty push delivery for operator alerts, production push entitlements, and retained Home Assistant routing for backup-person/failure fallback delivery.
 
 - [ ] **PNT-040 — Species-identification cache entries never expire or follow configuration.**
   Disk cache keys contain only the Photos asset ID, so switching servers or improving the backend still returns an old result forever.
@@ -224,9 +230,9 @@ An item is checked only after the implementation, regression test, commit, and p
   Six sheets independently implement saving, dismissal, and error propagation; some preserve and explain failures, some preserve silently, and one destroys input.
   Standardize one async result/error contract without forcing unrelated form layouts into one component.
 
-- [ ] **PNT-042 — Photo acquisition is duplicated and already diverging.**
+- [x] **PNT-042 — Photo acquisition is duplicated and already diverging.**
   Snap and consultation attachments separately own camera state, picker state, lifecycle, and the same silent-failure behavior.
-  Extract a small photo-acquisition state object and keep screen-specific guidance in the views.
+  Fixed before this audit batch by extracting the shared `PhotoAcquisition` state object used by both Snap and consultation while keeping screen-specific presentation in the views.
 
 - [ ] **PNT-043 — `CaptureStore.upload()` appears dead.**
   No production or test caller references the method, yet it describes a second diagnosis upload flow that the current consultation path does not use.
@@ -246,9 +252,9 @@ An item is checked only after the implementation, regression test, commit, and p
   Invalid safety configuration should prevent watering and report the bad value.
   Fixed by parsing pump duration only when watering is invoked, rejecting every explicitly invalid value, and retaining the default only when configuration is omitted.
 
-- [ ] **PNT-048 — Internal server errors are returned verbatim.**
+- [x] **PNT-048 — Internal server errors are returned verbatim.**
   Every 5xx response serializes `err.Error()`, including Postgres, object storage, Home Assistant, and Claude CLI errors.
-  Return stable public error codes with a request ID and keep wrapped details only in structured logs.
+  Fixed before this audit batch by returning stable public error messages/codes and an `X-Request-ID` for 5xx responses while keeping wrapped internal details only in structured logs.
 
 ## Deliberately rejected audit claim
 

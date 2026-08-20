@@ -84,18 +84,26 @@ type Digest struct {
 	Date    time.Time     `json:"date"`
 	Entries []DigestEntry `json:"entries"`
 
+	// Completeness belongs to the judgment run, not the current number of live
+	// plants. That keeps a partial model outage from masquerading as a full check.
+	Checked     int  `json:"checked"`
+	Expected    int  `json:"expected"`
+	Failed      int  `json:"failed"`
+	RunComplete bool `json:"run_complete"`
+
 	// Three states a client must be able to tell apart: nothing needs doing,
 	// the data is stale, and the judgment has never run at all.
-	Checked    int        `json:"checked"`
 	StaleSince *time.Time `json:"stale_since,omitempty"`
 	NeverRun   bool       `json:"never_run"`
 }
 
-// AllClear reports whether nothing needs doing, given data is actually fresh.
+// AllClear reports whether nothing needs doing and the latest garden-wide run
+// actually covered everything it promised to cover.
 func (d Digest) AllClear() bool {
-	return len(d.Entries) == 0 && d.StaleSince == nil && !d.NeverRun
+	return len(d.Entries) == 0 && d.StaleSince == nil && !d.NeverRun &&
+		d.RunComplete && d.Failed == 0 && d.Checked == d.Expected
 }
 
-// StaleAfter is how old the newest verdict may be before a digest says so.
+// StaleAfter is how old the newest complete run may be before a digest says so.
 // Sized past a missed daily run, so one hiccup does not cry stale.
 const StaleAfter = 36 * time.Hour

@@ -11,7 +11,16 @@ protocol PlantyAPI: Sendable {
     func updatePlant(slug: String, patch: PlantPatch) async throws -> Plant
     func archivePlant(slug: String, status: PlantStatus) async throws
     func addObservation(slug: String, observation: NewObservation) async throws -> PlantObservation
+    func completeVerdict(
+        slug: String,
+        verdictID: UUID,
+        kind: ObservationKind,
+        note: String,
+        idempotencyKey: UUID
+    ) async throws -> PlantObservation
+    func observationsPage(slug: String, cursor: String) async throws -> ObservationListResponse
     func timeline(slug: String) async throws -> PlantTimeline
+    func timelinePage(slug: String, cursor: String) async throws -> PlantTimeline
     func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo
     func acknowledge(verdictID: UUID) async throws
     func sensors() async throws -> [SensorLink]
@@ -56,6 +65,32 @@ extension PlantyAPI {
     }
 
     func managedChoices() async throws -> ManagedChoices { .empty }
+
+    /// Production overrides this with the atomic endpoint. The fallback keeps
+    /// small test doubles source-compatible while still modeling the old two
+    /// operations explicitly in tests that have not opted into the new seam.
+    func completeVerdict(
+        slug: String,
+        verdictID: UUID,
+        kind: ObservationKind,
+        note: String,
+        idempotencyKey: UUID
+    ) async throws -> PlantObservation {
+        let observation = try await addObservation(
+            slug: slug,
+            observation: NewObservation(kind: kind, body: note.isEmpty ? nil : note)
+        )
+        try await acknowledge(verdictID: verdictID)
+        return observation
+    }
+
+    func observationsPage(slug: String, cursor: String) async throws -> ObservationListResponse {
+        throw PlantyError.server(status: 503, message: "Observation pagination is unavailable from this client.")
+    }
+
+    func timelinePage(slug: String, cursor: String) async throws -> PlantTimeline {
+        throw PlantyError.server(status: 503, message: "Photo pagination is unavailable from this client.")
+    }
 
     // Defaults keep lightweight test doubles source-compatible. Production
     // PlantyClient implements these and the feature surfaces handle unavailable

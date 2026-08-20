@@ -37,6 +37,7 @@ final class AppSession {
 
     private let defaults: UserDefaults
     private let tokens: any TokenStoring
+    private var apiGeneration = 0
 
     init(
         defaults: UserDefaults = .standard,
@@ -73,7 +74,8 @@ final class AppSession {
     }
 
     /// Rebuilds the client and re-asks, because a new base URL invalidates
-    /// every cached answer the old one gave.
+    /// every cached answer the old one gave. The generation also invalidates
+    /// in-flight child-store requests that still hold the previous client.
     func updateConfiguration(baseURL: String, token: String) {
         let trimmedURL = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         defaults.set(trimmedURL.isEmpty ? nil : trimmedURL, forKey: ConfigurationKey.baseURLDefaults)
@@ -86,6 +88,7 @@ final class AppSession {
 
         configuration = PlantyConfiguration.resolve(defaults: defaults, tokens: tokens)
         let client = PlantyClient(configuration: configuration)
+        apiGeneration += 1
         api = client
 
         today.replace(api: client, isConfigured: configuration.isConfigured)
@@ -112,7 +115,12 @@ final class AppSession {
     }
 
     func storyStore(for plant: Plant) -> PlantStoryStore {
-        PlantStoryStore(api: api, plant: plant)
+        let generation = apiGeneration
+        return PlantStoryStore(
+            api: api,
+            plant: plant,
+            isSessionCurrent: { [weak self] in self?.apiGeneration == generation }
+        )
     }
 
     /// `asking` is sent the moment the screen opens, for entry points that

@@ -15,7 +15,7 @@ import (
 
 // today answers "what should I do right now" for both clients.
 func (s *Server) today(w http.ResponseWriter, r *http.Request) {
-	digest, err := s.store.Digest(r.Context(), plant.StaleAfter)
+	digest, err := s.store.ReliableDigest(r.Context(), plant.StaleAfter)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
@@ -32,6 +32,9 @@ func (s *Server) today(w http.ResponseWriter, r *http.Request) {
 		"date":           digest.Date,
 		"entries":        digest.Entries,
 		"checked":        digest.Checked,
+		"expected":       digest.Expected,
+		"failed":         digest.Failed,
+		"run_complete":   digest.RunComplete,
 		"stale_since":    digest.StaleSince,
 		"never_run":      digest.NeverRun,
 		"all_clear":      digest.AllClear(),

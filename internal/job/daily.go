@@ -23,17 +23,32 @@ type Daily struct {
 	Notifier string
 }
 
-// Run judges every live plant and notifies only if something needs doing.
+// Run judges every live plant and notifies only if something needs doing or the
+// check was incomplete. The garden-wide run is persisted before model work so a
+// process interruption cannot leave yesterday's all-clear looking current.
 func (d Daily) Run(ctx context.Context) error {
 	plants, err := d.Store.ListPlants(ctx, store.PlantFilter{Status: plant.StatusAlive})
 	if err != nil {
 		return fmt.Errorf("list plants: %w", err)
 	}
 
-	// No key is a Planty running without its opinion, not a broken one. Said
-	// once a day rather than per plant, and never as an error, because the
-	// cold watch and the watering line are unaffected.
+	run, err := d.Store.StartJudgmentRun(ctx, len(plants))
+	if err != nil {
+		return fmt.Errorf("start judgment run: %w", err)
+	}
+
+	// No key is a Planty running without its opinion, not a broken cold-watch or
+	// watering system. Still record that this daily check covered zero plants so
+	// Today cannot inherit a false all-clear from an older successful run.
 	if d.Judge == nil {
+		for range plants {
+			if err := d.Store.RecordJudgmentResult(ctx, run.ID, false); err != nil {
+				return fmt.Errorf("record unavailable judgment: %w", err)
+			}
+		}
+		if err := d.Store.CompleteJudgmentRun(ctx, run.ID); err != nil {
+			return fmt.Errorf("complete unavailable judgment run: %w", err)
+		}
 		d.Log.Warn("no judgment: no model backend is configured",
 			"plants", len(plants), "still_running", "cold watch, watering, escalation")
 		return nil
@@ -41,11 +56,19 @@ func (d Daily) Run(ctx context.Context) error {
 
 	var failed int
 	for _, p := range plants {
+		judged := true
 		if err := d.judgeOne(ctx, p); err != nil {
 			// One plant failing must not silence the rest of the digest.
 			d.Log.Error("judgment failed", "plant", p.Slug, "error", err)
 			failed++
+			judged = false
 		}
+		if err := d.Store.RecordJudgmentResult(ctx, run.ID, judged); err != nil {
+			return fmt.Errorf("record judgment result for %s: %w", p.Slug, err)
+		}
+	}
+	if err := d.Store.CompleteJudgmentRun(ctx, run.ID); err != nil {
+		return fmt.Errorf("complete judgment run: %w", err)
 	}
 
 	// A death is worth understanding, and nobody remembers to ask for it.
@@ -56,12 +79,11 @@ func (d Daily) Run(ctx context.Context) error {
 		d.Log.Info("postmortems written", "count", written)
 	}
 
-	digest, err := d.Store.Digest(ctx, plant.StaleAfter)
+	digest, err := d.Store.ReliableDigest(ctx, plant.StaleAfter)
 	if err != nil {
 		return fmt.Errorf("digest: %w", err)
 	}
 
-	// A run where everything failed must not render as a calm day.
 	if failed == len(plants) && len(plants) > 0 {
 		return fmt.Errorf("every plant failed judgment (%d)", failed)
 	}
@@ -143,12 +165,20 @@ func (d Daily) notify(ctx context.Context, digest plant.Digest) error {
 			urgent = true
 		}
 	}
+	incomplete := !digest.RunComplete || digest.Failed > 0 || digest.Checked != digest.Expected
+	if incomplete {
+		fmt.Fprintf(&b, "\nWarning: Planty checked %d of %d plants; %d failed. This check is incomplete.\n",
+			digest.Checked, digest.Expected, digest.Failed)
+	}
 	if digest.StaleSince != nil {
-		b.WriteString("\nWarning: readings are stale, so this may be incomplete.\n")
+		b.WriteString("\nWarning: the last complete check is stale.\n")
 	}
 
 	title := fmt.Sprintf("%d plants need you", len(digest.Entries))
-	if len(digest.Entries) == 1 {
+	switch {
+	case incomplete && len(digest.Entries) == 0:
+		title = "Planty's check was incomplete"
+	case len(digest.Entries) == 1:
 		title = "One plant needs you"
 	}
 

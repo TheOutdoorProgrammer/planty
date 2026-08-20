@@ -98,9 +98,9 @@ struct ConsultStoreTests {
         #expect(!store.isThinking)
     }
 
-    @Test("A cancelled question is not an error")
+    @Test("A cancelled question returns to the composer instead of dangling")
     @MainActor
-    func cancellationIsQuiet() async {
+    func cancellationRestoresDraft() async {
         let api = FakeAPI()
         api.failure = PlantyError.from(URLError(.cancelled))
         let store = ConsultStore(api: api, plant: .fixture())
@@ -108,6 +108,9 @@ struct ConsultStoreTests {
         await store.send("anything")
 
         #expect(store.error == nil)
+        #expect(store.messages.isEmpty, "a cancelled optimistic bubble was left with no answer")
+        #expect(store.composer == "anything", "the cancelled question was not recoverable")
+        #expect(store.failed == nil)
     }
 }
 

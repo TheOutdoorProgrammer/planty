@@ -14,6 +14,7 @@ final class PlantsStore {
 
     var isConfigured: Bool
     private var api: any PlantyAPI
+    private var loadGeneration = 0
 
     init(api: any PlantyAPI, isConfigured: Bool) {
         self.api = api
@@ -21,23 +22,33 @@ final class PlantsStore {
     }
 
     func replace(api: any PlantyAPI, isConfigured: Bool) {
+        loadGeneration += 1
         self.api = api
         self.isConfigured = isConfigured
         plants = []
         error = nil
+        isLoading = false
         hasLoaded = false
     }
 
     func load() async {
         guard isConfigured else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
+        let client = api
         isLoading = true
         error = nil
-        defer { isLoading = false }
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
 
         do {
-            plants = try await api.plants(filter: .live)
+            let loaded = try await client.plants(filter: .live)
+            guard generation == loadGeneration else { return }
+            plants = loaded
             hasLoaded = true
         } catch {
+            guard generation == loadGeneration else { return }
             guard !PlantyError.isCancellation(error) else { return }
             self.error = PlantyError.from(error)
         }
@@ -108,7 +119,6 @@ final class PlantsStore {
 
     func clearError() { error = nil }
 }
-
 
 struct PlantGroup: Sendable, Hashable, Identifiable {
     let title: String

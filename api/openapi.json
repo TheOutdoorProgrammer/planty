@@ -52,6 +52,7 @@
     "/v1/plants/{slug}/postmortem": {"post": {"operationId": "createPostmortem"}},
     "/v1/today": {"get": {"operationId": "today"}},
     "/v1/verdicts/{id}/ack": {"post": {"operationId": "ackVerdict"}},
+    "/v1/verdicts/{id}/complete": {"post": {"operationId": "completeVerdict"}},
     "/v1/choices": {"get": {"operationId": "listChoices"}},
     "/v1/home-assistant/entities": {"get": {"operationId": "listHomeAssistantEntities"}},
     "/v1/sensors": {
@@ -64,6 +65,8 @@
       "post": {"operationId": "createQuestion"}
     },
     "/v1/questions/{id}/answer": {"post": {"operationId": "answerQuestion"}},
+    "/v1/owner-update": {"post": {"operationId": "createOwnerUpdate"}},
+    "/v1/push-devices": {"post": {"operationId": "registerPushDevice"}},
     "/v1/away": {
       "get": {"operationId": "listAway"},
       "post": {"operationId": "createAway"}
@@ -74,9 +77,7 @@
     },
     "/v1/cold-watch": {"get": {"operationId": "coldWatch"}},
     "/v1/shelter": {"post": {"operationId": "shelter"}},
-    "/v1/unshelter": {"post": {"operationId": "unshelter"}},
-    "/v1/push-devices": {"post": {"operationId": "registerPushDevice"}},
-    "/v1/owner-update": {"post": {"operationId": "createOwnerUpdate"}}
+    "/v1/unshelter": {"post": {"operationId": "unshelter"}}
   },
   "components": {
     "schemas": {
