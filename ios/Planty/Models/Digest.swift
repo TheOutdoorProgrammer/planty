@@ -70,6 +70,23 @@ struct Digest: Codable, Sendable, Hashable {
         return copy
     }
 
+    /// `/v1/today` carries the judged plant record, while `/v1/plants` carries
+    /// the newest photo URL. Today already loads both, so merge only the photo
+    /// metadata instead of adding another request or duplicating plant state.
+    func keepingPhotos(from plants: [Plant]) -> Digest {
+        let byID = Dictionary(uniqueKeysWithValues: plants.map { ($0.id, $0) })
+        var copy = self
+        copy.entries = entries.map { entry in
+            guard let listed = byID[entry.plant.id] else { return entry }
+            return DigestEntry(
+                plant: entry.plant.keepingPhoto(from: listed),
+                verdict: entry.verdict,
+                risk: entry.risk
+            )
+        }
+        return copy
+    }
+
     /// Friend-owned first, then by the service's own neglect risk. Ownership
     /// changes the order and nothing else about how the card looks.
     var sortedEntries: [DigestEntry] {

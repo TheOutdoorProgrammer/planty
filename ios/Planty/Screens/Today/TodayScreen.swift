@@ -1,11 +1,9 @@
 import SwiftUI
 
-/// Orientation before capture. Designed from the calm state outward: the most
+/// Orientation before action. Designed from the calm state outward: the most
 /// common screen is a completion, not an empty list.
 struct TodayScreen: View {
     @Environment(AppSession.self) private var session
-    @State private var postponing: DigestEntry?
-    @State private var completing: DigestEntry?
 
     private var store: TodayStore { session.today }
 
@@ -38,24 +36,6 @@ struct TodayScreen: View {
                 guard let verdict else { return }
                 store.settled(verdict)
                 session.capture.clearSettled()
-            }
-            .sheet(item: $postponing) { entry in
-                PostponeSheet(entry: entry) { interval in
-                    store.postpone(entry, by: interval)
-                    postponing = nil
-                } handled: {
-                    completing = entry
-                    postponing = nil
-                }
-            }
-            .sheet(item: $completing) { entry in
-                HandledSheet(entry: entry) { kind, note in
-                    Task { await store.complete(entry, kind: kind, note: note) }
-                    completing = nil
-                } noteOnly: { text in
-                    Task { await store.addNote(entry, text: text) }
-                    completing = nil
-                }
             }
             .alert(
                 "That did not save.",
@@ -141,11 +121,12 @@ struct TodayScreen: View {
     @ViewBuilder
     private func cards(for entries: [DigestEntry]) -> some View {
         ForEach(entries) { entry in
-            CareCard(entry: entry) {
-                session.beginCapture(for: entry)
-            } notNow: {
-                postponing = entry
+            NavigationLink {
+                TodayActionScreen(entry: entry)
+            } label: {
+                CareCard(entry: entry)
             }
+            .buttonStyle(.plain)
         }
     }
 

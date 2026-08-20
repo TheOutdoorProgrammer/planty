@@ -10,9 +10,8 @@ final class TodayStore {
     private(set) var knownPlantCount: Int?
     private(set) var error: PlantyError?
 
-    /// Kept apart from `error`, which is about the load. Tapping "Watered" and
-    /// failing used to render "Today's check did not finish", which is a claim
-    /// about the whole screen rather than about the tap.
+    /// Kept apart from `error`, which is about the load. Tapping a care action
+    /// and failing must not turn into a claim that the whole daily check failed.
     private(set) var actionError: PlantyError?
 
     /// The plant a note was just written against, for a brief confirmation.
@@ -51,6 +50,8 @@ final class TodayStore {
         digest = nil
         knownPlantCount = nil
         error = nil
+        actionError = nil
+        noted = nil
         lastLoadedAt = nil
         resolvedIDs = []
         postponedUntil = [:]
@@ -72,7 +73,7 @@ final class TodayStore {
     }
 
     /// Postponed cards drop out until their interval passes. They are never
-    /// marked done: "Not now" and "I handled it" are different claims.
+    /// marked done: "Later" and "I handled it" are different claims.
     private var visibleDigest: Digest? {
         guard let digest else { return nil }
         let now = clock()
@@ -92,7 +93,7 @@ final class TodayStore {
             async let digestTask = api.today()
             async let plantsTask = api.plants(filter: .live)
             let (loaded, plants) = try await (digestTask, plantsTask)
-            digest = loaded
+            digest = loaded.keepingPhotos(from: plants)
             knownPlantCount = plants.count
             lastLoadedAt = clock()
         } catch {
@@ -103,18 +104,23 @@ final class TodayStore {
         }
     }
 
-    func acknowledge(_ entry: DigestEntry) async {
+    /// Explicit acknowledgement is intentionally different from recording care:
+    /// it says "I saw this" and silences the current verdict without inventing
+    /// a watering, move or symptom that did not happen.
+    @discardableResult
+    func acknowledge(_ entry: DigestEntry) async -> PlantyError? {
+        actionError = nil
         do {
             try await api.acknowledge(verdictID: entry.verdict.id)
             resolvedIDs.insert(entry.verdict.id)
+            return nil
         } catch {
-            actionError = PlantyError.from(error)
+            let failure = PlantyError.from(error)
+            actionError = failure
+            return failure
         }
     }
 
-    /// Records what happened and drops the card, the only route by which an
-    /// action may disappear as complete. The acknowledgement stops the service
-    /// escalating, so its failure is reported rather than swallowed.
     /// Waiting on a person rather than a plant, and answered from here so the
     /// queue has an outlet instead of filling up unread.
     var openQuestions: [OpenQuestion] { digest?.openQuestions ?? [] }
@@ -131,29 +137,61 @@ final class TodayStore {
         }
     }
 
-    func complete(_ entry: DigestEntry, kind: ObservationKind, note: String = "") async {
+    /// Records what happened and then acknowledges the verdict. A failure in
+    /// either half leaves the card visible and is returned to the action screen.
+    @discardableResult
+    func complete(
+        _ entry: DigestEntry,
+        kind: ObservationKind,
+        note: String = ""
+    ) async -> PlantyError? {
+        actionError = nil
         do {
             _ = try await api.addObservation(
                 slug: entry.plant.slug,
                 observation: NewObservation(kind: kind, body: note.isEmpty ? nil : note)
             )
         } catch {
-            actionError = PlantyError.from(error)
-            return
+            let failure = PlantyError.from(error)
+            actionError = failure
+            return failure
         }
 
         do {
             try await api.acknowledge(verdictID: entry.verdict.id)
             resolvedIDs.insert(entry.verdict.id)
+            return nil
         } catch {
             actionError = .stillAsking
+            return .stillAsking
+        }
+    }
+
+    /// A photograph is optional evidence. Saving one never silently marks a
+    /// verdict handled; the user still chooses acknowledgement or a care action.
+    @discardableResult
+    func addPhoto(_ entry: DigestEntry, jpeg: Data) async -> PlantyError? {
+        actionError = nil
+        do {
+            _ = try await api.uploadPhoto(
+                slug: entry.plant.slug,
+                jpeg: jpeg,
+                caption: nil,
+                takenAt: clock()
+            )
+            return nil
+        } catch {
+            let failure = PlantyError.from(error)
+            actionError = failure
+            return failure
         }
     }
 
     /// Writes something down without claiming the job is done. The card stays,
-    /// because a note is not a watering.
+    /// because a note is not a watering or an acknowledgement.
     func addNote(_ entry: DigestEntry, text: String) async {
         guard !text.isEmpty else { return }
+        actionError = nil
         do {
             _ = try await api.addObservation(
                 slug: entry.plant.slug,
