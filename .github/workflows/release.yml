@@ -48,7 +48,9 @@ jobs:
         uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
-          args: build --snapshot --clean
+          args: release --snapshot --clean --skip=publish
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
