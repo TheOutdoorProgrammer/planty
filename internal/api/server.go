@@ -82,6 +82,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeSetReminder, s.setReminder)
 	mux.HandleFunc(routeDeleteReminder, s.deleteReminder)
 
+	// Device registration is deliberately independent of APNs credentials. A
+	// phone may register before the server is configured to send; delivery then
+	// starts automatically as soon as credentials land.
+	mux.HandleFunc(routeRegisterPushDevice, s.registerPushDevice)
+
 	// No slug: a question about something in a shop is not a plant you own.
 	mux.HandleFunc(routeAsk, s.ask)
 
@@ -104,6 +109,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeListQuestions, s.listQuestions)
 	mux.HandleFunc(routeCreateQuestion, s.askOwner)
 	mux.HandleFunc(routeAnswerQuestion, s.answerQuestion)
+	mux.HandleFunc(routeCreateOwnerUpdate, s.createOwnerUpdate)
 
 	mux.HandleFunc(routeListAway, s.listAway)
 	mux.HandleFunc(routeCreateAway, s.goAway)

@@ -84,6 +84,7 @@ jobs:
             "${auth[@]}" \
             DEVELOPMENT_TEAM="$TEAM" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            CODE_SIGN_ENTITLEMENTS="Planty/Planty.entitlements" \
             PLANTY_BASE_URL="$PLANTY_BASE_URL" \
             FLEDGE_BASE_URL="$FLEDGE_BASE_URL"
 

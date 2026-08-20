@@ -14,6 +14,7 @@ enum APIPath {
     static func calibrateSensor(id: String) -> String { "/v1/sensors/\(id)" }
     static let coldWatch = "/v1/cold-watch"
     static let createAway = "/v1/away"
+    static let createOwnerUpdate = "/v1/owner-update"
     static let createPlant = "/v1/plants"
     static let createPlantFromPhoto = "/v1/plants/from-photo"
     static func createPostmortem(slug: String) -> String { "/v1/plants/\(slug)/postmortem" }
@@ -39,6 +40,7 @@ enum APIPath {
     static let listQuestions = "/v1/questions"
     static func listReminders(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
     static let listSensors = "/v1/sensors"
+    static let registerPushDevice = "/v1/push-devices"
     static func setReminder(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
     static let shelter = "/v1/shelter"
     static let today = "/v1/today"
