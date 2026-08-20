@@ -19,6 +19,13 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Verify generated API contract
+        run: |
+          go run ./cmd/contractgen
+          git diff --exit-code -- \
+            internal/api/contract_generated.go \
+            ios/Planty/Networking/APIContract.generated.swift
+
       - name: Verify formatting
         run: |
           unformatted=$(gofmt -l ./cmd ./internal)
