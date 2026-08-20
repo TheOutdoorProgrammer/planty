@@ -9,12 +9,16 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/google/uuid"
+
 	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
+
+const requestIDHeader = "X-Request-ID"
 
 // Server routes HTTP onto the store.
 //
@@ -43,73 +47,81 @@ func (s *Server) WithPhotos(p *photos.Store, j *judge.Judge) *Server {
 	return s
 }
 
-// Handler returns the routed, authenticated mux.
+// Handler returns the routed mux. Route patterns are generated from the
+// OpenAPI contract so the server and clients cannot silently spell one
+// differently. Every response receives a request id for log correlation.
 func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /healthz", s.health)
+	mux.HandleFunc(routeHealth, s.health)
 
-	mux.HandleFunc("GET /v1/plants", s.listPlants)
-	mux.HandleFunc("POST /v1/plants", s.createPlant)
-	mux.HandleFunc("GET /v1/plants/{slug}", s.getPlant)
-	mux.HandleFunc("PATCH /v1/plants/{slug}", s.updatePlant)
-	mux.HandleFunc("DELETE /v1/plants/{slug}", s.archivePlant)
+	mux.HandleFunc(routeListPlants, s.listPlants)
+	mux.HandleFunc(routeCreatePlant, s.createPlant)
+	mux.HandleFunc(routeGetPlant, s.getPlant)
+	mux.HandleFunc(routeUpdatePlant, s.updatePlant)
+	mux.HandleFunc(routeArchivePlant, s.archivePlant)
 
-	mux.HandleFunc("GET /v1/plants/{slug}/observations", s.listObservations)
-	mux.HandleFunc("POST /v1/plants/{slug}/observations", s.addObservation)
+	mux.HandleFunc(routeListObservations, s.listObservations)
+	mux.HandleFunc(routeAddObservation, s.addObservation)
 
-	mux.HandleFunc("GET /v1/plants/{slug}/notes", s.listNotes)
-	mux.HandleFunc("POST /v1/plants/{slug}/notes", s.addNote)
-	// No slug: true of the house rather than of anything growing in it.
-	mux.HandleFunc("GET /v1/notes", s.listHouseholdNotes)
-	mux.HandleFunc("POST /v1/notes", s.addHouseholdNote)
-	mux.HandleFunc("PATCH /v1/notes/{id}", s.updateNote)
-	mux.HandleFunc("DELETE /v1/notes/{id}", s.deleteNote)
+	mux.HandleFunc(routeListPlantNotes, s.listNotes)
+	mux.HandleFunc(routeAddPlantNote, s.addNote)
+	mux.HandleFunc(routeListHouseholdNotes, s.listHouseholdNotes)
+	mux.HandleFunc(routeAddHouseholdNote, s.addHouseholdNote)
+	mux.HandleFunc(routeUpdateNote, s.updateNote)
+	mux.HandleFunc(routeDeleteNote, s.deleteNote)
 
-	mux.HandleFunc("GET /v1/harvests", s.listHarvests)
-	mux.HandleFunc("GET /v1/plants/{slug}/harvests", s.listHarvests)
-	mux.HandleFunc("POST /v1/plants/{slug}/harvests", s.addHarvest)
-	mux.HandleFunc("POST /v1/plants/{slug}/photos", s.uploadPhoto)
-	mux.HandleFunc("GET /v1/plants/{slug}/timeline", s.timeline)
-	mux.HandleFunc("POST /v1/plants/{slug}/ask", s.consult)
+	mux.HandleFunc(routeListHarvests, s.listHarvests)
+	mux.HandleFunc(routeListPlantHarvests, s.listHarvests)
+	mux.HandleFunc(routeAddHarvest, s.addHarvest)
+	mux.HandleFunc(routeUploadPhoto, s.uploadPhoto)
+	mux.HandleFunc(routeGetTimeline, s.timeline)
+	mux.HandleFunc(routeAskPlant, s.consult)
 
-	mux.HandleFunc("GET /v1/plants/{slug}/reminders", s.listReminders)
-	mux.HandleFunc("PUT /v1/plants/{slug}/reminders", s.setReminder)
-	mux.HandleFunc("DELETE /v1/plants/{slug}/reminders/{kind}", s.deleteReminder)
+	mux.HandleFunc(routeListReminders, s.listReminders)
+	mux.HandleFunc(routeSetReminder, s.setReminder)
+	mux.HandleFunc(routeDeleteReminder, s.deleteReminder)
 
 	// No slug: a question about something in a shop is not a plant you own.
-	mux.HandleFunc("POST /v1/ask", s.ask)
+	mux.HandleFunc(routeAsk, s.ask)
 
-	mux.HandleFunc("POST /v1/identify", s.identify)
-	mux.HandleFunc("POST /v1/plants/from-photo", s.plantFromPhoto)
+	mux.HandleFunc(routeIdentify, s.identify)
+	mux.HandleFunc(routeCreatePlantFromPhoto, s.plantFromPhoto)
 
-	mux.HandleFunc("GET /v1/postmortems", s.listPostmortems)
-	mux.HandleFunc("POST /v1/plants/{slug}/postmortem", s.autopsy)
+	mux.HandleFunc(routeListPostmortems, s.listPostmortems)
+	mux.HandleFunc(routeCreatePostmortem, s.autopsy)
 
-	mux.HandleFunc("GET /v1/today", s.today)
-	mux.HandleFunc("POST /v1/verdicts/{id}/ack", s.ackVerdict)
+	mux.HandleFunc(routeToday, s.today)
+	mux.HandleFunc(routeAckVerdict, s.ackVerdict)
 
-	mux.HandleFunc("GET /v1/choices", s.listManagedChoices)
-	mux.HandleFunc("GET /v1/home-assistant/entities", s.discoverHomeAssistantEntities)
+	mux.HandleFunc(routeListChoices, s.listManagedChoices)
+	mux.HandleFunc(routeListHomeAssistantEntities, s.discoverHomeAssistantEntities)
 
-	mux.HandleFunc("GET /v1/sensors", s.listSensors)
-	mux.HandleFunc("POST /v1/sensors", s.linkSensor)
-	mux.HandleFunc("PATCH /v1/sensors/{id}", s.calibrateSensor)
+	mux.HandleFunc(routeListSensors, s.listSensors)
+	mux.HandleFunc(routeLinkSensor, s.linkSensor)
+	mux.HandleFunc(routeCalibrateSensor, s.calibrateSensor)
 
-	mux.HandleFunc("GET /v1/questions", s.listQuestions)
-	mux.HandleFunc("POST /v1/questions", s.askOwner)
-	mux.HandleFunc("POST /v1/questions/{id}/answer", s.answerQuestion)
+	mux.HandleFunc(routeListQuestions, s.listQuestions)
+	mux.HandleFunc(routeCreateQuestion, s.askOwner)
+	mux.HandleFunc(routeAnswerQuestion, s.answerQuestion)
 
-	mux.HandleFunc("GET /v1/away", s.listAway)
-	mux.HandleFunc("POST /v1/away", s.goAway)
-	mux.HandleFunc("PATCH /v1/away/{id}", s.updateAway)
-	mux.HandleFunc("DELETE /v1/away/{id}", s.cancelAway)
+	mux.HandleFunc(routeListAway, s.listAway)
+	mux.HandleFunc(routeCreateAway, s.goAway)
+	mux.HandleFunc(routeUpdateAway, s.updateAway)
+	mux.HandleFunc(routeDeleteAway, s.cancelAway)
 
-	mux.HandleFunc("GET /v1/cold-watch", s.coldWatch)
-	mux.HandleFunc("POST /v1/shelter", s.shelter)
-	mux.HandleFunc("POST /v1/unshelter", s.unshelter)
+	mux.HandleFunc(routeColdWatch, s.coldWatch)
+	mux.HandleFunc(routeShelter, s.shelter)
+	mux.HandleFunc(routeUnshelter, s.unshelter)
 
-	return mux
+	return withRequestID(mux)
+}
+
+func withRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set(requestIDHeader, uuid.NewString())
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
@@ -128,9 +140,10 @@ func (s *Server) ok(w http.ResponseWriter, code int, body any) {
 	}
 }
 
-// fail maps the error onto a status, so the error decides whose fault it was
-// rather than every call site guessing. A database outage reporting 400 would
-// send whoever is debugging it looking at the request.
+// fail maps the error onto a status, then draws a hard boundary between public
+// failures and internal detail. 4xx errors may explain the caller's mistake;
+// 5xx errors expose only a stable code and request id while the wrapped error
+// remains in structured logs.
 func (s *Server) fail(w http.ResponseWriter, code int, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
@@ -140,11 +153,73 @@ func (s *Server) fail(w http.ResponseWriter, code int, err error) {
 	case errors.Is(err, plant.ErrInvalid):
 		code = http.StatusBadRequest
 	}
+
+	requestID := w.Header().Get(requestIDHeader)
+	if requestID == "" {
+		requestID = uuid.NewString()
+		w.Header().Set(requestIDHeader, requestID)
+	}
+	publicMessage := err.Error()
 	if code >= http.StatusInternalServerError {
-		s.log.Error("request failed", "status", code, "error", err)
+		publicMessage = publicServerError(code)
+		s.log.Error("request failed",
+			"request_id", requestID,
+			"status", code,
+			"code", publicErrorCode(code),
+			"error", err,
+		)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(map[string]string{"error": err.Error()})
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"error":      publicMessage,
+		"code":       publicErrorCode(code),
+		"request_id": requestID,
+	})
+}
+
+func publicServerError(code int) string {
+	switch code {
+	case http.StatusBadGateway:
+		return "An upstream service could not complete the request."
+	case http.StatusServiceUnavailable:
+		return "A required service is unavailable."
+	case http.StatusGatewayTimeout:
+		return "An upstream service did not answer in time."
+	default:
+		return "The service could not complete the request."
+	}
+}
+
+func publicErrorCode(code int) string {
+	switch code {
+	case http.StatusBadRequest:
+		return "bad_request"
+	case http.StatusUnauthorized:
+		return "unauthorized"
+	case http.StatusForbidden:
+		return "forbidden"
+	case http.StatusNotFound:
+		return "not_found"
+	case http.StatusConflict:
+		return "conflict"
+	case http.StatusRequestEntityTooLarge:
+		return "payload_too_large"
+	case http.StatusUnprocessableEntity:
+		return "unprocessable_entity"
+	case http.StatusBadGateway:
+		return "upstream_error"
+	case http.StatusServiceUnavailable:
+		return "service_unavailable"
+	case http.StatusGatewayTimeout:
+		return "upstream_timeout"
+	case http.StatusInternalServerError:
+		return "internal_error"
+	default:
+		if code >= http.StatusInternalServerError {
+			return "server_error"
+		}
+		return "request_error"
+	}
 }
