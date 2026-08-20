@@ -42,6 +42,7 @@ struct LinkSensorSheet: View {
     let onLinked: (SensorLink) -> Void
 
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppSession.self) private var session
     @State private var draft = SensorLinkDraft()
     @State private var entitySource: EntityEntrySource = .discovered
     @State private var entities: [HomeAssistantEntity] = []
@@ -87,19 +88,23 @@ struct LinkSensorSheet: View {
                 Section {
                     Picker("Speaks for", selection: $draft.target) {
                         Text("One plant").tag(SensorLinkDraft.Target.plant)
-                        Text("A zone").tag(SensorLinkDraft.Target.zone)
+                        Text("A place").tag(SensorLinkDraft.Target.zone)
                     }
                     .pickerStyle(.segmented)
 
                     switch draft.target {
                     case .plant: plantPicker
                     case .zone:
-                        TextField("porch", text: $draft.zone)
-                            .textInputAutocapitalization(.never)
-                            .autocorrectionDisabled()
+                        ManagedChoiceField(
+                            title: "Place",
+                            emptyLabel: "Choose a place",
+                            customLabel: "Add a custom place",
+                            choices: session.choices.catalog.places,
+                            value: $draft.zone
+                        )
                     }
                 } footer: {
-                    Text("A probe in a pot serves that plant. An ambient sensor can serve a zone: one porch thermometer speaks for every pot on it.")
+                    Text("A probe in a pot serves that plant. An ambient sensor can serve a Place: one porch thermometer speaks for every pot there.")
                 }
 
                 if let failure {
@@ -126,6 +131,7 @@ struct LinkSensorSheet: View {
             }
             .task { await loadPlants() }
             .task { await loadEntities() }
+            .task { await session.choices.loadIfNeeded() }
         }
     }
 
@@ -174,7 +180,7 @@ struct LinkSensorSheet: View {
         } else if !hasLoadedPlants {
             HStack(spacing: 12) { ProgressView(); Text("Loading plants…").foregroundStyle(PlantyColor.secondaryText) }
         } else if plants.isEmpty {
-            Text("No plants yet. Add one first, or link the sensor to a zone.").foregroundStyle(PlantyColor.secondaryText)
+            Text("No plants yet. Add one first, or link the sensor to a place.").foregroundStyle(PlantyColor.secondaryText)
         } else {
             Picker("Plant", selection: $draft.plantID) {
                 Text("Choose a plant").tag(UUID?.none)
@@ -199,8 +205,16 @@ struct LinkSensorSheet: View {
     private func attemptSave() async {
         guard let link = draft.newLink() else { return }
         isSaving = true
-        do { let saved = try await api.linkSensor(link); isSaving = false; onLinked(saved); dismiss() }
-        catch { isSaving = false; failure = PlantyError.from(error) }
+        do {
+            let saved = try await api.linkSensor(link)
+            await session.choices.load()
+            isSaving = false
+            onLinked(saved)
+            dismiss()
+        } catch {
+            isSaving = false
+            failure = PlantyError.from(error)
+        }
     }
 }
 
