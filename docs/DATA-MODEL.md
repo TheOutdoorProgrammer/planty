@@ -152,52 +152,7 @@ Pollination is called out because indoor tomatoes do not set fruit without physi
 
 Both clients call the same thing. Anything the app can do by tapping, an agent can do by asking.
 
-This is the shipped surface, not a plan. Every route below exists.
-
-```text
-GET    /healthz                   liveness, and the only unauthenticated concern
-
-GET    /v1/plants                 list; filter by domain, steward, status, watering_method, include_archived
-POST   /v1/plants                 create; sparse, the service fills domain/status/steward/accessibility/watering
-POST   /v1/plants/from-photo      photograph one to add it: identify, record, keep the photo as frame one
-GET    /v1/plants/{slug}          record, risk, observations, last watered, latest readings, current verdict
-PATCH  /v1/plants/{slug}          sparse update; omitted fields are left alone
-DELETE /v1/plants/{slug}          archive, never a hard delete; ?status=dead records why
-
-GET    /v1/plants/{slug}/observations   history, newest first
-POST   /v1/plants/{slug}/observations   log watered, misted, repotted, fertilized, pruned, moved, symptom, note, died
-GET    /v1/harvests                     list harvest history across the garden
-GET    /v1/plants/{slug}/harvests       list one plant's harvest history
-POST   /v1/plants/{slug}/harvests       log a harvest, with quantity and unit
-POST   /v1/plants/{slug}/photos         upload; raw bytes or multipart, with optional RFC3339 taken_at
-GET    /v1/plants/{slug}/timeline       photos oldest first, with short-lived links
-POST   /v1/plants/{slug}/diagnosis      read the photo timeline and report what changed
-POST   /v1/plants/{slug}/ask            ask about it from its record; no photo needed; {message, conversation_id}
-POST   /v1/plants/{slug}/postmortem     ask what killed it, now, rather than waiting for the sweep
-
-GET    /v1/plants/{slug}/reminders      what is set, and what is owed right now
-PUT    /v1/plants/{slug}/reminders      set or replace one kind; {kind, every_days, at_hours, active, note}
-DELETE /v1/plants/{slug}/reminders/{kind}  stop reminding about that one
-
-POST   /v1/identify              name a plant from one photo; ?taken_at=&lat=&lon= narrow it
-
-GET    /v1/today                  the digest; carries all_clear and stale_since separately
-POST   /v1/verdicts/{id}/ack      acknowledge, which stops escalation
-
-GET    /v1/sensors                links and calibration state
-POST   /v1/sensors                link a Home Assistant entity to a plant or a zone
-PATCH  /v1/sensors/{id}           record dry and wet baselines
-
-GET    /v1/questions              the owner queue; also returns as_text, ready to send
-POST   /v1/questions              queue one; asked_of defaults to the plant's steward
-POST   /v1/questions/{id}/answer  record what the owner said
-
-POST   /v1/away                   record a period with a backup contact
-
-GET    /v1/cold-watch             which plants need bringing in for a given forecast_low_f
-POST   /v1/shelter                record that plants came indoors; {"slugs":[...]} or {"all":true}
-POST   /v1/unshelter              record that they went back out
-```
+The canonical shipped route inventory and closed wire enums live in `api/openapi.json`. `cmd/contractgen` generates the Go mux patterns and Swift client paths/enums from that contract, and CI fails if the checked-in generated output drifts. This document explains behavior and rationale instead of copying the route table into another source of truth.
 
 **`POST /v1/identify` belongs to no plant, deliberately.** Nobody knows which plant it is yet, and it may not be one on record. It takes a `photo` multipart part or raw bytes, and answers `{candidates: [{common_name, scientific_name, confidence}], count}` with at most three, most likely first. An empty list is a valid answer and a better one than a guessed name.
 
@@ -212,7 +167,7 @@ It answers `{plant, candidates, photo}` so the app can show what else was consid
 Owning three pothos is ordinary and slugs are unique, so the second one becomes `golden-pothos-2`.
 If the photograph fails to store the plant still exists, and the reply carries `photo_error` rather than unwinding a record you can see was created.
 
-**`/ask` needs no photograph, and that is the point.** Diagnosis exists to compare frames over time and refuses without them; most questions are not about a picture at all, and requiring one to ask anything is what made this awkward to use.
+**`/ask` needs no photograph, and that is the point.** Most questions are not about a picture at all, and requiring one to ask anything is what made this awkward to use. When seeing the plant would change the answer, a plant consultation can inspect recent timeline photographs or accept a photo attached to the conversation.
 It reads the last 45 days of the record: what was done, what the probes saw, what earlier photographs were found to show.
 Long enough for a season to turn and a watering rhythm to be visible, short enough that a plant's whole life is not re-read to answer "are these leaves normal".
 
