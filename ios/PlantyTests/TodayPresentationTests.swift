@@ -153,10 +153,12 @@ struct TodayPresentationTests {
     @Test("Among equals, the service's own neglect risk breaks the tie")
     func riskOrdersWithinAGroup() {
         let easy = DigestEntry.fixture(
-            plant: .fixture(slug: "a", commonName: "A", accessibility: .easy, wateringMethod: .letpot)
+            plant: .fixture(slug: "a", commonName: "A", accessibility: .easy, wateringMethod: .letpot),
+            risk: 1
         )
         let hard = DigestEntry.fixture(
-            plant: .fixture(slug: "b", commonName: "B", accessibility: .hard, wateringMethod: .hand)
+            plant: .fixture(slug: "b", commonName: "B", accessibility: .hard, wateringMethod: .hand),
+            risk: 7
         )
         let digest = Digest.fixture(entries: [easy, hard])
         #expect(digest.sortedEntries.first?.plant.slug == "b")
