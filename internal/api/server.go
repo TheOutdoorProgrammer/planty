@@ -89,6 +89,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /v1/today", s.today)
 	mux.HandleFunc("POST /v1/verdicts/{id}/ack", s.ackVerdict)
 
+	mux.HandleFunc("GET /v1/choices", s.listManagedChoices)
 	mux.HandleFunc("GET /v1/home-assistant/entities", s.discoverHomeAssistantEntities)
 
 	mux.HandleFunc("GET /v1/sensors", s.listSensors)
