@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// History as a story, top to bottom. Photos anchor time and short narrative
-/// findings bridge them. Charts live behind a disclosure, never on top.
+/// A plant page starts with identity, current recommendation, and the actions a
+/// person can take while standing beside it. Facts and history come after the
+/// decision instead of competing with it.
 struct PlantStoryScreen: View {
     @State var store: PlantStoryStore
     @Environment(AppSession.self) private var session
@@ -12,12 +13,22 @@ struct PlantStoryScreen: View {
     @State private var isConfirmingDeath = false
     @State private var deathError: PlantyError?
 
+    private let actionColumns = [GridItem(.flexible()), GridItem(.flexible())]
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
-                PlantFactsCard(plant: store.plant)
                 currentState
+
+                if !store.plant.status.isRetired {
+                    actions
+                } else {
+                    referenceActions
+                }
+
+                PlantFactsCard(plant: store.plant)
+
                 if let toxicity = store.toxicity {
                     PlantToxicitySection(plant: store.plant, toxicity: toxicity)
                 }
@@ -33,6 +44,8 @@ struct PlantStoryScreen: View {
                     chapterErrorCard(error)
                 }
 
+                SectionHeading("History", detail: "Photos, care, and the changes Planty noticed over time.")
+
                 if store.hasStory {
                     ForEach(store.chapters) { chapter in
                         ChapterRow(chapter: chapter, plant: store.plant)
@@ -43,8 +56,8 @@ struct PlantStoryScreen: View {
 
                 WhyPlantyThinksThis(series: store.series, verdict: store.verdict)
             }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .plantyPage()
@@ -125,11 +138,14 @@ struct PlantStoryScreen: View {
         }
         .safeAreaInset(edge: .bottom) {
             if !store.plant.status.isRetired {
-                Button("Take today's photo") {
+                Button {
                     session.beginCapture(for: store.plant)
+                } label: {
+                    Label("Take a photo", systemImage: "camera.fill")
+                        .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(PrimaryButtonStyle())
-                .padding(.horizontal, 20)
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.pink))
+                .padding(.horizontal, 16)
                 .padding(.vertical, 10)
                 .background(.ultraThinMaterial)
             }
@@ -141,86 +157,129 @@ struct PlantStoryScreen: View {
         if deathError == nil { session.library.apply(store.plant) }
     }
 
-    /// Asking needs no photograph, which is why it sits here rather than
-    /// behind the camera: most questions are about the record, not a picture.
-    private var plantActions: some View {
-        HStack(spacing: 10) {
-            NavigationLink {
-                ConsultScreen(store: session.consultStore(for: store.plant))
-            } label: {
-                ActionFace("Ask", icon: "bubble.left.and.text.bubble.right.fill")
-            }
-            .buttonStyle(SecondaryButtonStyle())
-
-            NavigationLink {
-                RemindersScreen(store: session.remindersStore(for: store.plant))
-            } label: {
-                ActionFace("Reminders", icon: "bell.fill")
-            }
-            .buttonStyle(SecondaryButtonStyle())
-
-            NavigationLink {
-                NotesScreen(store: session.notesStore(for: store.plant))
-            } label: {
-                ActionFace("Notes", icon: "note.text")
-            }
-            .buttonStyle(SecondaryButtonStyle())
-        }
-    }
-
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text(store.plant.commonName)
-                .font(.largeTitle.weight(.bold))
-            HStack(spacing: 10) {
-                if let species = store.plant.displaySpecies {
-                    Text(species)
-                        .font(.subheadline)
-                        .foregroundStyle(PlantyColor.secondaryText)
-                }
-                OwnershipBadge(plant: store.plant)
-            }
             PlantPhotoView(
                 plant: store.plant,
                 photo: store.chapters.first?.photo,
-                height: 240
+                height: 250
             )
-            if comparison.isPossible {
-                NavigationLink("Compare with the first photo") {
-                    PhotoComparisonScreen(plant: store.plant, comparison: comparison)
+
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(store.plant.commonName)
+                        .font(.largeTitle.weight(.bold))
+                    if let species = store.plant.displaySpecies {
+                        Text(species)
+                            .font(.subheadline)
+                            .foregroundStyle(PlantyColor.secondaryText)
+                    }
+                    if !store.plant.location.isEmpty {
+                        Label(store.plant.location, systemImage: "mappin.and.ellipse")
+                            .font(.caption)
+                            .foregroundStyle(PlantyColor.secondaryText)
+                    }
                 }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(PlantyColor.green)
+                Spacer(minLength: 4)
+                OwnershipBadge(plant: store.plant)
             }
-            plantActions
-            if !store.plant.status.isRetired {
-                careActions
+
+            if comparison.isPossible {
+                NavigationLink {
+                    PhotoComparisonScreen(plant: store.plant, comparison: comparison)
+                } label: {
+                    Label("Compare photos", systemImage: "rectangle.split.2x1")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundStyle(PlantyColor.green)
+                .frame(minHeight: 44)
             }
         }
     }
 
-    /// Care gets recorded where the plant lives, not by telling the chat. The
-    /// harvest button only exists where a harvest can.
-    private var careActions: some View {
-        HStack(spacing: 10) {
-            Button {
-                isLoggingCare = true
-            } label: {
-                Label("Log care", systemImage: "checkmark.circle.fill")
-                    .frame(maxWidth: .infinity)
+    private var currentState: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                StatusPill(state: store.careState)
+                Spacer()
+                Text(store.lastComparedLine)
+                    .font(.caption)
+                    .foregroundStyle(store.freshness.isFresh ? PlantyColor.green : PlantyColor.orange)
+                    .multilineTextAlignment(.trailing)
             }
-            .buttonStyle(SecondaryButtonStyle())
-            .accessibilityLabel("Log care for \(store.plant.commonName)")
+            Text(headline)
+                .font(.title2.weight(.bold))
+            Text(store.verdict?.reasoning ?? store.careState.sentence)
+                .font(.body)
+                .foregroundStyle(PlantyColor.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .plantyCard(border: store.careState.color.opacity(0.22))
+    }
 
-            if isEdible {
-                Button {
-                    isHarvesting = true
+    private var actions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading("Actions")
+            LazyVGrid(columns: actionColumns, spacing: 10) {
+                NavigationLink {
+                    ConsultScreen(store: session.consultStore(for: store.plant))
                 } label: {
-                    Label("Harvest", systemImage: "basket.fill")
-                        .frame(maxWidth: .infinity)
+                    ActionFace("Ask Planty", icon: "bubble.left.and.text.bubble.right.fill")
                 }
                 .buttonStyle(SecondaryButtonStyle())
-                .accessibilityLabel("Log a harvest from \(store.plant.commonName)")
+
+                Button {
+                    isLoggingCare = true
+                } label: {
+                    ActionFace("Log care", icon: "checkmark.circle.fill")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .accessibilityLabel("Log care for \(store.plant.commonName)")
+
+                NavigationLink {
+                    RemindersScreen(store: session.remindersStore(for: store.plant))
+                } label: {
+                    ActionFace("Reminders", icon: "bell.fill")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                NavigationLink {
+                    NotesScreen(store: session.notesStore(for: store.plant))
+                } label: {
+                    ActionFace("Notes", icon: "note.text")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                if isEdible {
+                    Button {
+                        isHarvesting = true
+                    } label: {
+                        ActionFace("Harvest", icon: "basket.fill")
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityLabel("Log a harvest from \(store.plant.commonName)")
+                }
+            }
+        }
+    }
+
+    private var referenceActions: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading("Reference")
+            LazyVGrid(columns: actionColumns, spacing: 10) {
+                NavigationLink {
+                    ConsultScreen(store: session.consultStore(for: store.plant))
+                } label: {
+                    ActionFace("Ask Planty", icon: "bubble.left.and.text.bubble.right.fill")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                NavigationLink {
+                    NotesScreen(store: session.notesStore(for: store.plant))
+                } label: {
+                    ActionFace("Notes", icon: "note.text")
+                }
+                .buttonStyle(SecondaryButtonStyle())
             }
         }
     }
@@ -233,57 +292,30 @@ struct PlantStoryScreen: View {
         PhotoComparison(store.timeline.photos)
     }
 
-    /// Says what Planty concluded and how fresh that is, and never claims the
-    /// plant is healthy.
-    private var currentState: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            StatusPill(state: store.careState)
-            Text(headline)
-                .font(.title3.weight(.bold))
-            Text(store.verdict?.reasoning ?? store.careState.sentence)
-                .font(.subheadline)
-                .foregroundStyle(PlantyColor.secondaryText)
-            Text(store.lastComparedLine)
-                .font(.footnote)
-                .foregroundStyle(
-                    store.freshness.isFresh ? PlantyColor.green : PlantyColor.yellow
-                )
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .plantyCard(border: store.careState.color.opacity(0.4))
-    }
-
     private var headline: String {
         switch store.careState {
-        case .allGood: "Doing okay"
-        case .watch: "Watching one thing"
-        case .needsCare: "One thing to do"
-        case .urgent: "Needs you now"
+        case .allGood: "Nothing to do right now"
+        case .watch: "Keep an eye on this"
+        case .needsCare: "One thing needs doing"
+        case .urgent: "This needs attention now"
         case .unknown: "Planty cannot say yet"
         }
     }
 
     private var emptyStory: some View {
         StateMessage(
-            title: store.hasPhotos
-                ? "Nothing has happened yet. Nice."
-                : "\(store.plant.commonName) has data, but no story yet.",
+            title: store.hasPhotos ? "No changes worth calling out yet" : "Add the first photo",
             message: store.hasPhotos
                 ? "Photos, care actions, and useful changes will collect here over time."
-                : """
-                    Sensors can tell Planty about the pot and the room. A photo \
-                    adds the part they cannot see.
-                    """,
+                : "Sensors can describe the pot and room. A photo adds the part they cannot see.",
             accent: PlantyColor.pink,
             icon: "camera.fill"
         ) {
-            Button("Take the first photo") { session.beginCapture(for: store.plant) }
-                .buttonStyle(PrimaryButtonStyle())
+            Button("Take a photo") { session.beginCapture(for: store.plant) }
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.pink))
         }
     }
 
-    /// The lesson gets the loudest type in the card: it is the reason a dead
-    /// plant keeps its record at all.
     private var postmortemCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Eyebrow(text: "Postmortem", color: PlantyColor.purple)
@@ -297,7 +329,7 @@ struct PlantStoryScreen: View {
                 if let lesson = postmortem.lesson {
                     Label("Next time", systemImage: "lightbulb.fill")
                         .font(.caption.weight(.bold))
-                        .foregroundStyle(PlantyColor.yellow)
+                        .foregroundStyle(PlantyColor.orange)
                         .padding(.top, 4)
                     Text(lesson)
                         .font(.title3.weight(.bold))
@@ -305,16 +337,13 @@ struct PlantStoryScreen: View {
             } else if store.isAskingPostmortem {
                 HStack(alignment: .top, spacing: 12) {
                     ProgressView()
-                    Text("""
-                        Planty is reading the whole story back before it \
-                        answers. This can take a minute.
-                        """)
-                    .font(.subheadline)
-                    .foregroundStyle(PlantyColor.secondaryText)
+                    Text("Planty is reading the whole story back before it answers.")
+                        .font(.subheadline)
+                        .foregroundStyle(PlantyColor.secondaryText)
                 }
                 .accessibilityElement(children: .combine)
             } else {
-                Text("\(store.plant.commonName) is recorded as dead. The story above stays.")
+                Text("\(store.plant.commonName) is recorded as dead. The story stays available.")
                     .font(.subheadline)
                     .foregroundStyle(PlantyColor.secondaryText)
                 if let detail = store.postmortemError?.errorDescription {
@@ -329,12 +358,12 @@ struct PlantStoryScreen: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .plantyCard(border: PlantyColor.purple.opacity(0.4))
+        .plantyCard(border: PlantyColor.purple.opacity(0.22))
     }
 
     private func deathCard(_ failure: PlantyError) -> some View {
         StateMessage(
-            title: "The death was not recorded.",
+            title: "The death was not recorded",
             message: failure.errorDescription ?? "The service could not be reached.",
             accent: PlantyColor.orange,
             icon: "exclamationmark.triangle.fill"
@@ -346,11 +375,8 @@ struct PlantStoryScreen: View {
 
     private func chapterErrorCard(_ error: PlantyError) -> some View {
         StateMessage(
-            title: "The newest chapter is missing.",
-            message: """
-                Earlier photos and notes are still available. Planty could not \
-                load the latest events.
-                """,
+            title: "The newest history is missing",
+            message: "Earlier photos and notes are still available. Planty could not load the latest events.",
             accent: PlantyColor.orange,
             icon: "arrow.trianglehead.clockwise"
         ) {

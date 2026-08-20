@@ -1,6 +1,8 @@
 import SwiftUI
 
-/// Work that spans the whole collection: people, weather, travel, and history.
+/// Collection-wide tools live under More so the bottom navigation speaks in
+/// tasks users recognize. No Garden feature is removed; this is only a clearer
+/// doorway into questions, weather, travel, and history.
 struct GardenScreen: View {
     @Environment(AppSession.self) private var session
 
@@ -13,7 +15,7 @@ struct GardenScreen: View {
                     if !store.isConfigured {
                         StateMessage(
                             title: "Connect Planty first",
-                            message: "Garden planning needs the Planty service.",
+                            message: "Planning tools need the Planty service.",
                             accent: PlantyColor.orange,
                             icon: "link.badge.plus"
                         ) {
@@ -24,7 +26,7 @@ struct GardenScreen: View {
                         GardenLoadingView()
                     } else if let error = store.error, !store.hasLoaded {
                         StateMessage(
-                            title: "The garden did not load",
+                            title: "These tools did not load",
                             message: error.errorDescription ?? "Try again in a moment.",
                             accent: PlantyColor.orange,
                             icon: "wifi.exclamationmark"
@@ -44,17 +46,18 @@ struct GardenScreen: View {
                             }
                         }
                         routes
+                        settingsRoute
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 24)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 16)
             }
             .plantyPage()
-            .navigationTitle("Garden")
+            .navigationTitle("More")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { session.isShowingSettings = true } label: {
-                        Image(systemName: "person.crop.circle")
+                        Image(systemName: "gearshape.fill")
                     }
                     .accessibilityLabel("Settings")
                 }
@@ -69,16 +72,17 @@ struct GardenScreen: View {
     }
 
     private var routes: some View {
-        VStack(spacing: 14) {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading("Garden tools", detail: "Things that span more than one plant.")
+
             NavigationLink {
                 QuestionsScreen(store: store, plants: session.library.plants)
             } label: {
                 GardenRouteCard(
-                    eyebrow: "People",
                     title: "Questions",
                     detail: store.questions.isEmpty
                         ? "Nothing waiting on an answer"
-                        : "(store.questions.count) waiting on an answer",
+                        : "\(store.questions.count) waiting on an answer",
                     symbol: "person.2.wave.2.fill",
                     color: PlantyColor.cyan
                 )
@@ -88,7 +92,6 @@ struct GardenScreen: View {
                 ColdWatchScreen(store: store)
             } label: {
                 GardenRouteCard(
-                    eyebrow: "Weather",
                     title: "Cold watch",
                     detail: "See what needs shelter before a cold night",
                     symbol: "thermometer.snowflake",
@@ -100,9 +103,8 @@ struct GardenScreen: View {
                 AwayPlannerScreen(store: store)
             } label: {
                 GardenRouteCard(
-                    eyebrow: "Travel",
                     title: "Plan time away",
-                    detail: "Tell Planty who can cover the garden",
+                    detail: "Set dates and tell Planty who can cover the garden",
                     symbol: "suitcase.rolling.fill",
                     color: PlantyColor.orange
                 )
@@ -112,7 +114,6 @@ struct GardenScreen: View {
                 GardenHistoryScreen(store: store)
             } label: {
                 GardenRouteCard(
-                    eyebrow: "Memory",
                     title: "Garden history",
                     detail: "Harvests and lessons from plants you lost",
                     symbol: "book.pages.fill",
@@ -122,26 +123,31 @@ struct GardenScreen: View {
         }
         .buttonStyle(.plain)
     }
+
+    private var settingsRoute: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading("App")
+            Button {
+                session.isShowingSettings = true
+            } label: {
+                GardenRouteCard(
+                    title: "Settings",
+                    detail: "Connection, sensors, data freshness, and app configuration",
+                    symbol: "gearshape.fill",
+                    color: PlantyColor.secondaryText
+                )
+            }
+            .buttonStyle(.plain)
+        }
+    }
 }
 
 private struct PartialGardenWarning: View {
     let error: PlantyError
     let retry: () -> Void
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 12) { warningContent }
-            } else {
-                HStack(spacing: 12) { warningContent }
-            }
-        }
-        .plantyCard(border: PlantyColor.orange.opacity(0.35), padding: 14)
-    }
-
-    @ViewBuilder
-    private var warningContent: some View {
+        HStack(alignment: .top, spacing: 10) {
             Image(systemName: "exclamationmark.arrow.triangle.2.circlepath")
                 .foregroundStyle(PlantyColor.orange)
                 .accessibilityHidden(true)
@@ -152,12 +158,13 @@ private struct PartialGardenWarning: View {
                     .font(.caption)
                     .foregroundStyle(PlantyColor.secondaryText)
             }
-            if !dynamicTypeSize.isAccessibilitySize {
-                Spacer(minLength: 4)
-            }
+            Spacer(minLength: 4)
             Button("Retry", action: retry)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(PlantyColor.orange)
+                .frame(minHeight: 44)
+        }
+        .plantyCard(border: PlantyColor.orange.opacity(0.2), padding: 14)
     }
 }
 
@@ -165,119 +172,68 @@ private struct GardenHero: View {
     let questions: Int
     let harvests: Int
     let lessons: Int
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 14) { intro }
-            } else {
-                HStack(alignment: .top, spacing: 16) { intro }
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "leaf.circle.fill")
+                    .font(.largeTitle)
+                    .foregroundStyle(PlantyColor.green)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Beyond today's care")
+                        .font(.title2.weight(.bold))
+                    Text("Plan around weather and travel, answer people, and keep the garden's memory.")
+                        .font(.subheadline)
+                        .foregroundStyle(PlantyColor.secondaryText)
+                }
             }
 
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(spacing: 10) { metrics }
-            } else {
-                HStack(spacing: 10) { metrics }
+            HStack(spacing: 8) {
+                GardenMetric(value: questions, label: "open")
+                GardenMetric(value: harvests, label: "harvests")
+                GardenMetric(value: lessons, label: "lessons")
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .plantyCard(border: PlantyColor.green.opacity(0.4))
-    }
-
-    @ViewBuilder
-    private var intro: some View {
-        ZStack {
-            Circle()
-                .fill(PlantyColor.green.opacity(0.15))
-                .frame(width: 72, height: 72)
-            Circle()
-                .stroke(PlantyColor.cyan.opacity(0.45), lineWidth: 2)
-                .frame(width: 54, height: 54)
-            Image(systemName: "leaf.fill")
-                .font(.title.weight(.semibold))
-                .foregroundStyle(PlantyColor.green)
-        }
-        .accessibilityHidden(true)
-
-        VStack(alignment: .leading, spacing: 6) {
-            Eyebrow(text: "The whole garden", color: PlantyColor.green)
-            Text("Plan past today")
-                .font(.title2.weight(.bold))
-            Text("Trips, cold nights, questions, and what the garden taught you.")
-                .font(.subheadline)
-                .foregroundStyle(PlantyColor.secondaryText)
-        }
-    }
-
-    @ViewBuilder
-    private var metrics: some View {
-        GardenMetric(value: questions, label: "open")
-        GardenMetric(value: harvests, label: "harvests")
-        GardenMetric(value: lessons, label: "lessons")
+        .plantyCard(border: PlantyColor.green.opacity(0.18))
     }
 }
 
 private struct GardenMetric: View {
     let value: Int
     let label: String
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                HStack(spacing: 12) { content }
-            } else {
-                VStack(spacing: 2) { content }
-            }
+        VStack(spacing: 2) {
+            Text(value.formatted())
+                .font(.headline.monospacedDigit())
+            Text(label)
+                .font(.caption2)
+                .foregroundStyle(PlantyColor.secondaryText)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(PlantyColor.background.opacity(0.45), in: RoundedRectangle(cornerRadius: 14))
+        .padding(.vertical, 9)
+        .background(PlantyColor.elevated, in: RoundedRectangle(cornerRadius: 12))
         .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder
-    private var content: some View {
-            Text(value.formatted())
-                .font(.title3.monospacedDigit().weight(.bold))
-            Text(label)
-                .font(.caption)
-                .foregroundStyle(PlantyColor.secondaryText)
     }
 }
 
 private struct GardenRouteCard: View {
-    let eyebrow: String
     let title: String
     let detail: String
     let symbol: String
     let color: Color
-    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     var body: some View {
-        Group {
-            if dynamicTypeSize.isAccessibilitySize {
-                VStack(alignment: .leading, spacing: 12) { routeContent }
-            } else {
-                HStack(spacing: 15) { routeContent }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .plantyCard(border: color.opacity(0.28), padding: 16)
-        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
-    }
-
-    @ViewBuilder
-    private var routeContent: some View {
+        HStack(spacing: 12) {
             Image(systemName: symbol)
-                .font(.title2.weight(.semibold))
+                .font(.headline.weight(.semibold))
                 .foregroundStyle(color)
-                .frame(width: 42, height: 42)
-                .background(color.opacity(0.13), in: Circle())
+                .frame(width: 40, height: 40)
+                .background(color.opacity(0.1), in: Circle())
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 3) {
-                Eyebrow(text: eyebrow, color: color)
                 Text(title)
                     .font(.headline)
                     .foregroundStyle(PlantyColor.foreground)
@@ -286,26 +242,30 @@ private struct GardenRouteCard: View {
                     .foregroundStyle(PlantyColor.secondaryText)
                     .multilineTextAlignment(.leading)
             }
-            if !dynamicTypeSize.isAccessibilitySize {
-                Spacer(minLength: 8)
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(PlantyColor.secondaryText)
-            }
+            Spacer(minLength: 8)
+            Image(systemName: "chevron.right")
+                .font(.caption.weight(.bold))
+                .foregroundStyle(PlantyColor.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .plantyCard(border: color.opacity(0.14), padding: 14)
+        .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 }
 
 private struct GardenLoadingView: View {
     var body: some View {
-        VStack(spacing: 16) {
+        HStack(spacing: 14) {
             ProgressView().tint(PlantyColor.green)
-            Text("Gathering the garden…")
-                .font(.headline)
-            Text("Questions, harvests, and lessons are coming together.")
-                .font(.subheadline)
-                .foregroundStyle(PlantyColor.secondaryText)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Loading garden tools…")
+                    .font(.headline)
+                Text("Questions, harvests, and lessons are coming together.")
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.secondaryText)
+            }
         }
-        .frame(maxWidth: .infinity)
-        .plantyCard(border: PlantyColor.green.opacity(0.35))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .plantyCard()
     }
 }

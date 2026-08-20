@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Orientation before action. Designed from the calm state outward: the most
-/// common screen is a completion, not an empty list.
+/// The landing screen answers the only question that matters first: is there
+/// anything to do? Secondary destinations stay visible, but below that answer.
 struct TodayScreen: View {
     @Environment(AppSession.self) private var session
 
@@ -14,21 +14,22 @@ struct TodayScreen: View {
                     if let release = session.updates.available {
                         UpdateBanner(release: release) { session.updates.dismiss() }
                     }
+
                     content
 
-                    // Below the day's actions: a question for an absent friend
-                    // is worth surfacing, but never ahead of a thirsty plant.
                     OpenQuestionsCard(questions: store.openQuestions) { question, answer in
                         await store.answer(question, with: answer)
                     }
+
+                    shortcuts
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 24)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 18)
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .plantyPage()
-            .navigationTitle("Planty")
-            .toolbar { profileButton }
+            .navigationTitle("Today")
+            .toolbar { settingsButton }
             .refreshable { await store.load() }
             .task { await store.load() }
             .task { await session.updates.check() }
@@ -98,24 +99,33 @@ struct TodayScreen: View {
 
     @ViewBuilder
     private func actionState(_ summary: ActionSummary) -> some View {
-        Text(summary.headline)
-            .font(.title.weight(.bold))
-            .foregroundStyle(PlantyColor.foreground)
+        VStack(alignment: .leading, spacing: 8) {
+            Label(summary.headline, systemImage: "hand.raised.fill")
+                .font(.title2.weight(.bold))
+                .foregroundStyle(PlantyColor.foreground)
+            Text(summary.footnote)
+                .font(.subheadline)
+                .foregroundStyle(PlantyColor.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .plantyCard(border: PlantyColor.orange.opacity(0.22))
 
+        SectionHeading("Needs attention")
         cards(for: summary.featured)
 
         if let deferredLabel = summary.deferredLabel {
-            DisclosureGroup(deferredLabel) {
-                cards(for: summary.deferred)
-                    .padding(.top, 8)
+            DisclosureGroup {
+                VStack(spacing: 12) {
+                    cards(for: summary.deferred)
+                }
+                .padding(.top, 12)
+            } label: {
+                Label(deferredLabel, systemImage: "clock.arrow.circlepath")
+                    .font(.subheadline.weight(.semibold))
             }
             .tint(PlantyColor.secondaryText)
-            .font(.subheadline.weight(.semibold))
+            .plantyCard(padding: 14)
         }
-
-        Text(summary.footnote)
-            .font(.subheadline)
-            .foregroundStyle(PlantyColor.secondaryText)
     }
 
     @ViewBuilder
@@ -130,12 +140,33 @@ struct TodayScreen: View {
         }
     }
 
-    private var profileButton: some ToolbarContent {
+    private var shortcuts: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading("Quick access")
+            HStack(spacing: 10) {
+                Button {
+                    session.selectedTab = .snap
+                } label: {
+                    ActionFace("Take photo", icon: "camera.fill")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+
+                Button {
+                    session.selectedTab = .plants
+                } label: {
+                    ActionFace("Plants", icon: "leaf.fill")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+        }
+    }
+
+    private var settingsButton: some ToolbarContent {
         ToolbarItem(placement: .topBarTrailing) {
             Button {
                 session.isShowingSettings = true
             } label: {
-                Image(systemName: "person.crop.circle")
+                Image(systemName: "gearshape.fill")
             }
             .accessibilityLabel("Settings, sensors and data freshness")
         }

@@ -1,8 +1,9 @@
 import PhotosUI
 import SwiftUI
 
-/// The camera is the screen, not a button in a form. Plant selection sits on
-/// top as a chip and never blocks the shutter.
+/// Capture is a focused task. The selected plant is always visible, the camera
+/// owns the screen while shooting, and the follow-up choices become scrollable
+/// only after a photo exists.
 struct SnapScreen: View {
     @Environment(AppSession.self) private var session
     @State private var acquisition = PhotoAcquisition()
@@ -14,17 +15,15 @@ struct SnapScreen: View {
 
     var body: some View {
         NavigationStack(path: $route) {
-            ScrollView {
-                VStack(spacing: 18) {
-                    PlantChip(plant: store.selectedPlant) { isPickingPlant = true }
-                    acquisitionError
-                    stage
+            Group {
+                if store.stage.photo == nil {
+                    readyLayout
+                } else {
+                    capturedLayout
                 }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 16)
             }
             .plantyPage()
-            .navigationTitle("Snap")
+            .navigationTitle("Capture")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: SnapRoute.self) { route in
                 switch route {
@@ -39,8 +38,6 @@ struct SnapScreen: View {
                 PlantPickerSheet(plants: session.library.plants) { name in
                     isPickingPlant = false
                     Task {
-                        // Identified, created and photographed in one step, so
-                        // a first run never ends holding a picture of nothing.
                         let metadata = store.stage.photo
                             .map { CaptureMetadataReader.read(from: $0.jpeg) } ?? CaptureMetadata()
                         if await store.createPlant(named: name, metadata: metadata) != nil {
@@ -71,6 +68,30 @@ struct SnapScreen: View {
         }
     }
 
+    private var readyLayout: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                PlantChip(plant: store.selectedPlant) { isPickingPlant = true }
+                acquisitionError
+                readyState
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
+    private var capturedLayout: some View {
+        ScrollView {
+            VStack(spacing: 14) {
+                PlantChip(plant: store.selectedPlant) { isPickingPlant = true }
+                acquisitionError
+                stage
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+        }
+    }
+
     @ViewBuilder
     private var stage: some View {
         switch store.stage {
@@ -79,8 +100,6 @@ struct SnapScreen: View {
         case .captured, .saving:
             capturedState
         case .failed(_, _, let error):
-            // Retries whatever the user said they did, rather than saving the
-            // photo alone and silently dropping the watering.
             SaveFailedCard(error: error) {
                 Task {
                     if await store.retrySave() != nil {
@@ -141,8 +160,7 @@ struct SnapScreen: View {
                 Button("Dismiss") { acquisition.clearError() }
                     .font(.caption.weight(.semibold))
             }
-            .padding(12)
-            .background(PlantyColor.orange.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+            .plantyCard(border: PlantyColor.orange.opacity(0.2), padding: 12)
         }
     }
 
@@ -165,8 +183,6 @@ struct SnapScreen: View {
         )
     }
 
-    /// TabView builds neighbouring tabs eagerly, and asking for the camera
-    /// before the user has opened Snap is how permission prompts get denied.
     private func prepareIfVisible() async {
         guard session.selectedTab == .snap else {
             acquisition.stop()
@@ -178,8 +194,6 @@ struct SnapScreen: View {
     private func prepare() async {
         if let context = session.snapContext {
             store.selectedPlant = context.plant
-            // Carried through the whole capture: settling it is what stops the
-            // card coming back after the job was actually done.
             store.answering = context.verdictID
             session.snapContext = nil
         }
@@ -204,8 +218,6 @@ struct SnapScreen: View {
         await session.identification.identify(jpeg: acquired.jpeg, assetID: acquired.assetID)
     }
 
-    /// A candidate names a species, not one of your pots, so this only offers a
-    /// match and never silently reassigns the photo.
     private func matchPlant(named candidate: IdentificationCandidate) {
         let wanted = candidate.commonName.lowercased()
         if let match = session.library.plants.first(where: {
@@ -218,7 +230,6 @@ struct SnapScreen: View {
         }
     }
 
-    /// Diagnosis is pushed, so the camera stays behind it in the stack.
     private func startDiagnosis(photo: CapturedPhoto) {
         guard let plant = store.selectedPlant else {
             isPickingPlant = true
@@ -228,12 +239,8 @@ struct SnapScreen: View {
     }
 }
 
-/// Both cases open the same chat. The difference is only whether a plant is
-/// behind it, which decides whether the photo joins a story.
 enum SnapRoute: Hashable {
     case aboutPlant(plant: Plant, photo: CapturedPhoto)
-
-    /// Nothing is created, so the photo stays on the capture screen as it was.
     case justAsk(photo: CapturedPhoto)
 }
 

@@ -1,7 +1,8 @@
 import SwiftUI
 
-/// Three large exception-oriented actions. No moisture field, no checklist, no
-/// required note: routine observation belongs to the sensors.
+/// After capture, the screen asks for the outcome in one scan-friendly grid.
+/// Every pre-existing action remains available; the hierarchy simply separates
+/// "record what happened" from "ask about this picture" and "save only".
 struct CapturedSheet: View {
     let photo: CapturedPhoto
     let plant: Plant?
@@ -10,18 +11,14 @@ struct CapturedSheet: View {
     let record: (ObservationKind?) -> Void
     let lookOff: () -> Void
     let retake: () -> Void
-
-    /// Straight into a chat about this picture. It exists because the only way
-    /// to ask about something used to be inventing a plant record for it first.
     let justAsk: () -> Void
-
-    /// Identification sits with the unknown-plant prompt because that is the
-    /// moment somebody is deciding what this actually is.
     var identification: IdentificationStore?
     var useCandidate: ((IdentificationCandidate) -> Void)?
 
+    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 18) {
             preview
 
             if plant == nil {
@@ -34,45 +31,46 @@ struct CapturedSheet: View {
                 }
             }
 
-            justAskCard
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeading("What happened?", detail: "Choose one if this photo records care.")
 
-            Text("What happened here?")
-                .font(.title3.weight(.bold))
-
-            Button("Watered by hand") { record(.watered) }
-                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.cyan))
-            // Beside watering rather than below the fold: a mushroom kit is
-            // misted twice a day and never watered at all.
-            Button("Misted") { record(.misted) }
-                .buttonStyle(SecondaryButtonStyle())
-            Button("Repotted") { record(.repotted) }
-                .buttonStyle(SecondaryButtonStyle())
-            Button("Something looks off", action: lookOff)
-                .buttonStyle(SecondaryButtonStyle())
+                LazyVGrid(columns: columns, spacing: 10) {
+                    CaptureAction(title: "Watered", icon: "drop.fill", color: PlantyColor.cyan) {
+                        record(.watered)
+                    }
+                    CaptureAction(title: "Misted", icon: "cloud.drizzle.fill", color: PlantyColor.cyan) {
+                        record(.misted)
+                    }
+                    CaptureAction(title: "Repotted", icon: "arrow.triangle.2.circlepath", color: PlantyColor.green) {
+                        record(.repotted)
+                    }
+                    CaptureAction(title: "Looks off", icon: "exclamationmark.magnifyingglass", color: PlantyColor.orange) {
+                        lookOff()
+                    }
+                }
+            }
 
             noteField
 
-            Button("Save photo only") { record(nil) }
+            VStack(alignment: .leading, spacing: 10) {
+                SectionHeading("Need an answer?", detail: "Ask about this exact photo without creating anything new.")
+                Button(action: justAsk) {
+                    Label("Ask Planty about this photo", systemImage: "bubble.left.and.text.bubble.right.fill")
+                        .frame(maxWidth: .infinity)
+                }
                 .buttonStyle(SecondaryButtonStyle())
+            }
+
+            Button("Save photo only") { record(nil) }
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.green))
+
             Button("Retake", action: retake)
-                .font(.subheadline)
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(PlantyColor.secondaryText)
                 .frame(maxWidth: .infinity, minHeight: 44)
         }
         .disabled(isBusy)
         .overlay { if isBusy { savingOverlay } }
-    }
-
-    /// Offered whether or not a plant is picked, because a plant you do not
-    /// keep is exactly the thing you most want to ask about.
-    private var justAskCard: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Button("Just ask about it", action: justAsk)
-                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.purple))
-            Text("Opens a chat about this photo. No plant is created and nothing is saved.")
-                .font(.footnote)
-                .foregroundStyle(PlantyColor.secondaryText)
-        }
     }
 
     private var preview: some View {
@@ -82,66 +80,93 @@ struct CapturedSheet: View {
                     .resizable()
                     .scaledToFit()
             } else {
-                Color(hex: 0x1F2D2A)
+                PlantyColor.surface
             }
         }
         .frame(maxWidth: .infinity)
-        .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .accessibilityLabel(
             plant.map { "Photo just taken of \($0.commonName)" } ?? "Photo just taken"
         )
     }
 
-    /// Never focused automatically: the whole point is that it is optional.
     private var noteField: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Add a short note (optional)")
-                .font(.footnote)
+            Text("Note (optional)")
+                .font(.footnote.weight(.semibold))
                 .foregroundStyle(PlantyColor.secondaryText)
-            TextField("", text: $note, axis: .vertical)
+            TextField("Anything worth remembering?", text: $note, axis: .vertical)
                 .textFieldStyle(.plain)
                 .lineLimit(1...4)
                 .padding(12)
                 .background(
-                    PlantyColor.background,
+                    PlantyColor.surface,
                     in: RoundedRectangle(cornerRadius: 14, style: .continuous)
                 )
                 .overlay {
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .stroke(PlantyColor.quietDecoration.opacity(0.5), lineWidth: 1)
+                        .stroke(PlantyColor.quietDecoration.opacity(0.18), lineWidth: 1)
                 }
                 .accessibilityLabel("Optional note about this photo")
         }
     }
 
     private var savingOverlay: some View {
-        ProgressView("Saving the photo first…")
+        ProgressView("Saving photo…")
             .tint(PlantyColor.pink)
             .padding(20)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
     }
 }
 
-/// A low-confidence guess is never accepted silently.
+private struct CaptureAction: View {
+    let title: String
+    let icon: String
+    let color: Color
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 10) {
+                Image(systemName: icon)
+                    .font(.headline)
+                    .foregroundStyle(color)
+                    .frame(width: 34, height: 34)
+                    .background(color.opacity(0.1), in: Circle())
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(PlantyColor.foreground)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .frame(maxWidth: .infinity, minHeight: 92, alignment: .leading)
+            .background(PlantyColor.surface, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(color.opacity(0.14), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+}
+
 struct UnknownPlantCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Which plant is this?")
+            Label("Choose the plant before saving", systemImage: "questionmark.circle.fill")
                 .font(.headline)
-            Text("Pick one above before saving, so this lands in the right story.")
+                .foregroundStyle(PlantyColor.orange)
+            Text("Use the picker above so the photo lands in the right story.")
                 .font(.footnote)
                 .foregroundStyle(PlantyColor.secondaryText)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .plantyCard(border: PlantyColor.yellow.opacity(0.5), padding: 14)
+        .plantyCard(border: PlantyColor.orange.opacity(0.2), padding: 14)
     }
 }
 
-/// Recent first, then friend groups, then mine, matching the library order.
 struct PlantPickerSheet: View {
     let plants: [Plant]
-    /// Offered alongside the list, and the only option at all on a first run.
-    /// Without it an empty library was a dead end with the photo discarded.
     var addNew: ((String?) -> Void)?
     let pick: (Plant) -> Void
 
@@ -166,11 +191,9 @@ struct PlantPickerSheet: View {
                             )
                             .frame(maxWidth: .infinity, alignment: .leading)
                         }
-                        .listRowBackground(PlantyColor.surface)
                         Text("Leave the name empty and Planty will work it out from the picture.")
                             .font(.caption)
                             .foregroundStyle(PlantyColor.secondaryText)
-                            .listRowBackground(PlantyColor.surface)
                     }
                 }
                 ForEach(groups) { group in
@@ -179,7 +202,6 @@ struct PlantPickerSheet: View {
                             Button { pick(plant) } label: {
                                 PlantRowLabel(plant: plant)
                             }
-                            .listRowBackground(PlantyColor.surface)
                         }
                     }
                 }
@@ -187,7 +209,7 @@ struct PlantPickerSheet: View {
             .scrollContentBackground(.hidden)
             .plantyPage()
             .searchable(text: $search, prompt: "Name, room, species or owner")
-            .navigationTitle("Pick a plant")
+            .navigationTitle("Choose a plant")
             .navigationBarTitleDisplayMode(.inline)
         }
     }

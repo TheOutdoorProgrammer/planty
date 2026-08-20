@@ -1,25 +1,24 @@
 import SwiftUI
 
-/// Dracula Classic, used semantically. See design/UI-CONCEPT.md for the roles.
+/// Planty's palette follows the system appearance instead of forcing the app
+/// to look like a developer theme. Brand colour is reserved for meaning:
+/// green is healthy/calm, pink is capture, and the remaining colours are
+/// semantic accents rather than decoration.
 enum PlantyColor {
-    static let background = Color(hex: 0x282A36)
-    static let surface = Color(hex: 0x44475A)
-    static let foreground = Color(hex: 0xF8F8F2)
+    static let background = Color(uiColor: .systemGroupedBackground)
+    static let surface = Color(uiColor: .secondarySystemGroupedBackground)
+    static let elevated = Color(uiColor: .tertiarySystemGroupedBackground)
+    static let foreground = Color.primary
+    static let secondaryText = Color.secondary
+    static let quietDecoration = Color(uiColor: .separator)
 
-    /// Dracula comment blue. Strokes and dividers only. It fails contrast for
-    /// small text on the canvas, so it is never a foregroundStyle.
-    static let quietDecoration = Color(hex: 0x6272A4)
-
-    /// What secondary copy uses instead of comment blue.
-    static let secondaryText = Color(hex: 0xC8CAE0)
-
-    static let green = Color(hex: 0x50FA7B)
-    static let cyan = Color(hex: 0x8BE9FD)
-    static let orange = Color(hex: 0xFFB86C)
-    static let pink = Color(hex: 0xFF79C6)
-    static let purple = Color(hex: 0xBD93F9)
-    static let red = Color(hex: 0xFF5555)
-    static let yellow = Color(hex: 0xF1FA8C)
+    static let green = Color(uiColor: .systemGreen)
+    static let cyan = Color(uiColor: .systemTeal)
+    static let orange = Color(uiColor: .systemOrange)
+    static let pink = Color(uiColor: .systemPink)
+    static let purple = Color(uiColor: .systemPurple)
+    static let red = Color(uiColor: .systemRed)
+    static let yellow = Color(uiColor: .systemYellow)
 }
 
 extension Color {

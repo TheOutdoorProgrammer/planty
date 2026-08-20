@@ -1,7 +1,6 @@
 import PhotosUI
 import SwiftUI
 
-/// Large, tappable, and prefilled from the care card or the last plant seen.
 struct PlantChip: View {
     let plant: Plant?
     let pick: () -> Void
@@ -9,30 +8,24 @@ struct PlantChip: View {
     var body: some View {
         Button(action: pick) {
             HStack(spacing: 10) {
-                Image(systemName: "leaf.fill")
+                Image(systemName: plant == nil ? "leaf.circle" : "leaf.fill")
                     .foregroundStyle(PlantyColor.green)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(plant?.commonName ?? "Pick a plant")
+                    Text(plant?.commonName ?? "Choose a plant")
                         .font(.headline)
-                    if let plant {
-                        Text(subtitle(for: plant))
-                            .font(.caption)
-                            .foregroundStyle(PlantyColor.secondaryText)
-                    } else {
-                        Text("You can shoot first and choose after.")
-                            .font(.caption)
-                            .foregroundStyle(PlantyColor.secondaryText)
-                    }
+                    Text(plant.map(subtitle) ?? "Optional — you can choose after the photo")
+                        .font(.caption)
+                        .foregroundStyle(PlantyColor.secondaryText)
+                        .lineLimit(1)
                 }
                 Spacer(minLength: 8)
-                Image(systemName: "chevron.down")
-                    .font(.footnote.weight(.bold))
+                Image(systemName: "chevron.up.chevron.down")
+                    .font(.caption.weight(.bold))
                     .foregroundStyle(PlantyColor.secondaryText)
             }
-            .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(PlantyColor.surface, in: Capsule())
+            .frame(maxWidth: .infinity, minHeight: 52, alignment: .leading)
+            .padding(.horizontal, 14)
+            .background(PlantyColor.surface, in: RoundedRectangle(cornerRadius: 15, style: .continuous))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(plant.map { "Selected plant, \($0.commonName)" } ?? "No plant selected")
@@ -50,21 +43,20 @@ struct PlantChip: View {
 struct CameraStage: View {
     let camera: CameraController
     @Binding var photoItem: PhotosPickerItem?
-
-    /// Overridden where the shot is not a whole-plant portrait: a chat asking
-    /// for the underside of a leaf must not tell you to frame the whole plant.
     var guidance = "Fit the whole plant in the frame."
     var footnote = "One photo is enough."
     let shutter: () -> Void
 
-    @ScaledMetric(relativeTo: .largeTitle) private var shutterSize: CGFloat = 74
+    @ScaledMetric(relativeTo: .largeTitle) private var shutterSize: CGFloat = 72
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 14) {
             preview
+
             Text(guidance)
-                .font(.subheadline)
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(PlantyColor.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 24) {
                 PhotosPicker(selection: $photoItem, matching: .images) {
@@ -80,8 +72,9 @@ struct CameraStage: View {
                         .fill(PlantyColor.pink)
                         .frame(width: shutterSize, height: shutterSize)
                         .overlay {
-                            Circle().stroke(PlantyColor.foreground.opacity(0.8), lineWidth: 3)
+                            Circle().stroke(Color.white.opacity(0.9), lineWidth: 3)
                         }
+                        .shadow(color: PlantyColor.pink.opacity(0.25), radius: 8, y: 3)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Take plant photo")
@@ -91,28 +84,30 @@ struct CameraStage: View {
             }
 
             Text(footnote)
-                .font(.footnote)
+                .font(.caption)
                 .foregroundStyle(PlantyColor.secondaryText)
         }
     }
 
-    /// Double tap is deliberately not wired to the shutter: duplicate records
-    /// are worse than a missed tap.
     private var preview: some View {
         ZStack {
             if camera.availability == .ready {
                 CameraPreview(session: camera.session)
             } else {
                 LinearGradient(
-                    colors: [Color(hex: 0x394B43), Color(hex: 0x26332F)],
+                    colors: [PlantyColor.green.opacity(0.25), PlantyColor.surface],
                     startPoint: .top,
                     endPoint: .bottom
                 )
                 ProgressView()
             }
         }
-        .frame(height: 380)
-        .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
+        .frame(height: 390)
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .stroke(PlantyColor.quietDecoration.opacity(0.16), lineWidth: 1)
+        }
         .accessibilityHidden(true)
     }
 }
@@ -122,11 +117,8 @@ struct CameraPermissionCard: View {
 
     var body: some View {
         StateMessage(
-            title: "Planty needs the camera for the useful bit.",
-            message: """
-                Photos let Planty compare changes that soil and room sensors \
-                cannot see.
-                """,
+            title: "Camera access is off",
+            message: "Allow camera access, or choose an existing photo. Both paths support the same Planty features.",
             accent: PlantyColor.pink,
             icon: "camera.fill"
         ) {
@@ -134,27 +126,26 @@ struct CameraPermissionCard: View {
                 guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
                 UIApplication.shared.open(url)
             }
-            .buttonStyle(PrimaryButtonStyle())
+            .buttonStyle(PrimaryButtonStyle(color: PlantyColor.pink))
 
             PhotosPicker(selection: $photoItem, matching: .images) {
                 Text("Choose from Photos")
                     .font(.headline)
                     .foregroundStyle(PlantyColor.foreground)
                     .frame(maxWidth: .infinity, minHeight: 50)
-                    .background(PlantyColor.surface, in: Capsule())
+                    .background(PlantyColor.surface, in: RoundedRectangle(cornerRadius: 15))
             }
         }
     }
 }
 
-/// Every simulator lands here, and so does any device with no usable camera.
 struct NoCameraCard: View {
     @Binding var photoItem: PhotosPickerItem?
 
     var body: some View {
         StateMessage(
-            title: "No camera on this device.",
-            message: "Pick an existing photo instead. Everything else works the same.",
+            title: "No camera on this device",
+            message: "Choose an existing photo instead. Everything else works the same.",
             accent: PlantyColor.cyan,
             icon: "camera.badge.ellipsis"
         ) {
@@ -163,7 +154,7 @@ struct NoCameraCard: View {
                     .font(.headline)
                     .foregroundStyle(PlantyColor.background)
                     .frame(maxWidth: .infinity, minHeight: 52)
-                    .background(PlantyColor.cyan, in: Capsule())
+                    .background(PlantyColor.cyan, in: RoundedRectangle(cornerRadius: 15))
             }
         }
     }
@@ -176,11 +167,8 @@ struct SaveFailedCard: View {
 
     var body: some View {
         StateMessage(
-            title: "That photo did not save.",
-            message: """
-                It is still on this screen. Try again before closing so the \
-                observation is not lost.
-                """,
+            title: "That photo did not save",
+            message: "It is still on this screen. Retry before closing so the observation is not lost.",
             accent: PlantyColor.orange,
             icon: "exclamationmark.arrow.trianglehead.2.clockwise.rotate.90"
         ) {

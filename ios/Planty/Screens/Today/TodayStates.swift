@@ -1,48 +1,52 @@
 import SwiftUI
 
-/// The state the whole screen is designed around. Says how many plants were
-/// checked and when, because a calm claim with no freshness earns no trust.
+/// Calm is compact and confidence-building: conclusion, freshness, and the one
+/// optional action all fit in one glance instead of making the user scroll past
+/// a mascot before learning whether anything needs doing.
 struct CalmHero: View {
     let summary: CalmSummary
     let takePhoto: () -> Void
 
     var body: some View {
-        VStack(spacing: 18) {
-            PlantyMascot()
-
-            VStack(spacing: 8) {
-                Text(summary.headline)
-                    .font(.largeTitle.weight(.bold))
-                Text(summary.subhead)
-                    .font(.title3)
-                    .foregroundStyle(PlantyColor.secondaryText)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 7) {
+                    Eyebrow(text: "All clear", color: PlantyColor.green)
+                    Text(summary.headline)
+                        .font(.largeTitle.weight(.bold))
+                    Text(summary.subhead)
+                        .font(.body)
+                        .foregroundStyle(PlantyColor.secondaryText)
+                }
+                Spacer(minLength: 4)
+                Image(systemName: "leaf.circle.fill")
+                    .font(.system(size: 54))
+                    .foregroundStyle(PlantyColor.green)
+                    .accessibilityHidden(true)
             }
-            .multilineTextAlignment(.center)
 
-            Text(summary.freshnessLine)
+            Label(summary.freshnessLine, systemImage: "checkmark.circle.fill")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(PlantyColor.green)
                 .accessibilityLabel("\(summary.freshnessLine). This is how fresh the evidence is.")
 
-            VStack(alignment: .leading, spacing: 6) {
+            VStack(alignment: .leading, spacing: 5) {
                 Text(summary.reassuranceTitle)
                     .font(.headline)
                 Text(summary.reassuranceBody)
                     .font(.subheadline)
                     .foregroundStyle(PlantyColor.secondaryText)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .plantyCard()
+            .padding(.top, 2)
 
-            Button("Take a photo anyway", action: takePhoto)
+            Button("Take a photo", action: takePhoto)
                 .buttonStyle(SecondaryButtonStyle())
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .plantyCard(border: PlantyColor.green.opacity(0.2))
     }
 }
 
-/// Never dressed as calm, never dressed as danger. It says only that Planty
-/// cannot honestly speak for the plants right now.
 struct StaleBanner: View {
     let summary: StaleSummary
     let checkConnections: () -> Void
@@ -61,7 +65,7 @@ struct StaleBanner: View {
                     .foregroundStyle(PlantyColor.secondaryText)
             }
             Button("Check connections", action: checkConnections)
-                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.yellow))
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.orange))
             Button("Take a photo", action: takePhoto)
                 .buttonStyle(SecondaryButtonStyle())
         }
@@ -100,56 +104,52 @@ struct EmptySetupView: View {
     @Environment(AppSession.self) private var session
 
     var body: some View {
-        VStack(spacing: 18) {
-            PlantyMascot(wobbles: false)
-            StateMessage(
-                title: "No plants to worry about yet.",
-                message: """
-                    Add the first one with a photo. If you do not know its name, \
-                    Planty can help after the picture.
-                    """,
-                accent: PlantyColor.pink,
-                icon: "leaf.fill"
-            ) {
-                Button("Add a plant") { session.selectedTab = .snap }
-                    .buttonStyle(PrimaryButtonStyle())
-            }
+        StateMessage(
+            title: "Add your first plant",
+            message: "Start with a photo. You can name it now or let Planty help after the picture.",
+            accent: PlantyColor.green,
+            icon: "leaf.fill"
+        ) {
+            Button("Take the first photo") { session.selectedTab = .snap }
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.green))
         }
     }
 }
 
 struct LoadingColdView: View {
     var body: some View {
-        VStack(spacing: 16) {
-            PlantyMascot(wobbles: false)
-            Text("Checking on everyone…")
-                .font(.title2.weight(.bold))
-            Text("Planty is reading the latest photos and sensor updates.")
-                .font(.subheadline)
-                .foregroundStyle(PlantyColor.secondaryText)
-                .multilineTextAlignment(.center)
+        HStack(spacing: 14) {
+            ProgressView().tint(PlantyColor.green)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Checking on everyone…")
+                    .font(.headline)
+                Text("Reading the latest photos and sensor updates.")
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.secondaryText)
+            }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .plantyCard()
         .accessibilityElement(children: .combine)
     }
 }
 
-/// Keeps the previous verdicts on screen and names how old they are, rather
-/// than replacing real information with a spinner.
 struct LoadingWarmView: View {
     let checkedAt: Date
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Label("Checking today's evidence…", systemImage: "arrow.trianglehead.clockwise")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(PlantyColor.cyan)
-            Text("Showing the last check from \(RelativeAge.dayAndTime(checkedAt, now: Date())).")
-                .font(.footnote)
-                .foregroundStyle(PlantyColor.secondaryText)
+        HStack(alignment: .top, spacing: 10) {
+            ProgressView().tint(PlantyColor.cyan)
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Refreshing today's evidence")
+                    .font(.subheadline.weight(.semibold))
+                Text("Showing the last check from \(RelativeAge.dayAndTime(checkedAt, now: Date())).")
+                    .font(.footnote)
+                    .foregroundStyle(PlantyColor.secondaryText)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .plantyCard(border: PlantyColor.cyan.opacity(0.35), padding: 14)
+        .plantyCard(border: PlantyColor.cyan.opacity(0.2), padding: 14)
     }
 }
 
@@ -158,11 +158,8 @@ struct UnconfiguredCard: View {
 
     var body: some View {
         StateMessage(
-            title: "Planty is not connected yet.",
-            message: """
-                Point the app at your Planty service and paste its token. \
-                Until then there is no evidence to be calm about.
-                """,
+            title: "Connect Planty",
+            message: "Add the service address and token before the app can tell you what needs attention.",
             accent: PlantyColor.cyan,
             icon: "antenna.radiowaves.left.and.right"
         ) {
