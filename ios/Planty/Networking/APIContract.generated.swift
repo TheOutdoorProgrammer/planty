@@ -13,6 +13,7 @@ enum APIPath {
     static func askPlant(slug: String) -> String { "/v1/plants/\(slug)/ask" }
     static func calibrateSensor(id: String) -> String { "/v1/sensors/\(id)" }
     static let coldWatch = "/v1/cold-watch"
+    static func completeReminder(id: String) -> String { "/v1/reminders/\(id)/complete" }
     static func completeVerdict(id: String) -> String { "/v1/verdicts/\(id)/complete" }
     static let createAway = "/v1/away"
     static let createOwnerUpdate = "/v1/owner-update"

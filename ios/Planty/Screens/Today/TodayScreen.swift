@@ -71,6 +71,7 @@ struct TodayScreen: View {
             LoadingColdView()
         case .loadingWarm(let previous, let checkedAt):
             LoadingWarmView(checkedAt: checkedAt)
+            reminderSection(previous.sortedDueReminders)
             cards(for: previous.sortedEntries)
         case .emptySetup:
             EmptySetupView()
@@ -84,6 +85,7 @@ struct TodayScreen: View {
             } takePhoto: {
                 session.selectedTab = .snap
             }
+            reminderSection(summary.reminders)
             cards(for: summary.pending)
         case .failed(let error, let cached):
             TodayErrorView(error: error) {
@@ -92,6 +94,7 @@ struct TodayScreen: View {
                 session.selectedTab = .snap
             }
             if let cached {
+                reminderSection(cached.sortedDueReminders)
                 cards(for: cached.sortedEntries)
             }
         }
@@ -110,8 +113,12 @@ struct TodayScreen: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .plantyCard(border: PlantyColor.orange.opacity(0.22))
 
-        SectionHeading("Needs attention")
-        cards(for: summary.featured)
+        reminderSection(summary.reminders)
+
+        if !summary.featured.isEmpty {
+            SectionHeading("Needs attention")
+            cards(for: summary.featured)
+        }
 
         if let deferredLabel = summary.deferredLabel {
             DisclosureGroup {
@@ -125,6 +132,28 @@ struct TodayScreen: View {
             }
             .tint(PlantyColor.secondaryText)
             .plantyCard(padding: 14)
+        }
+    }
+
+    @ViewBuilder
+    private func reminderSection(_ reminders: [DueReminder]) -> some View {
+        if !reminders.isEmpty {
+            SectionHeading(reminders.count == 1 ? "Due reminder" : "Due reminders")
+            reminderCards(for: reminders)
+        }
+    }
+
+    @ViewBuilder
+    private func reminderCards(for reminders: [DueReminder]) -> some View {
+        ForEach(reminders) { occurrence in
+            TodayReminderCard(
+                occurrence: occurrence,
+                isCompleting: store.completingReminderOccurrenceIDs.contains(
+                    occurrence.occurrenceID
+                )
+            ) {
+                Task { await store.complete(occurrence) }
+            }
         }
     }
 

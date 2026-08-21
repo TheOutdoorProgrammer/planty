@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -20,6 +21,13 @@ func (s *Server) today(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
+
+	dueReminders, err := s.store.DueReminders(r.Context(), time.Now())
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	// Questions the model queued for somebody who is not in the conversation,
 	// usually a friend whose plants these are. Without an outlet they piled up
 	// in a table nobody opened.
@@ -31,13 +39,14 @@ func (s *Server) today(w http.ResponseWriter, r *http.Request) {
 	s.ok(w, http.StatusOK, map[string]any{
 		"date":           digest.Date,
 		"entries":        digest.Entries,
+		"due_reminders":  dueReminders,
 		"checked":        digest.Checked,
 		"expected":       digest.Expected,
 		"failed":         digest.Failed,
 		"run_complete":   digest.RunComplete,
 		"stale_since":    digest.StaleSince,
 		"never_run":      digest.NeverRun,
-		"all_clear":      digest.AllClear(),
+		"all_clear":      digest.AllClear() && len(dueReminders) == 0,
 		"open_questions": waiting,
 	})
 }

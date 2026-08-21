@@ -27,12 +27,18 @@ final class TodayStore {
     /// digest rather than edited into it, so `checked` stays honest.
     private(set) var resolvedIDs: Set<UUID> = []
 
+    /// Reminder identity includes its scheduled slot. Completing an 8 AM mist
+    /// must not hide the same reminder when its 8 PM occurrence becomes due.
+    private(set) var resolvedReminderOccurrenceIDs: Set<String> = []
+    private(set) var completingReminderOccurrenceIDs: Set<String> = []
+
     var isConfigured: Bool
     private var api: any PlantyAPI
     private let policy: FreshnessPolicy
     private let clock: @Sendable () -> Date
     private var loadGeneration = 0
     private var completionAttempts: [UUID: CompletionAttempt] = [:]
+    private var reminderCompletionAttempts: [String: UUID] = [:]
 
     init(
         api: any PlantyAPI,
@@ -58,8 +64,11 @@ final class TodayStore {
         lastLoadedAt = nil
         isLoading = false
         resolvedIDs = []
+        resolvedReminderOccurrenceIDs = []
+        completingReminderOccurrenceIDs = []
         postponedUntil = [:]
         completionAttempts = [:]
+        reminderCompletionAttempts = [:]
     }
 
     var presentation: TodayPresentation {
@@ -71,21 +80,26 @@ final class TodayStore {
                 error: error,
                 knownPlantCount: knownPlantCount,
                 now: clock(),
-                didJustFinish: !resolvedIDs.isEmpty
+                didJustFinish: !resolvedIDs.isEmpty || !resolvedReminderOccurrenceIDs.isEmpty
             ),
             policy: policy
         )
     }
 
-    /// Postponed cards drop out until their interval passes. They are never
-    /// marked done: "Later" and "I handled it" are different claims.
+    /// Postponed verdict cards drop out until their interval passes. They are
+    /// never marked done: "Later" and "I handled it" are different claims.
     private var visibleDigest: Digest? {
         guard let digest else { return nil }
         let now = clock()
-        var hidden = resolvedIDs
-        hidden.formUnion(postponedUntil.filter { $0.value > now }.keys)
-        guard !hidden.isEmpty else { return digest }
-        return digest.hiding(verdictIDs: hidden)
+        var hiddenVerdicts = resolvedIDs
+        hiddenVerdicts.formUnion(postponedUntil.filter { $0.value > now }.keys)
+        guard !hiddenVerdicts.isEmpty || !resolvedReminderOccurrenceIDs.isEmpty else {
+            return digest
+        }
+        return digest.hiding(
+            verdictIDs: hiddenVerdicts,
+            reminderOccurrenceIDs: resolvedReminderOccurrenceIDs
+        )
     }
 
     func load() async {
@@ -178,6 +192,47 @@ final class TodayStore {
             )
             completionAttempts.removeValue(forKey: entry.verdict.id)
             resolvedIDs.insert(entry.verdict.id)
+            return nil
+        } catch {
+            let failure = PlantyError.from(error)
+            actionError = failure
+            return failure
+        }
+    }
+
+    /// Completing a scheduled reminder records exactly the kind it was created
+    /// for. Production sends one idempotent occurrence to the server; the plain
+    /// observation fallback exists only for lightweight test doubles.
+    @discardableResult
+    func complete(_ occurrence: DueReminder) async -> PlantyError? {
+        let identity = occurrence.occurrenceID
+        guard !completingReminderOccurrenceIDs.contains(identity) else { return nil }
+
+        actionError = nil
+        completingReminderOccurrenceIDs.insert(identity)
+        defer { completingReminderOccurrenceIDs.remove(identity) }
+
+        let idempotencyKey = reminderCompletionAttempts[identity] ?? UUID()
+        reminderCompletionAttempts[identity] = idempotencyKey
+
+        do {
+            if let completing = api as? any ReminderCompleting {
+                _ = try await completing.completeReminder(
+                    reminderID: occurrence.reminder.id,
+                    dueAt: occurrence.dueAt,
+                    idempotencyKey: idempotencyKey
+                )
+            } else {
+                _ = try await api.addObservation(
+                    slug: occurrence.plant.slug,
+                    observation: NewObservation(
+                        kind: occurrence.reminder.kind,
+                        body: occurrence.reminder.note
+                    )
+                )
+            }
+            reminderCompletionAttempts.removeValue(forKey: identity)
+            resolvedReminderOccurrenceIDs.insert(identity)
             return nil
         } catch {
             let failure = PlantyError.from(error)

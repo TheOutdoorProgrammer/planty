@@ -45,7 +45,9 @@ struct CalmSummary: Sendable, Equatable {
 }
 
 struct ActionSummary: Sendable, Equatable {
-    /// Expanded cards, friend-owned first. Never more than three.
+    /// Scheduled care is already due, not a judgment to defer behind another
+    /// card. Judgment cards retain the existing three-expanded-card limit.
+    let reminders: [DueReminder]
     let featured: [DigestEntry]
     let deferred: [DigestEntry]
     let checked: Int
@@ -53,8 +55,24 @@ struct ActionSummary: Sendable, Equatable {
 
     static let maxFeatured = 3
 
+    init(
+        reminders: [DueReminder] = [],
+        featured: [DigestEntry],
+        deferred: [DigestEntry],
+        checked: Int,
+        updatedAt: Date
+    ) {
+        self.reminders = reminders
+        self.featured = featured
+        self.deferred = deferred
+        self.checked = checked
+        self.updatedAt = updatedAt
+    }
+
+    var count: Int { reminders.count + featured.count + deferred.count }
+
     var headline: String {
-        switch featured.count + deferred.count {
+        switch count {
         case 1: "One thing. You've got this."
         case 2: "Two things. You've got this."
         case 3: "Three things. You've got this."
@@ -78,8 +96,25 @@ struct StaleSummary: Sendable, Equatable {
     let since: Date
     let reason: StaleReason
     let now: Date
+    /// Scheduled reminders remain trustworthy even when judgment evidence is
+    /// stale, because their due state is based on the recorded care schedule.
+    let reminders: [DueReminder]
     /// Actions Planty already knew about. Still shown; just never as calm.
     let pending: [DigestEntry]
+
+    init(
+        since: Date,
+        reason: StaleReason,
+        now: Date,
+        reminders: [DueReminder] = [],
+        pending: [DigestEntry]
+    ) {
+        self.since = since
+        self.reason = reason
+        self.now = now
+        self.reminders = reminders
+        self.pending = pending
+    }
 
     var headline: String { "Planty needs a fresh look." }
 
@@ -126,7 +161,9 @@ extension TodayPresentation {
 
         guard let digest = inputs.digest else { return .loadingCold }
 
-        if digest.entries.isEmpty, inputs.knownPlantCount == 0 {
+        if digest.entries.isEmpty,
+           digest.dueReminders.isEmpty,
+           inputs.knownPlantCount == 0 {
             return .emptySetup
         }
 
@@ -141,12 +178,13 @@ extension TodayPresentation {
                     since: since,
                     reason: reason,
                     now: inputs.now,
+                    reminders: digest.sortedDueReminders,
                     pending: digest.sortedEntries
                 )
             )
         }
 
-        guard !digest.entries.isEmpty else {
+        guard !digest.entries.isEmpty || !digest.dueReminders.isEmpty else {
             return .calm(
                 CalmSummary(
                     checked: digest.checked,
@@ -159,6 +197,7 @@ extension TodayPresentation {
         let sorted = digest.sortedEntries
         return .actions(
             ActionSummary(
+                reminders: digest.sortedDueReminders,
                 featured: Array(sorted.prefix(ActionSummary.maxFeatured)),
                 deferred: Array(sorted.dropFirst(ActionSummary.maxFeatured)),
                 checked: digest.checked,

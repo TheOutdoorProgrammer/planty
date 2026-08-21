@@ -1,9 +1,11 @@
 import Foundation
 
-/// The answer to "what should I do right now". Mirrors internal/plant.Digest.
+/// The answer to "what should I do right now". Mirrors internal/plant.Digest
+/// and adds scheduled reminder occurrences that are due alongside judgments.
 struct Digest: Codable, Sendable, Hashable {
     let date: Date
     private(set) var entries: [DigestEntry]
+    private(set) var dueReminders: [DueReminder]
 
     /// Completeness belongs to the persisted garden-wide judgment run. A
     /// partial run must never look identical to a complete all-clear.
@@ -25,6 +27,7 @@ struct Digest: Codable, Sendable, Hashable {
     enum CodingKeys: String, CodingKey {
         case date
         case entries
+        case dueReminders = "due_reminders"
         case checked
         case expected
         case failed
@@ -35,13 +38,14 @@ struct Digest: Codable, Sendable, Hashable {
     }
 
     var isAllClear: Bool {
-        entries.isEmpty && staleSince == nil && !neverRun &&
+        entries.isEmpty && dueReminders.isEmpty && staleSince == nil && !neverRun &&
             runComplete && failed == 0 && checked == expected
     }
 
     init(
         date: Date,
         entries: [DigestEntry],
+        dueReminders: [DueReminder] = [],
         checked: Int,
         expected: Int? = nil,
         failed: Int = 0,
@@ -53,6 +57,7 @@ struct Digest: Codable, Sendable, Hashable {
         self.openQuestions = openQuestions
         self.date = date
         self.entries = entries
+        self.dueReminders = dueReminders
         self.checked = checked
         self.expected = expected ?? checked
         self.failed = failed
@@ -74,21 +79,31 @@ struct Digest: Codable, Sendable, Hashable {
         // An empty list is null on some encoders, and refusing to decode the
         // whole digest over that took the Today tab down entirely.
         entries = try container.decodeIfPresent([DigestEntry].self, forKey: .entries) ?? []
+        dueReminders = try container.decodeIfPresent(
+            [DueReminder].self, forKey: .dueReminders) ?? []
         openQuestions = try container.decodeIfPresent(
             [OpenQuestion].self, forKey: .openQuestions) ?? []
     }
 
-    /// Drops entries the user already settled, without touching `checked`:
-    /// the freshness count has to keep describing what the service did.
-    func hiding(verdictIDs: Set<UUID>) -> Digest {
+    /// Drops work the user already settled, without touching `checked`: the
+    /// freshness count has to keep describing what the service did. Reminder
+    /// identities include the due slot, so finishing morning misting cannot
+    /// suppress the evening occurrence.
+    func hiding(
+        verdictIDs: Set<UUID>,
+        reminderOccurrenceIDs: Set<String> = []
+    ) -> Digest {
         var copy = self
         copy.entries = entries.filter { !verdictIDs.contains($0.verdict.id) }
+        copy.dueReminders = dueReminders.filter {
+            !reminderOccurrenceIDs.contains($0.occurrenceID)
+        }
         return copy
     }
 
-    /// `/v1/today` carries the judged plant record, while `/v1/plants` carries
-    /// the newest photo URL. Today already loads both, so merge only the photo
-    /// metadata instead of adding another request or duplicating plant state.
+    /// `/v1/today` carries the judged/reminded plant record, while
+    /// `/v1/plants` carries the newest photo URL. Today already loads both, so
+    /// merge only photo metadata instead of adding another request.
     func keepingPhotos(from plants: [Plant]) -> Digest {
         let byID = Dictionary(uniqueKeysWithValues: plants.map { ($0.id, $0) })
         var copy = self
@@ -98,6 +113,15 @@ struct Digest: Codable, Sendable, Hashable {
                 plant: entry.plant.keepingPhoto(from: listed),
                 verdict: entry.verdict,
                 risk: entry.risk
+            )
+        }
+        copy.dueReminders = dueReminders.map { occurrence in
+            guard let listed = byID[occurrence.plant.id] else { return occurrence }
+            return DueReminder(
+                reminder: occurrence.reminder,
+                plant: occurrence.plant.keepingPhoto(from: listed),
+                lastDone: occurrence.lastDone,
+                dueAt: occurrence.dueAt
             )
         }
         return copy
@@ -112,6 +136,18 @@ struct Digest: Codable, Sendable, Hashable {
             }
             if lhs.risk != rhs.risk {
                 return lhs.risk > rhs.risk
+            }
+            return lhs.plant.commonName.localizedCompare(rhs.plant.commonName) == .orderedAscending
+        }
+    }
+
+    /// Reminders are ordered by the slot first, with friend-owned plants first
+    /// inside a slot so care promised to somebody else is hardest to overlook.
+    var sortedDueReminders: [DueReminder] {
+        dueReminders.sorted { lhs, rhs in
+            if lhs.dueAt != rhs.dueAt { return lhs.dueAt < rhs.dueAt }
+            if lhs.plant.isFriends != rhs.plant.isFriends {
+                return lhs.plant.isFriends
             }
             return lhs.plant.commonName.localizedCompare(rhs.plant.commonName) == .orderedAscending
         }

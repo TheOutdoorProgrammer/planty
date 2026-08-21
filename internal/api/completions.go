@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -32,6 +33,34 @@ func (s *Server) completeVerdict(w http.ResponseWriter, r *http.Request) {
 		VerdictID:      verdictID,
 		Kind:           body.Kind,
 		Body:           body.Body,
+	})
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, completed)
+}
+
+type completeReminderRequest struct {
+	IdempotencyKey uuid.UUID `json:"idempotency_key"`
+	DueAt          time.Time `json:"due_at"`
+}
+
+func (s *Server) completeReminder(w http.ResponseWriter, r *http.Request) {
+	reminderID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	var body completeReminderRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	completed, err := s.store.CompleteReminder(r.Context(), store.ReminderCompletion{
+		IdempotencyKey: body.IdempotencyKey,
+		ReminderID:     reminderID,
+		DueAt:          body.DueAt,
 	})
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
