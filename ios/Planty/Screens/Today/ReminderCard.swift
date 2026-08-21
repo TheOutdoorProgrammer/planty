@@ -1,0 +1,63 @@
+import SwiftUI
+
+/// A scheduled care occurrence is actionable on the Today screen itself. The
+/// confirmation copy matches the observation kind that will be written, so a
+/// misting reminder can never quietly become a generic acknowledgement.
+struct TodayReminderCard: View {
+    let occurrence: DueReminder
+    let isCompleting: Bool
+    let complete: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            PlantPhotoView(plant: occurrence.plant, height: 132, opensFullScreen: false)
+                .allowsHitTesting(false)
+
+            HStack(spacing: 10) {
+                OwnershipBadge(plant: occurrence.plant)
+                Label("Scheduled", systemImage: "bell.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(PlantyColor.cyan)
+                Spacer(minLength: 0)
+            }
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(occurrence.reminder.kind.instruction)
+                    .font(.title3.weight(.bold))
+                    .foregroundStyle(PlantyColor.foreground)
+                Text(occurrence.plant.commonName)
+                    .font(.headline)
+                Text(occurrence.dueLine)
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.secondaryText)
+            }
+
+            if let note = occurrence.reminder.note, !note.isEmpty {
+                Text(note)
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.secondaryText)
+            }
+
+            Button(action: complete) {
+                if isCompleting {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                        Text("Saving…")
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    Label(
+                        occurrence.completionLabel,
+                        systemImage: occurrence.reminder.kind.symbol
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle(color: PlantyColor.green))
+            .disabled(isCompleting)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .plantyCard(border: PlantyColor.cyan.opacity(0.3))
+        .accessibilityElement(children: .contain)
+    }
+}

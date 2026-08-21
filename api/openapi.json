@@ -46,6 +46,7 @@
       "put": {"operationId": "setReminder"}
     },
     "/v1/plants/{slug}/reminders/{kind}": {"delete": {"operationId": "deleteReminder"}},
+    "/v1/reminders/{id}/complete": {"post": {"operationId": "completeReminder"}},
     "/v1/ask": {"post": {"operationId": "ask"}},
     "/v1/identify": {"post": {"operationId": "identify"}},
     "/v1/postmortems": {"get": {"operationId": "listPostmortems"}},

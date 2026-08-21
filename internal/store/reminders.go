@@ -21,12 +21,14 @@ func reminderColumnsFor(alias string) string {
 		%[1]sat_hours, %[1]sactive, %[1]snote, %[1]slast_sent_at, %[1]screated_at`, q)
 }
 
-// DueReminder is a reminder that is owed, carried with the plant it belongs to
-// and when the thing was last actually done.
+// DueReminder is a reminder that is owed, carried with the plant it belongs to,
+// when the thing was last actually done, and the exact scheduled occurrence.
+// DueAt makes two daily misting slots distinct actions rather than one card.
 type DueReminder struct {
 	Reminder plant.Reminder `json:"reminder"`
 	Plant    plant.Plant    `json:"plant"`
 	LastDone *time.Time     `json:"last_done,omitempty"`
+	DueAt    time.Time      `json:"due_at"`
 }
 
 // SaveReminder creates or replaces the reminder of one kind for one plant.
@@ -121,6 +123,30 @@ func (s *Store) ActiveReminders(ctx context.Context) ([]DueReminder, error) {
 		out = append(out, due)
 	}
 	return out, rows.Err()
+}
+
+// DueReminders returns the exact occurrences owed at now. DueAt is the slot,
+// not the query time, so the morning and evening occurrence of one reminder
+// remain different cards and different idempotent completion operations.
+func (s *Store) DueReminders(ctx context.Context, now time.Time) ([]DueReminder, error) {
+	reminders, err := s.ActiveReminders(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	out := make([]DueReminder, 0)
+	for _, due := range reminders {
+		if !due.Reminder.Due(due.LastDone, now) {
+			continue
+		}
+		slot, ok := due.Reminder.LastSlot(due.LastDone, now)
+		if !ok {
+			continue
+		}
+		due.DueAt = slot
+		out = append(out, due)
+	}
+	return out, nil
 }
 
 // MarkReminderSent records that a notification went out. It only ever stops an

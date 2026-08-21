@@ -33,6 +33,27 @@ struct Reminder: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// One owed occurrence of a recurring reminder. The scheduled time belongs in
+/// the identity because morning and evening misting are two different jobs.
+struct DueReminder: Codable, Sendable, Hashable, Identifiable {
+    let reminder: Reminder
+    let plant: Plant
+    let lastDone: Date?
+    let dueAt: Date
+
+    var id: String { occurrenceID }
+    var occurrenceID: String {
+        "\(reminder.id.uuidString)|\(dueAt.timeIntervalSince1970)"
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case reminder
+        case plant
+        case lastDone = "last_done"
+        case dueAt = "due_at"
+    }
+}
+
 struct ReminderListResponse: Decodable, Sendable {
     let reminders: [Reminder]
     var count: Int?
@@ -83,6 +104,14 @@ extension Reminder {
     }
 }
 
+extension DueReminder {
+    var completionLabel: String { reminder.kind.completionLabel }
+
+    var dueLine: String {
+        "Due at \(dueAt.formatted(date: .omitted, time: .shortened))"
+    }
+}
+
 extension ObservationKind {
     /// What to do, not what was recorded: a reminder is an instruction, and
     /// "watered" is not one.
@@ -94,6 +123,18 @@ extension ObservationKind {
         case .pruned: "Prune it"
         case .repotted: "Repot it"
         default: rawValue.capitalized
+        }
+    }
+
+    /// The confirmation button says exactly what will be written to history.
+    var completionLabel: String {
+        switch self {
+        case .watered: "I watered it"
+        case .misted: "I misted it"
+        case .fertilized: "I fed it"
+        case .pruned: "I pruned it"
+        case .repotted: "I repotted it"
+        default: "I did it"
         }
     }
 }

@@ -13,6 +13,7 @@ const (
 	routeAskPlant                  = "POST /v1/plants/{slug}/ask"
 	routeCalibrateSensor           = "PATCH /v1/sensors/{id}"
 	routeColdWatch                 = "GET /v1/cold-watch"
+	routeCompleteReminder          = "POST /v1/reminders/{id}/complete"
 	routeCompleteVerdict           = "POST /v1/verdicts/{id}/complete"
 	routeCreateAway                = "POST /v1/away"
 	routeCreateOwnerUpdate         = "POST /v1/owner-update"
