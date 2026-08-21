@@ -1,20 +1,27 @@
 import SwiftUI
 import UIKit
 
-/// The destination for a Today card. Looking, postponing, recording care and
-/// taking a photo are separate choices so none of them is accidentally implied
-/// by tapping the card itself.
+/// The destination for a Today card. The things a person may actually have done
+/// are first-class actions here; clearing without a record remains available,
+/// but it is no longer the only obvious way to finish a card.
 struct TodayActionScreen: View {
     let entry: DigestEntry
 
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
 
-    @State private var isHandling = false
     @State private var isAddingPhoto = false
     @State private var isSavingPhoto = false
     @State private var photoPreview: Data?
     @State private var photoSaved = false
+    @State private var isWritingDetail = false
+    @State private var writingKind: ObservationKind = .note
+
+    private let actionColumns = [GridItem(.flexible()), GridItem(.flexible())]
+    private let resolutionKinds: [ObservationKind] = [
+        .watered, .misted, .fertilized, .repotted,
+        .pruned, .moved, .harvested, .symptom, .note
+    ]
 
     private var store: TodayStore { session.today }
     private var state: CareState { CareState.from(action: entry.verdict.action) }
@@ -25,8 +32,8 @@ struct TodayActionScreen: View {
                 PlantPhotoView(plant: entry.plant, height: 240)
                 identity
                 recommendation
-                photoSection
                 actionSection
+                photoSection
                 reminderSection
             }
             .padding(.horizontal, 20)
@@ -36,11 +43,12 @@ struct TodayActionScreen: View {
         .plantyPage()
         .navigationTitle(entry.plant.commonName)
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $isHandling) {
-            HandledSheet(entry: entry) { kind, note in
-                Task { await record(kind, note: note) }
-            } noteOnly: { text in
-                Task { await saveNote(text) }
+        .sheet(isPresented: $isWritingDetail) {
+            ResolutionDetailSheet(
+                plantName: entry.plant.commonName,
+                kind: writingKind
+            ) { text in
+                Task { await record(writingKind, note: text) }
             }
         }
         .sheet(isPresented: $isAddingPhoto) {
@@ -102,6 +110,39 @@ struct TodayActionScreen: View {
         .plantyCard(border: state.color.opacity(0.4))
     }
 
+    private var actionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeading(text: "What did you do?")
+            Text("Pick what happened. Any of these records it in the plant's story and clears this attention item.")
+                .font(.subheadline)
+                .foregroundStyle(PlantyColor.secondaryText)
+
+            LazyVGrid(columns: actionColumns, spacing: 10) {
+                ForEach(resolutionKinds, id: \.self) { kind in
+                    Button {
+                        choose(kind)
+                    } label: {
+                        Label(kind.label, systemImage: kind.symbol)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityLabel("\(kind.label) \(entry.plant.commonName)")
+                }
+            }
+
+            Divider().overlay(PlantyColor.quietDecoration)
+
+            Button("Clear without logging anything") {
+                Task { await acknowledgeAndDismiss() }
+            }
+            .buttonStyle(SecondaryButtonStyle())
+
+            Text("Use this only when the card is no longer relevant and you do not want to add an event to the plant's history.")
+                .font(.caption)
+                .foregroundStyle(PlantyColor.secondaryText)
+        }
+    }
+
     private var photoSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeading(text: "Photo")
@@ -143,40 +184,6 @@ struct TodayActionScreen: View {
         }
     }
 
-    private var actionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            SectionHeading(text: "Done with this?")
-
-            Button("I already handled it") {
-                if needsRecordedAction {
-                    isHandling = true
-                } else {
-                    Task { await acknowledgeAndDismiss() }
-                }
-            }
-            .buttonStyle(PrimaryButtonStyle(color: state.color))
-
-            if needsRecordedAction {
-                Text("Record what you did so the plant's story stays useful.")
-                    .font(.caption)
-                    .foregroundStyle(PlantyColor.secondaryText)
-
-                Button("Acknowledge without logging care") {
-                    Task { await acknowledgeAndDismiss() }
-                }
-                .buttonStyle(SecondaryButtonStyle())
-
-                Text("This clears today's card without claiming that watering, harvesting, moving, or another care action happened.")
-                    .font(.caption)
-                    .foregroundStyle(PlantyColor.secondaryText)
-            } else {
-                Text("For a Watch item, this simply records that you looked and clears the current reminder.")
-                    .font(.caption)
-                    .foregroundStyle(PlantyColor.secondaryText)
-            }
-        }
-    }
-
     private var reminderSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeading(text: "Not yet")
@@ -194,12 +201,12 @@ struct TodayActionScreen: View {
         }
     }
 
-    private var needsRecordedAction: Bool {
-        switch entry.verdict.action {
-        case .water, .harvest, .urgent:
-            true
-        case .check, .none, .unknown:
-            false
+    private func choose(_ kind: ObservationKind) {
+        if kind == .note || kind == .symptom {
+            writingKind = kind
+            isWritingDetail = true
+        } else {
+            Task { await record(kind, note: "") }
         }
     }
 
@@ -209,14 +216,9 @@ struct TodayActionScreen: View {
     }
 
     private func record(_ kind: ObservationKind, note: String) async {
-        isHandling = false
+        isWritingDetail = false
         guard await store.complete(entry, kind: kind, note: note) == nil else { return }
         dismiss()
-    }
-
-    private func saveNote(_ text: String) async {
-        await store.addNote(entry, text: text)
-        isHandling = false
     }
 
     private func savePhoto(_ jpeg: Data) async {
@@ -231,5 +233,56 @@ struct TodayActionScreen: View {
         } else {
             photoPreview = nil
         }
+    }
+}
+
+private struct ResolutionDetailSheet: View {
+    let plantName: String
+    let kind: ObservationKind
+    let save: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var detail = ""
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(prompt)
+                    .font(.title3.weight(.bold))
+                Text("This will be saved to \(plantName)'s story and clear the current attention item.")
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.secondaryText)
+
+                TextField("A sentence is plenty", text: $detail, axis: .vertical)
+                    .lineLimit(3...6)
+                    .focused($focused)
+                    .padding(12)
+                    .background(PlantyColor.surface, in: RoundedRectangle(cornerRadius: 14))
+
+                Button(kind == .note ? "Save note and clear" : "Record and clear") {
+                    save(detail.trimmingCharacters(in: .whitespacesAndNewlines))
+                }
+                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.green))
+                .disabled(detail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                Spacer(minLength: 0)
+            }
+            .padding(20)
+            .plantyPage()
+            .navigationTitle(kind.label)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+            }
+        }
+        .presentationDetents([.medium])
+        .onAppear { focused = true }
+    }
+
+    private var prompt: String {
+        kind == .note ? "What is worth remembering?" : "What did you notice?"
     }
 }

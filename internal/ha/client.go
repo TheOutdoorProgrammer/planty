@@ -1,5 +1,5 @@
-// Package ha talks to Home Assistant over its REST API: sensor states, weather
-// forecasts, notifications and service calls.
+// Package ha talks to Home Assistant over its REST API for sensor states,
+// weather forecasts, and actuator service calls.
 package ha
 
 import (
@@ -7,30 +7,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"maps"
 	"net/http"
 	"net/url"
 	"strconv"
 	"time"
 )
 
-// NotificationTransport is Planty's own delivery channel. The HA client keeps
-// this seam because all scheduled jobs already distinguish the operator's
-// notifier service from backup-person services; overriding only the primary
-// service moves Joey to APNs without breaking away-mode redirects.
-type NotificationTransport interface {
-	Send(ctx context.Context, title, body string, extra map[string]any) error
-}
-
 // Client is a Home Assistant REST client.
 type Client struct {
 	baseURL string
 	token   string
 	http    *http.Client
-
-	primaryNotifier       string
-	notifications         NotificationTransport
-	suppressAnnouncements bool
 }
 
 // New builds a client against a base URL such as https://home.example.com.
@@ -40,22 +27,6 @@ func New(baseURL, token string) *Client {
 		token:   token,
 		http:    &http.Client{Timeout: 20 * time.Second},
 	}
-}
-
-// WithNotificationTransport sends notifications addressed to primary through
-// transport first. If APNs is unavailable or has no registered phone yet, HA is
-// retained as a failure fallback so a rollout cannot silently lose a warning.
-// Backup notify services are never intercepted.
-func (c *Client) WithNotificationTransport(primary string, transport NotificationTransport) *Client {
-	if transport == nil {
-		return c
-	}
-	c.primaryNotifier = primary
-	c.notifications = transport
-	// Once Planty can reach the phone itself, urgent chases should not also
-	// shout through Home Assistant speakers.
-	c.suppressAnnouncements = true
-	return c
 }
 
 // State is one entity's current state.
@@ -125,34 +96,9 @@ func (c *Client) States(ctx context.Context) ([]State, error) {
 	return out, err
 }
 
-// CallService invokes a service, for example notify/notify.
+// CallService invokes a service, for example switch/turn_on.
 func (c *Client) CallService(ctx context.Context, domain, service string, data map[string]any) error {
 	return c.do(ctx, http.MethodPost, "/api/services/"+domain+"/"+service, data, nil)
-}
-
-// Notify sends the operator through APNs when configured. A named backup
-// service still goes through HA, and an APNs failure falls back to HA rather
-// than converting a delivery outage into silence.
-func (c *Client) Notify(ctx context.Context, service, title, message string, extra map[string]any) error {
-	if c.notifications != nil && service == c.primaryNotifier {
-		if err := c.notifications.Send(ctx, title, message, extra); err == nil {
-			return nil
-		}
-	}
-	data := map[string]any{"title": title, "message": message}
-	maps.Copy(data, extra)
-	return c.CallService(ctx, "notify", service, data)
-}
-
-// Announce speaks through the house speakers only while HA is still the primary
-// notification channel. APNs-enabled installs keep urgent alerts on the phone.
-func (c *Client) Announce(ctx context.Context, message string) error {
-	if c.suppressAnnouncements {
-		return nil
-	}
-	return c.CallService(ctx, "script", "announce", map[string]any{
-		"variables": map[string]any{"message": message},
-	})
 }
 
 // Forecast is one predicted period.

@@ -8,34 +8,23 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
 const (
-	// ChaseAfter is how long a verdict is left alone between chases.
-	ChaseAfter = 6 * time.Hour
-
-	// MaxEscalations caps the ladder. Past this Planty stops asking, because a
-	// notification that never stops is one you stop reading.
+	ChaseAfter     = 6 * time.Hour
 	MaxEscalations = 3
-
-	// SpeakRisk is the neglect score at which the house speakers are allowed.
-	// Reached by a hand-watered plant that belongs to someone else.
-	SpeakRisk = 4
 )
 
-// Escalate chases unacknowledged verdicts, hand-watered plants hardest: a line
-// fails rarely, a hand-watered plant fails every time its owner is busy.
+// Escalate chases unacknowledged verdicts. Delivery is always Planty's native
+// push channel; Home Assistant is not a notification fallback or speaker path.
 type Escalate struct {
-	Store    *store.Store
-	HA       *ha.Client
-	Log      *slog.Logger
-	Notifier string
+	Store         *store.Store
+	Log           *slog.Logger
+	Notifications Notifier
 }
 
-// Run chases everything due, one rung up the ladder.
 func (e Escalate) Run(ctx context.Context) error {
 	due, err := e.Store.Chaseable(ctx, ChaseAfter, MaxEscalations)
 	if err != nil {
@@ -46,55 +35,29 @@ func (e Escalate) Run(ctx context.Context) error {
 		return nil
 	}
 
-	target, away := e.target(ctx)
-
-	var speak []plant.DigestEntry
-	for _, entry := range due {
-		if e.shouldSpeak(entry) {
-			speak = append(speak, entry)
-		}
-	}
-
-	if err := e.HA.Notify(ctx, target, chaseTitle(due), chaseBody(due, away), map[string]any{
+	away := e.away(ctx)
+	if err := notify(ctx, e.Notifications, chaseTitle(due), chaseBody(due, away), map[string]any{
 		"data": map[string]any{"tag": "planty-chase"},
 	}); err != nil {
 		return err
 	}
 
-	// Recorded even when the notify succeeded but the announce did not, so a
-	// speaker failure cannot restart the ladder from the bottom.
 	for _, entry := range due {
 		if err := e.Store.RecordEscalation(ctx, entry.Verdict.ID); err != nil {
 			e.Log.Error("could not record escalation", "verdict", entry.Verdict.ID, "error", err)
 		}
 	}
 
-	e.Log.Warn("chased", "verdicts", len(due), "spoken", len(speak),
-		"backup", away.BackupContact)
-
-	if len(speak) == 0 {
-		return nil
-	}
-	return e.HA.Announce(ctx, announcement(speak))
+	e.Log.Warn("chased", "verdicts", len(due), "backup", away.BackupContact)
+	return nil
 }
 
-// shouldSpeak reserves the speakers for the last rung, and only for a plant
-// whose neglect actually costs something.
-func (e Escalate) shouldSpeak(entry plant.DigestEntry) bool {
-	last := entry.Verdict.Escalations >= MaxEscalations-1
-	serious := entry.Risk >= SpeakRisk || entry.Verdict.Action == plant.ActionUrgent
-	return last && serious
-}
-
-func (e Escalate) target(ctx context.Context) (string, plant.AwayPeriod) {
+func (e Escalate) away(ctx context.Context) plant.AwayPeriod {
 	away, err := e.Store.AwayAt(ctx, time.Now())
 	if errors.Is(err, store.ErrNotFound) || err != nil {
-		return e.Notifier, plant.AwayPeriod{}
+		return plant.AwayPeriod{}
 	}
-	if away.BackupNotify != "" {
-		return away.BackupNotify, away
-	}
-	return e.Notifier, away
+	return away
 }
 
 func chaseTitle(due []plant.DigestEntry) string {
@@ -127,20 +90,8 @@ func chaseBody(due []plant.DigestEntry, away plant.AwayPeriod) string {
 	}
 
 	if away.BackupContact != "" {
-		fmt.Fprintf(&b, "\nJoey is away until %s. %s is covering.",
+		fmt.Fprintf(&b, "\nYou are away until %s. %s is recorded as covering.",
 			away.EndsAt.Format("Jan 2"), away.BackupContact)
 	}
 	return b.String()
-}
-
-func announcement(speak []plant.DigestEntry) string {
-	if len(speak) == 1 {
-		p := speak[0].Plant
-		if p.IsFriends() {
-			return fmt.Sprintf("%s's %s still needs water and nobody has done it.",
-				p.Steward, p.CommonName)
-		}
-		return fmt.Sprintf("The %s still needs water.", p.CommonName)
-	}
-	return fmt.Sprintf("%d plants still need attention. Check Planty.", len(speak))
 }

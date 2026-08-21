@@ -1,6 +1,7 @@
 package job
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -13,25 +14,23 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 )
 
-// notification is one thing the house was told, so a test can assert what the
-// operator would actually have seen rather than only that a call happened.
 type notification struct {
-	service string
 	title   string
 	message string
 }
 
-// fakeHA stands in for Home Assistant: it answers the forecast and records
-// every notification and announcement.
+// fakeHA stands in for Home Assistant's data and actuator APIs while also
+// implementing Notifier as a separate direct channel for job tests. If a job
+// tries to call HA's old notify/script services, haNotifications records it.
 type fakeHA struct {
 	server *httptest.Server
 
 	entity  string
 	periods []map[string]any
 
-	notified  []notification
-	announced []string
-	services  []string
+	notified        []notification
+	haNotifications []string
+	services        []string
 }
 
 func newFakeHA(t *testing.T, entity string) *fakeHA {
@@ -43,8 +42,6 @@ func newFakeHA(t *testing.T, entity string) *fakeHA {
 
 		switch {
 		case strings.HasPrefix(r.URL.Path, "/api/services/weather/get_forecasts"):
-			// The shape Home Assistant really returns. A fake that flattened
-			// this agreed with the bug and the cold watch never once ran.
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				"changed_states": []any{},
 				"service_response": map[string]any{
@@ -52,26 +49,9 @@ func newFakeHA(t *testing.T, entity string) *fakeHA {
 				},
 			})
 
-		case strings.HasPrefix(r.URL.Path, "/api/services/notify/"):
-			var body map[string]any
-			_ = json.NewDecoder(r.Body).Decode(&body)
-			title, _ := body["title"].(string)
-			message, _ := body["message"].(string)
-			f.notified = append(f.notified, notification{
-				service: strings.TrimPrefix(r.URL.Path, "/api/services/notify/"),
-				title:   title,
-				message: message,
-			})
-			_, _ = w.Write([]byte(`[]`))
-
-		case strings.HasPrefix(r.URL.Path, "/api/services/script/announce"):
-			var body struct {
-				Variables struct {
-					Message string `json:"message"`
-				} `json:"variables"`
-			}
-			_ = json.NewDecoder(r.Body).Decode(&body)
-			f.announced = append(f.announced, body.Variables.Message)
+		case strings.HasPrefix(r.URL.Path, "/api/services/notify/"),
+			strings.HasPrefix(r.URL.Path, "/api/services/script/announce"):
+			f.haNotifications = append(f.haNotifications, r.URL.Path)
 			_, _ = w.Write([]byte(`[]`))
 
 		case strings.HasPrefix(r.URL.Path, "/api/services/switch/"):
@@ -88,8 +68,11 @@ func newFakeHA(t *testing.T, entity string) *fakeHA {
 
 func (f *fakeHA) client() *ha.Client { return ha.New(f.server.URL, "token") }
 
-// forecast sets a single daily period stamped this morning, which is the shape
-// Home Assistant actually returns: today's entry carries tonight's low.
+func (f *fakeHA) Send(_ context.Context, title, body string, _ map[string]any) error {
+	f.notified = append(f.notified, notification{title: title, message: body})
+	return nil
+}
+
 func (f *fakeHA) forecast(high, low float64) {
 	f.periods = []map[string]any{{
 		"datetime":    time.Now().Add(-6 * time.Hour).Format(time.RFC3339),

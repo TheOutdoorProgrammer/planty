@@ -18,7 +18,6 @@ data:
   # subscription, "api" meters tokens against ANTHROPIC_API_KEY. Unset, a key
   # wins if the secret carries one.
   PLANTY_JUDGE: "cli"
-  PLANTY_NOTIFY_SERVICE: "notify"
   PLANTY_FRIEND_NAME: "friend"
 
   # Object storage for photos. Leave the endpoint empty to disable the photo

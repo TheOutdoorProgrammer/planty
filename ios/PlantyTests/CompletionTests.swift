@@ -3,18 +3,16 @@ import Testing
 
 @testable import Planty
 
-/// The two ways a card could go quiet without the plant being helped. Both
-/// shipped, and both are the kind of bug that kills something slowly: the user
-/// believes they did the thing, and the app agrees with them.
+/// A note can mean two different things: casually writing something down leaves
+/// the current task alone, while explicitly choosing Note from an attention
+/// item's resolution choices records the note and settles that verdict.
 @Suite("Finishing a task")
 struct CompletionTests {
     private func entry() -> DigestEntry {
         .fixture(action: .water)
     }
 
-    /// "Note" used to sit among the completion options. One tap filed an empty
-    /// note, acknowledged the verdict, and hid a thirsty plant.
-    @Test("A note never counts as having done the job")
+    @Test("A standalone note does not silently complete a task")
     @MainActor
     func notesDoNotComplete() async {
         let api = FakeAPI()
@@ -23,14 +21,13 @@ struct CompletionTests {
 
         await store.addNote(card, text: "leaves look a bit limp")
 
-        #expect(api.acknowledged.isEmpty, "writing a note silenced the card")
+        #expect(api.acknowledged.isEmpty, "writing a note outside the resolution flow silenced the card")
         #expect(!store.resolvedIDs.contains(card.verdict.id))
         #expect(api.observations.first?.1.kind == .note)
-        #expect(api.observations.first?.1.body == "leaves look a bit limp",
-                "an empty note tells the next diagnosis nothing")
+        #expect(api.observations.first?.1.body == "leaves look a bit limp")
     }
 
-    @Test("An empty note is not written at all")
+    @Test("An empty standalone note is not written at all")
     @MainActor
     func emptyNotesAreNotWritten() async {
         let api = FakeAPI()
@@ -52,6 +49,21 @@ struct CompletionTests {
 
         #expect(api.observations.first?.1.kind == .watered)
         #expect(api.observations.first?.1.body == "topped it up")
+        #expect(api.acknowledged == [card.verdict.id])
+        #expect(store.resolvedIDs.contains(card.verdict.id))
+    }
+
+    @Test("A note chosen as the resolution records it and settles the verdict")
+    @MainActor
+    func noteResolutionSettles() async {
+        let api = FakeAPI()
+        let store = TodayStore(api: api, isConfigured: true)
+        let card = entry()
+
+        await store.complete(card, kind: .note, note: "Checked it in person; nothing else needed.")
+
+        #expect(api.observations.first?.1.kind == .note)
+        #expect(api.observations.first?.1.body == "Checked it in person; nothing else needed.")
         #expect(api.acknowledged == [card.verdict.id])
         #expect(store.resolvedIDs.contains(card.verdict.id))
     }
@@ -89,8 +101,6 @@ struct CompletionTests {
         #expect(store.error == nil, "an action failure was reported as a load failure")
     }
 
-    /// A capture started from a card and answering it must settle that card, or
-    /// the user does everything right and the plant is asked for again.
     @Test("A capture that answers a card settles it")
     @MainActor
     func captureSettlesTheCardItAnswers() async {
@@ -106,8 +116,6 @@ struct CompletionTests {
         #expect(capture.settled == verdict)
     }
 
-    /// A photo with no claim attached settles nothing: looking at a plant is
-    /// not watering it.
     @Test("A photo alone does not settle a card")
     @MainActor
     func aPhotoAloneSettlesNothing() async {
@@ -123,9 +131,6 @@ struct CompletionTests {
     }
 }
 
-/// The first run: an empty library, one photo, and a promise that Planty can
-/// help after the picture. It used to end at an empty picker with the photo
-/// discarded, which is the worst possible first minute.
 @Suite("Adding the first plant from a photo")
 struct PhotoFirstTests {
     @Test("A photo becomes a plant, named or not")
@@ -185,9 +190,6 @@ struct PhotoFirstTests {
     }
 }
 
-/// Starting from the plant page carries no verdict id, so the acknowledgement
-/// has to be found rather than passed. It was passed, the plant page passed
-/// nothing, and watering a thirsty plant left it still asking.
 @Suite("Doing the job from anywhere")
 struct SettleFromAnywhereTests {
     @Test("Recording care settles the plant's open verdict with no card behind it")
@@ -222,7 +224,6 @@ struct SettleFromAnywhereTests {
         #expect(api.acknowledged == [verdict.id])
     }
 
-    /// A photo with no claim attached is still just looking at a plant.
     @Test("A photo alone settles nothing, even with a verdict open")
     @MainActor
     func aPhotoAloneStillSettlesNothing() async {
@@ -237,7 +238,6 @@ struct SettleFromAnywhereTests {
         #expect(api.acknowledged.isEmpty)
     }
 
-    /// A verdict already settled must not be acknowledged twice.
     @Test("An already settled verdict is left alone")
     @MainActor
     func settledVerdictsAreLeftAlone() async {
@@ -254,7 +254,6 @@ struct SettleFromAnywhereTests {
         #expect(api.acknowledged.isEmpty)
     }
 
-    /// "Nothing needs doing" is not a job, so there is nothing to settle.
     @Test("A calm plant has nothing to settle")
     @MainActor
     func calmPlantsSettleNothing() async {

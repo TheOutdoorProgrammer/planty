@@ -13,33 +13,25 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
-// Fractions of each probe's own range. Between them, doing nothing is correct.
 const (
 	Thirsty = 0.25
 	Soaked  = 0.60
 )
 
-// SettleWindow is how long to wait before checking whether water arrived.
 const SettleWindow = 45 * time.Minute
-
-// MaxWateringReadingAge spans two normal 20-minute ingests with a little
-// scheduler slack. Older evidence makes the shared line blind, never dry.
 const MaxWateringReadingAge = 45 * time.Minute
 
-// Water runs the LetPot line and checks that it worked. One pump, one line, no
-// zones, so every decision is about the line as a whole.
 type Water struct {
-	Store    *store.Store
-	HA       *ha.Client
-	Log      *slog.Logger
-	Notifier string
+	Store         *store.Store
+	HA            *ha.Client
+	Log           *slog.Logger
+	Notifications Notifier
 
 	PumpSwitch string
 	PumpSensor string
 	RunFor     time.Duration
 }
 
-// Run decides whether to water the line, does it, and verifies the result.
 func (w Water) Run(ctx context.Context) error {
 	onLine, err := w.Store.ListPlants(ctx, store.PlantFilter{
 		Status:         plant.StatusAlive,
@@ -49,9 +41,6 @@ func (w Water) Run(ctx context.Context) error {
 		return err
 	}
 
-	// Nothing on the line is a garden that waters by hand, not a fault. Only a
-	// line with plants on it and no pump behind it is broken, and that has to
-	// stay loud: it is watering silently not happening.
 	if len(onLine) == 0 {
 		return nil
 	}
@@ -60,9 +49,6 @@ func (w Water) Run(ctx context.Context) error {
 	}
 
 	thirsty, soaked, blind := w.survey(ctx, onLine)
-
-	// A plant with no calibrated probe is not evidence either way, and running
-	// a pump over an unknown is exactly the mistake this project exists to stop.
 	if len(blind) > 0 {
 		w.Log.Info("not watering: uncalibrated plants on the line", "plants", blind)
 		return nil
@@ -71,18 +57,12 @@ func (w Water) Run(ctx context.Context) error {
 		w.Log.Info("not watering: nothing on the line is dry")
 		return nil
 	}
-
-	// One pump waters everything, so a single soaked plant vetoes the run. This
-	// is the group-by-thirst rule enforced rather than merely written down.
 	if len(soaked) > 0 {
 		return w.reportConflict(ctx, thirsty, soaked)
 	}
 	return w.runLine(ctx, thirsty)
 }
 
-// moisture reports the driest thing a plant's own calibrated probes say, and
-// whether any of them could speak. The driest reading wins because two probes
-// in one pot disagreeing means part of the rootball is dry.
 func moisture(ctx context.Context, s *store.Store, p plant.Plant) (float64, bool) {
 	links, err := s.SensorLinks(ctx, &p.ID)
 	if err != nil {
@@ -133,8 +113,6 @@ func (w Water) survey(ctx context.Context, onLine []plant.Plant) (thirsty, soake
 	return thirsty, soaked, blind
 }
 
-// reportConflict is what a mixed line looks like: the pump cannot help one
-// plant without hurting another, and only moving a dripper fixes it.
 func (w Water) reportConflict(ctx context.Context, thirsty, soaked []string) error {
 	message := fmt.Sprintf(
 		"%s needs water, but %s on the same line is already wet.\n\n"+
@@ -144,7 +122,7 @@ func (w Water) reportConflict(ctx context.Context, thirsty, soaked []string) err
 		strings.Join(thirsty, " and "), strings.Join(soaked, " and "))
 
 	w.Log.Warn("watering conflict on the line", "thirsty", thirsty, "soaked", soaked)
-	return w.HA.Notify(ctx, w.Notifier, "The LetPot line is mismatched", message, nil)
+	return notify(ctx, w.Notifications, "The LetPot line is mismatched", message, nil)
 }
 
 func (w Water) runLine(ctx context.Context, thirsty []string) error {
@@ -159,9 +137,6 @@ func (w Water) runLine(ctx context.Context, thirsty []string) error {
 	}
 	w.Log.Info("pump on", "for", w.RunFor, "thirsty", thirsty)
 
-	// The stop is deferred so a cancelled context or a panic still closes the
-	// valve. A duration this code is holding cannot be reset by a restart the
-	// way a Home Assistant `for:` trigger can.
 	defer func() {
 		stop, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
@@ -180,8 +155,6 @@ func (w Water) runLine(ctx context.Context, thirsty []string) error {
 	return w.verify(ctx, started)
 }
 
-// verify checks that water reached the soil. When the pump ran and the soil did
-// not change, that dripper is clogged, and nothing else would ever catch it.
 func (w Water) verify(ctx context.Context, started time.Time) error {
 	onLine, err := w.Store.ListPlants(ctx, store.PlantFilter{
 		Status:         plant.StatusAlive,
@@ -230,5 +203,5 @@ func (w Water) verify(ctx context.Context, started time.Time) error {
 		strings.Join(clogged, " and "))
 
 	w.Log.Warn("pump ran but soil did not change", "plants", clogged)
-	return w.HA.Notify(ctx, w.Notifier, "Water is not reaching the soil", message, nil)
+	return notify(ctx, w.Notifications, "Water is not reaching the soil", message, nil)
 }

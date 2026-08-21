@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
@@ -16,11 +15,10 @@ import (
 
 // Daily produces one verdict per plant, then a single digest notification.
 type Daily struct {
-	Store    *store.Store
-	HA       *ha.Client
-	Judge    *judge.Judge
-	Log      *slog.Logger
-	Notifier string
+	Store         *store.Store
+	Judge         *judge.Judge
+	Log           *slog.Logger
+	Notifications Notifier
 }
 
 // Run judges every live plant and notifies only if something needs doing or the
@@ -157,13 +155,9 @@ func (d Daily) gather(ctx context.Context, p plant.Plant) (judge.Evidence, error
 
 func (d Daily) notify(ctx context.Context, digest plant.Digest) error {
 	var b strings.Builder
-	urgent := false
 
 	for _, entry := range digest.Entries {
 		fmt.Fprintf(&b, "%s: %s\n", entry.Plant.CommonName, entry.Verdict.Reasoning)
-		if entry.Verdict.Action == plant.ActionUrgent {
-			urgent = true
-		}
 	}
 	incomplete := !digest.RunComplete || digest.Failed > 0 || digest.Checked != digest.Expected
 	if incomplete {
@@ -182,14 +176,7 @@ func (d Daily) notify(ctx context.Context, digest plant.Digest) error {
 		title = "One plant needs you"
 	}
 
-	if err := d.HA.Notify(ctx, d.Notifier, title, b.String(), nil); err != nil {
-		return err
-	}
-	// Speakers are reserved for real risk; anything less trains him to tune out.
-	if urgent {
-		return d.HA.Announce(ctx, "A plant needs attention. Check Planty.")
-	}
-	return nil
+	return notify(ctx, d.Notifications, title, b.String(), nil)
 }
 
 // season shapes advice: the same soil reading means different things in winter.

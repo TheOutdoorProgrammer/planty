@@ -10,8 +10,6 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
-// The gap between the two is the whole safety margin: inside it, doing nothing
-// is the right answer, and a system with no dead band oscillates.
 func TestThresholdsLeaveADeadBand(t *testing.T) {
 	if Thirsty >= Soaked {
 		t.Fatalf("dry (%v) must sit below wet (%v)", Thirsty, Soaked)
@@ -21,8 +19,6 @@ func TestThresholdsLeaveADeadBand(t *testing.T) {
 	}
 }
 
-// Overwatering kills more houseplants than drought, so the dry threshold has to
-// sit well below halfway; watering at 45% would be watering damp soil.
 func TestDryThresholdBiasesAgainstOverwatering(t *testing.T) {
 	if Thirsty > 0.35 {
 		t.Errorf("dry threshold %.2f waters soil that is not actually dry", Thirsty)
@@ -30,8 +26,6 @@ func TestDryThresholdBiasesAgainstOverwatering(t *testing.T) {
 }
 
 func TestSettleWindowOutlastsASensorReportingInterval(t *testing.T) {
-	// Zigbee soil sensors commonly report every 20 minutes; checking sooner
-	// would call a perfectly good watering a failure.
 	if SettleWindow.Minutes() < 30 {
 		t.Errorf("settle window %v is shorter than a sensor reporting cycle", SettleWindow)
 	}
@@ -57,9 +51,6 @@ func TestPumpDoesNotStartWithoutAPositiveDuration(t *testing.T) {
 	}
 }
 
-// Planty with no API key still has to run: the cold watch and the watering
-// line are what keep plants alive and neither needs a model. Failing here
-// would fail the digest at eight every morning, forever.
 func TestNoJudgeIsAQuietDayNotAFailure(t *testing.T) {
 	s, ctx := testStore(t)
 	tender(t, s, ctx, "Keyless", plant.StewardSelf, 55)
@@ -69,26 +60,24 @@ func TestNoJudgeIsAQuietDayNotAFailure(t *testing.T) {
 	}
 }
 
-// Nothing waters a plant on a timer, so the reporting half has to work on its
-// own: no pump configured, no API key, nothing but probes.
 func TestThirstReportsWithoutAPumpOrAKey(t *testing.T) {
 	s, ctx := testStore(t)
 	onTheLine(t, s, ctx, "Tomato")
 
 	f := newFakeHA(t, weatherEntity)
-	report := Thirst{Store: s, HA: f.client(), Log: quietLog(), Notifier: "notify"}
+	report := Thirst{Store: s, Log: quietLog(), Notifications: f}
 	if err := report.Run(ctx); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
-	// No calibrated probe means nothing can be said, which is silence rather
-	// than a guess that the plant is fine.
 	if len(f.notified) != 0 {
 		t.Errorf("said %v about a plant with no calibrated probe", f.notified)
 	}
+	if len(f.haNotifications) != 0 {
+		t.Fatalf("thirst routed through Home Assistant notifications: %v", f.haNotifications)
+	}
 }
 
-// onTheLine creates a plant the LetPot pump is responsible for.
 func onTheLine(t *testing.T, s *store.Store, ctx context.Context, name string) plant.Plant {
 	t.Helper()
 
@@ -109,9 +98,6 @@ func onTheLine(t *testing.T, s *store.Store, ctx context.Context, name string) p
 	return p
 }
 
-// A garden that waters by hand is not a broken pump. Erroring on it would fail
-// the hourly job forever on a system that has no LetPot line at all, and a
-// failure that fires every hour is one nobody reads.
 func TestNothingOnTheLineIsNotAFault(t *testing.T) {
 	s, ctx := testStore(t)
 
@@ -120,7 +106,6 @@ func TestNothingOnTheLineIsNotAFault(t *testing.T) {
 	}
 }
 
-// The opposite case has to stay loud: this is watering silently not happening.
 func TestPlantsOnTheLineWithNoPumpIsAFault(t *testing.T) {
 	s, ctx := testStore(t)
 	onTheLine(t, s, ctx, "Tomato")
