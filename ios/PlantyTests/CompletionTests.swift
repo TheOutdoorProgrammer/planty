@@ -56,10 +56,10 @@ struct CompletionTests {
         #expect(store.resolvedIDs.contains(card.verdict.id))
     }
 
-    /// The acknowledgement is what stops the service escalating. Swallowing its
-    /// failure hides the card locally while the server keeps chasing, which is
-    /// the worst of both.
-    @Test("A failed acknowledgement is admitted, not swallowed")
+    /// Completion is one transactional server command now. If that request
+    /// times out, surface the real transport failure and keep the card visible;
+    /// retrying reuses the idempotency key, so it cannot duplicate care.
+    @Test("A failed atomic completion is admitted, not swallowed")
     @MainActor
     func failedAckIsReported() async {
         let api = FakeAPI()
@@ -69,9 +69,9 @@ struct CompletionTests {
 
         await store.complete(card, kind: .watered)
 
-        #expect(store.actionError == .stillAsking)
+        #expect(store.actionError == .timedOut)
         #expect(!store.resolvedIDs.contains(card.verdict.id),
-                "the card was hidden while the service was still asking")
+                "the card was hidden while completion was still uncertain")
     }
 
     /// Tapping "Watered" and failing used to render "Today's check did not

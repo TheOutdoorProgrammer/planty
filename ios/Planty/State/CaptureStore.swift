@@ -1,7 +1,6 @@
 import Foundation
 import Observation
 
-/// A photo that exists on the phone but may not exist on the service yet.
 struct CapturedPhoto: Sendable, Equatable, Identifiable {
     let id: UUID
     let jpeg: Data
@@ -15,8 +14,6 @@ struct CapturedPhoto: Sendable, Equatable, Identifiable {
     }
 }
 
-/// Where the capture flow is. `captured` keeps holding the image after a failed
-/// save, because losing the photo is the one unrecoverable outcome here.
 enum CaptureStage: Sendable, Equatable {
     case ready
     case captured(CapturedPhoto)
@@ -30,8 +27,6 @@ enum CaptureStage: Sendable, Equatable {
         }
     }
 
-    /// What the user said they did, kept across a failure so a retry records
-    /// the watering rather than just re-saving the picture.
     var recording: ObservationKind? {
         switch self {
         case .ready, .captured: nil
@@ -47,9 +42,6 @@ enum CaptureStage: Sendable, Equatable {
     }
 }
 
-/// The write that failed, including everything needed to repeat it exactly.
-/// A first-plant creation has no selected plant, so treating every failure as
-/// a photo save made its visible retry button a no-op.
 enum FailedCaptureAction: Sendable, Equatable {
     case save(ObservationKind?)
     case create(name: String?, metadata: CaptureMetadata)
@@ -60,27 +52,14 @@ enum FailedCaptureAction: Sendable, Equatable {
 final class CaptureStore {
     private(set) var stage = CaptureStage.ready
     private(set) var toast: String?
-
     var selectedPlant: Plant?
     var note = ""
-
-    /// Set when the service is not confident which plant this is, which must
-    /// never be resolved silently.
     private(set) var suggestion: Plant?
-
-    /// The verdict this capture was started from, when it came from a card on
-    /// Today. Acknowledging it is what stops the service escalating, so a
-    /// capture that answers a card has to carry it all the way through.
     var answering: UUID?
-
-    /// Set when the record was written but the verdict could not be settled,
-    /// so the card is honestly left in place rather than hidden.
     private(set) var stillAsking = false
-
-    /// The verdict settled by the last successful save, for Today to hide.
     private(set) var settled: UUID?
-
     private var api: any PlantyAPI
+    private var completionAttempt: CaptureCompletionAttempt?
 
     init(api: any PlantyAPI, selectedPlant: Plant? = nil) {
         self.api = api
@@ -95,34 +74,34 @@ final class CaptureStore {
         answering = nil
         settled = nil
         stillAsking = false
+        completionAttempt = nil
     }
 
     func accept(jpeg: Data) {
+        completionAttempt = nil
         stage = .captured(CapturedPhoto(jpeg: jpeg))
     }
 
     func retake() {
         stage = .ready
         note = ""
+        completionAttempt = nil
     }
 
     func discard() {
         stage = .ready
         note = ""
         toast = nil
+        completionAttempt = nil
     }
 
-    /// Saves the photo, then the optional exception tag. The photo goes first
-    /// on purpose: an orphan photo is recoverable, a lost one is not.
     func save(recording kind: ObservationKind?) async {
         guard var photo = stage.photo, let plant = selectedPlant else { return }
         stage = .saving(photo, kind)
         stillAsking = false
-
         let trimmedNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
+
         do {
-            // Skipped when a previous attempt already got the photo up, so a
-            // half-failed save does not leave two copies in the story.
             if photo.uploaded == nil {
                 photo.uploaded = try await api.uploadPhoto(
                     slug: plant.slug,
@@ -131,29 +110,43 @@ final class CaptureStore {
                     takenAt: photo.takenAt
                 )
             }
+
             if let kind {
-                _ = try await api.addObservation(
-                    slug: plant.slug,
-                    observation: NewObservation(
+                if let verdict = try await verdictToSettle(for: plant) {
+                    let identity = CaptureCompletionIdentity(
+                        verdictID: verdict,
                         kind: kind,
-                        body: trimmedNote.isEmpty ? nil : trimmedNote
+                        note: trimmedNote
                     )
-                )
+                    let attempt: CaptureCompletionAttempt
+                    if let pending = completionAttempt, pending.identity == identity {
+                        attempt = pending
+                    } else {
+                        attempt = CaptureCompletionAttempt(id: UUID(), identity: identity)
+                        completionAttempt = attempt
+                    }
+                    _ = try await api.completeVerdict(
+                        slug: plant.slug,
+                        verdictID: verdict,
+                        kind: kind,
+                        note: trimmedNote,
+                        idempotencyKey: attempt.id
+                    )
+                    settled = verdict
+                    completionAttempt = nil
+                } else {
+                    _ = try await api.addObservation(
+                        slug: plant.slug,
+                        observation: NewObservation(
+                            kind: kind,
+                            body: trimmedNote.isEmpty ? nil : trimmedNote
+                        )
+                    )
+                }
             }
         } catch {
             stage = .failed(photo, .save(kind), PlantyError.from(error))
             return
-        }
-
-        // Doing the thing the card asked for is what settles it. Without this
-        // the card survives the whole flow and the service keeps escalating.
-        if kind != nil, let verdict = await verdictToSettle(for: plant) {
-            do {
-                try await api.acknowledge(verdictID: verdict)
-                settled = verdict
-            } catch {
-                stillAsking = true
-            }
         }
 
         stage = .ready
@@ -162,21 +155,14 @@ final class CaptureStore {
         toast = savedMessage(plant: plant, kind: kind)
     }
 
-    /// Which verdict this capture answers. Looked up rather than threaded
-    /// through every screen: the plant page passed nothing, so watering from
-    /// there left the plant still asking to be watered.
-    private func verdictToSettle(for plant: Plant) async -> UUID? {
+    private func verdictToSettle(for plant: Plant) async throws -> UUID? {
         if let answering { return answering }
-
-        guard let verdict = try? await api.plant(slug: plant.slug).verdict else { return nil }
-        guard verdict.needsAction, !verdict.isAcknowledged else { return nil }
+        let verdict = try await api.plant(slug: plant.slug).verdict
+        guard let verdict, verdict.needsAction, !verdict.isAcknowledged else { return nil }
         return verdict.id
     }
 
     private func savedMessage(plant: Plant, kind: ObservationKind?) -> String {
-        if stillAsking {
-            return "Saved, but Planty may ask again."
-        }
         guard let kind else { return "Photo added to \(plant.commonName)'s story." }
         return "\(kind.label) recorded for \(plant.commonName)."
     }
@@ -195,10 +181,6 @@ final class CaptureStore {
 
     func clearSettled() { settled = nil }
 
-    /// Names the plant from the photo, creates it, and keeps the picture as
-    /// the first frame of its story. This is the first-run path: the empty
-    /// state promises Planty can help after the picture, and until now tapping
-    /// through led to an empty picker with the photo thrown away.
     func createPlant(named name: String?, metadata: CaptureMetadata) async -> Plant? {
         guard let photo = stage.photo else { return nil }
         stage = .saving(photo, nil)
@@ -231,4 +213,15 @@ final class CaptureStore {
     }
 
     func clearToast() { toast = nil }
+}
+
+private struct CaptureCompletionIdentity: Equatable {
+    let verdictID: UUID
+    let kind: ObservationKind
+    let note: String
+}
+
+private struct CaptureCompletionAttempt {
+    let id: UUID
+    let identity: CaptureCompletionIdentity
 }

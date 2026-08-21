@@ -204,16 +204,26 @@ func parseUploadTime(raw string) (time.Time, error) {
 	return takenAt.UTC(), nil
 }
 
-// timeline returns a plant's photos with short-lived links, so the app renders
-// images straight from storage instead of proxying every byte through here.
+// timeline returns one page of a plant's photos with short-lived links. The
+// cursor walks backward without silently dropping the older history.
 func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
+	cursor, err := decodeHistoryCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	limit, err := pageLimit(r.URL.Query(), 24)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
 
-	shots, err := s.store.Photos(r.Context(), p.ID, 24)
+	shots, next, err := s.store.PhotosPage(r.Context(), p.ID, cursor, limit)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
@@ -233,7 +243,11 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 		}
 		out = append(out, e)
 	}
-	s.ok(w, http.StatusOK, map[string]any{"photos": out, "count": len(out)})
+	s.ok(w, http.StatusOK, map[string]any{
+		"photos":      out,
+		"count":       len(out),
+		"next_cursor": encodeHistoryCursor(next),
+	})
 }
 
 // diagnosisRequest is what the app sends: an opening question, or a follow-up

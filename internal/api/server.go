@@ -98,6 +98,7 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc(routeToday, s.today)
 	mux.HandleFunc(routeAckVerdict, s.ackVerdict)
+	mux.HandleFunc(routeCompleteVerdict, s.completeVerdict)
 
 	mux.HandleFunc(routeListChoices, s.listManagedChoices)
 	mux.HandleFunc(routeListHomeAssistantEntities, s.discoverHomeAssistantEntities)
@@ -120,7 +121,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeShelter, s.shelter)
 	mux.HandleFunc(routeUnshelter, s.unshelter)
 
-	return withRequestID(mux)
+	return withRequestID(browserWriteGuard(mux))
 }
 
 func withRequestID(next http.Handler) http.Handler {

@@ -11,22 +11,29 @@ final class PlantStoryStore {
     private(set) var timeline = PlantTimeline()
     private(set) var error: PlantyError?
     private(set) var isLoading = false
+    private(set) var isLoadingEarlier = false
     private(set) var hasLoaded = false
 
     private let api: any PlantyAPI
     private let policy: FreshnessPolicy
     private let clock: @Sendable () -> Date
+    private let isSessionCurrent: @MainActor () -> Bool
+    private var loadGeneration = 0
+    private var observationCursor: String?
+    private var photoCursor: String?
 
     init(
         api: any PlantyAPI,
         plant: Plant,
         policy: FreshnessPolicy = .standard,
-        clock: @escaping @Sendable () -> Date = { Date() }
+        clock: @escaping @Sendable () -> Date = { Date() },
+        isSessionCurrent: @escaping @MainActor () -> Bool = { true }
     ) {
         self.api = api
         self.plant = plant
         self.policy = policy
         self.clock = clock
+        self.isSessionCurrent = isSessionCurrent
     }
 
     var chapters: [StoryChapter] { StoryBuilder.chapters(from: timeline) }
@@ -59,6 +66,7 @@ final class PlantStoryStore {
 
     var hasPhotos: Bool { !timeline.photos.isEmpty }
     var hasStory: Bool { !timeline.isEmpty }
+    var hasEarlierHistory: Bool { observationCursor != nil || photoCursor != nil }
 
     /// Answers the cold warning from the phone it arrived on. The local state
     /// moves straight away, so the button does not keep offering what was just
@@ -78,19 +86,90 @@ final class PlantStoryStore {
     }
 
     func load() async {
+        loadGeneration += 1
+        let generation = loadGeneration
+        let client = api
+        let slug = plant.slug
         isLoading = true
         error = nil
-        defer { isLoading = false }
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
 
         do {
-            async let detailTask = api.plant(slug: plant.slug)
-            async let timelineTask = api.timeline(slug: plant.slug)
+            async let detailTask = client.plant(slug: slug)
+            async let timelineTask = client.timeline(slug: slug)
             let (loadedDetail, loadedTimeline) = try await (detailTask, timelineTask)
+            guard generation == loadGeneration, isSessionCurrent() else { return }
             detail = loadedDetail
             plant = loadedDetail.plant
             timeline = loadedTimeline.merging(loadedDetail)
+            observationCursor = loadedDetail.observationsNextCursor
+            photoCursor = loadedTimeline.nextCursor
             hasLoaded = true
+
+            // Publish the first page immediately, then continue backward until
+            // the server says history is exhausted. The story therefore never
+            // silently stops at 20 observations or 24 photos.
+            await loadRemainingHistory(generation: generation)
         } catch {
+            guard generation == loadGeneration, isSessionCurrent() else { return }
+            guard !PlantyError.isCancellation(error) else { return }
+            self.error = PlantyError.from(error)
+        }
+    }
+
+    private func loadRemainingHistory(generation: Int) async {
+        while hasEarlierHistory, generation == loadGeneration, isSessionCurrent() {
+            let beforeObservations = observationCursor
+            let beforePhotos = photoCursor
+            await loadEarlier()
+            if beforeObservations == observationCursor, beforePhotos == photoCursor {
+                break
+            }
+        }
+    }
+
+    /// Loads the next older page for each history stream that still has one.
+    /// Pages publish together so a failure never leaves photos and care events
+    /// at silently different depths.
+    func loadEarlier() async {
+        guard hasEarlierHistory, !isLoadingEarlier, isSessionCurrent() else { return }
+        let generation = loadGeneration
+        let client = api
+        let slug = plant.slug
+        let startingObservationCursor = observationCursor
+        let startingPhotoCursor = photoCursor
+        isLoadingEarlier = true
+        error = nil
+        defer { isLoadingEarlier = false }
+
+        do {
+            var olderObservations: [PlantObservation] = []
+            var olderPhotos: [Photo] = []
+            var nextObservationCursor = startingObservationCursor
+            var nextPhotoCursor = startingPhotoCursor
+
+            if let cursor = startingObservationCursor {
+                let page = try await client.observationsPage(slug: slug, cursor: cursor)
+                olderObservations = page.observations
+                nextObservationCursor = page.nextCursor?.isEmpty == true ? nil : page.nextCursor
+            }
+            guard generation == loadGeneration, isSessionCurrent() else { return }
+
+            if let cursor = startingPhotoCursor {
+                let page = try await client.timelinePage(slug: slug, cursor: cursor)
+                olderPhotos = page.photos
+                nextPhotoCursor = page.nextCursor
+            }
+            guard generation == loadGeneration, isSessionCurrent() else { return }
+
+            timeline = timeline.appending(observations: olderObservations, photos: olderPhotos)
+            observationCursor = nextObservationCursor
+            photoCursor = nextPhotoCursor
+            timeline.nextCursor = nextPhotoCursor
+        } catch {
+            guard generation == loadGeneration, isSessionCurrent() else { return }
             guard !PlantyError.isCancellation(error) else { return }
             self.error = PlantyError.from(error)
         }

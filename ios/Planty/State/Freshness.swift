@@ -31,6 +31,8 @@ enum StaleReason: Sendable, Equatable {
     case tooOld
     /// A run happened but looked at nothing, while plants exist.
     case checkedNothing
+    /// The latest garden-wide run did not successfully cover every plant.
+    case incompleteCheck
 
     var sentence: String {
         switch self {
@@ -38,18 +40,23 @@ enum StaleReason: Sendable, Equatable {
             "That does not mean anything is wrong; it means Planty cannot honestly say everything is fine."
         case .checkedNothing:
             "The last run finished without reading any plant, so there is nothing behind a calm answer."
+        case .incompleteCheck:
+            "The latest run did not successfully check every plant, so Planty will not call the garden all clear."
         }
     }
 }
 
 extension Digest {
-    /// Precedence matters: the service's own admission of staleness outranks
-    /// the age of the digest, which outranks a run that read nothing.
+    /// Completeness outranks ordinary age: a check that failed five minutes ago
+    /// is not fresh just because its timestamp is recent.
     func freshness(
         now: Date,
         knownPlantCount: Int?,
         policy: FreshnessPolicy = .standard
     ) -> Freshness {
+        if !runComplete || failed > 0 || checked != expected {
+            return .stale(since: date, reason: .incompleteCheck)
+        }
         if let staleSince {
             return .stale(since: staleSince, reason: .serviceReported)
         }

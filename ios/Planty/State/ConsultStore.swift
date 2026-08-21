@@ -160,9 +160,12 @@ final class ConsultStore {
 
     private func ask(_ attempt: ConsultAttempt) async {
         guard !attempt.isEmpty else { return }
-        messages.append(
-            ConsultMessage(speaker: .user, text: attempt.text, photo: attempt.photo)
+        let optimistic = ConsultMessage(
+            speaker: .user,
+            text: attempt.text,
+            photo: attempt.photo
         )
+        messages.append(optimistic)
         isThinking = true
         error = nil
         defer { isThinking = false }
@@ -175,9 +178,24 @@ final class ConsultStore {
                 ConsultMessage(speaker: .planty, text: reply.reply, answer: reply)
             )
         } catch {
+            if PlantyError.isCancellation(error) {
+                // A cancellation has no answer coming. Remove only this
+                // optimistic bubble and hand the unsent payload back instead of
+                // leaving an unrecoverable question in the transcript.
+                messages.removeAll { $0.id == optimistic.id }
+                if composer.isEmpty, attachment == nil {
+                    composer = attempt.text
+                    attachment = attempt.photo
+                    failed = nil
+                } else {
+                    failed = attempt
+                }
+                return
+            }
+
             // Leaving the question on screen with no answer under it reads as a
-            // reply that has not arrived, so the failure is said out loud.
-            guard !PlantyError.isCancellation(error) else { return }
+            // reply that has not arrived, so a real failure is said out loud and
+            // the exact payload remains retryable.
             self.error = PlantyError.from(error)
             failed = attempt
         }

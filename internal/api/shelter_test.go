@@ -11,6 +11,7 @@ import (
 func TestMalformedShelterJSONStopsBeforeTheStore(t *testing.T) {
 	h := New(nil, slog.Default()).Handler()
 	req := httptest.NewRequest(http.MethodPost, "/v1/shelter", strings.NewReader(`{"all":true`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
 	h.ServeHTTP(rec, req)

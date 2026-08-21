@@ -160,12 +160,12 @@ func TestSoilSensorMustBelongToAPlant(t *testing.T) {
 }
 
 func TestAllClearDistinguishesCalmFromStale(t *testing.T) {
-	calm := Digest{Checked: 12}
+	calm := Digest{Checked: 12, Expected: 12, RunComplete: true}
 	if !calm.AllClear() {
-		t.Fatal("no entries and fresh data is the calm state")
+		t.Fatal("no entries and a complete fresh run is the calm state")
 	}
 
-	stale := Digest{Checked: 12, StaleSince: &calm.Date}
+	stale := Digest{Checked: 12, Expected: 12, RunComplete: true, StaleSince: &calm.Date}
 	if stale.AllClear() {
 		t.Fatal("stale data must never render as all clear")
 	}

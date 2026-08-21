@@ -5,9 +5,12 @@ struct Digest: Codable, Sendable, Hashable {
     let date: Date
     private(set) var entries: [DigestEntry]
 
-    /// checked and staleSince are what let the app tell "nothing needs doing"
-    /// apart from "no fresh data". They must never render the same.
+    /// Completeness belongs to the persisted garden-wide judgment run. A
+    /// partial run must never look identical to a complete all-clear.
     let checked: Int
+    let expected: Int
+    let failed: Int
+    let runComplete: Bool
     var staleSince: Date?
 
     /// Nothing has ever been judged. Distinct from "judged, nothing to do",
@@ -23,19 +26,26 @@ struct Digest: Codable, Sendable, Hashable {
         case date
         case entries
         case checked
+        case expected
+        case failed
+        case runComplete = "run_complete"
         case staleSince = "stale_since"
         case neverRun = "never_run"
         case openQuestions = "open_questions"
     }
 
-    /// Nothing to do, the data behind that claim is fresh, and something has
-    /// actually been checked.
-    var isAllClear: Bool { entries.isEmpty && staleSince == nil && !neverRun }
+    var isAllClear: Bool {
+        entries.isEmpty && staleSince == nil && !neverRun &&
+            runComplete && failed == 0 && checked == expected
+    }
 
     init(
         date: Date,
         entries: [DigestEntry],
         checked: Int,
+        expected: Int? = nil,
+        failed: Int = 0,
+        runComplete: Bool = true,
         staleSince: Date? = nil,
         neverRun: Bool = false,
         openQuestions: [OpenQuestion] = []
@@ -44,6 +54,9 @@ struct Digest: Codable, Sendable, Hashable {
         self.date = date
         self.entries = entries
         self.checked = checked
+        self.expected = expected ?? checked
+        self.failed = failed
+        self.runComplete = runComplete
         self.staleSince = staleSince
         self.neverRun = neverRun
     }
@@ -52,6 +65,9 @@ struct Digest: Codable, Sendable, Hashable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         date = try container.decode(Date.self, forKey: .date)
         checked = try container.decode(Int.self, forKey: .checked)
+        expected = try container.decodeIfPresent(Int.self, forKey: .expected) ?? checked
+        failed = try container.decodeIfPresent(Int.self, forKey: .failed) ?? 0
+        runComplete = try container.decodeIfPresent(Bool.self, forKey: .runComplete) ?? true
         staleSince = try container.decodeIfPresent(Date.self, forKey: .staleSince)
         neverRun = try container.decodeIfPresent(Bool.self, forKey: .neverRun) ?? false
 

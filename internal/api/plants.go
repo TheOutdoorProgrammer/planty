@@ -103,7 +103,7 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	history, err := s.store.Observations(r.Context(), p.ID, 20)
+	history, next, err := s.store.ObservationsPage(r.Context(), p.ID, nil, 20)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
@@ -113,6 +113,9 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 		"plant":        p,
 		"risk":         p.Risk(),
 		"observations": history,
+	}
+	if cursor := encodeHistoryCursor(next); cursor != "" {
+		body["observations_next_cursor"] = cursor
 	}
 	if at, err := s.store.LastWatered(r.Context(), p.ID); err == nil {
 		body["last_watered"] = at
@@ -219,14 +222,26 @@ func (s *Server) listObservations(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
+	cursor, err := decodeHistoryCursor(r.URL.Query().Get("cursor"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	limit, err := pageLimit(r.URL.Query(), 50)
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
 
-	history, err := s.store.Observations(r.Context(), p.ID, limit)
+	history, next, err := s.store.ObservationsPage(r.Context(), p.ID, cursor, limit)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.ok(w, http.StatusOK, map[string]any{"observations": history})
+	s.ok(w, http.StatusOK, map[string]any{
+		"observations": history,
+		"next_cursor":  encodeHistoryCursor(next),
+	})
 }
 
 func (s *Server) addObservation(w http.ResponseWriter, r *http.Request) {

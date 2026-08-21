@@ -31,6 +31,8 @@ final class TodayStore {
     private var api: any PlantyAPI
     private let policy: FreshnessPolicy
     private let clock: @Sendable () -> Date
+    private var loadGeneration = 0
+    private var completionAttempts: [UUID: CompletionAttempt] = [:]
 
     init(
         api: any PlantyAPI,
@@ -45,6 +47,7 @@ final class TodayStore {
     }
 
     func replace(api: any PlantyAPI, isConfigured: Bool) {
+        loadGeneration += 1
         self.api = api
         self.isConfigured = isConfigured
         digest = nil
@@ -53,8 +56,10 @@ final class TodayStore {
         actionError = nil
         noted = nil
         lastLoadedAt = nil
+        isLoading = false
         resolvedIDs = []
         postponedUntil = [:]
+        completionAttempts = [:]
     }
 
     var presentation: TodayPresentation {
@@ -85,18 +90,25 @@ final class TodayStore {
 
     func load() async {
         guard isConfigured else { return }
+        loadGeneration += 1
+        let generation = loadGeneration
+        let client = api
         isLoading = true
         error = nil
-        defer { isLoading = false }
+        defer {
+            if generation == loadGeneration { isLoading = false }
+        }
 
         do {
-            async let digestTask = api.today()
-            async let plantsTask = api.plants(filter: .live)
+            async let digestTask = client.today()
+            async let plantsTask = client.plants(filter: .live)
             let (loaded, plants) = try await (digestTask, plantsTask)
+            guard generation == loadGeneration else { return }
             digest = loaded.keepingPhotos(from: plants)
             knownPlantCount = plants.count
             lastLoadedAt = clock()
         } catch {
+            guard generation == loadGeneration else { return }
             // A pull to refresh whose gesture ended is not a failed check, and
             // showing it as one is worse than showing nothing.
             guard !PlantyError.isCancellation(error) else { return }
@@ -137,8 +149,9 @@ final class TodayStore {
         }
     }
 
-    /// Records what happened and then acknowledges the verdict. A failure in
-    /// either half leaves the card visible and is returned to the action screen.
+    /// The service records care and acknowledges the verdict in one idempotent
+    /// transaction. Keep the same key after a transport failure so retrying can
+    /// never duplicate the observation if the first response was merely lost.
     @discardableResult
     func complete(
         _ entry: DigestEntry,
@@ -146,24 +159,30 @@ final class TodayStore {
         note: String = ""
     ) async -> PlantyError? {
         actionError = nil
+        let identity = CompletionIdentity(kind: kind, note: note)
+        let attempt: CompletionAttempt
+        if let pending = completionAttempts[entry.verdict.id], pending.identity == identity {
+            attempt = pending
+        } else {
+            attempt = CompletionAttempt(id: UUID(), identity: identity)
+            completionAttempts[entry.verdict.id] = attempt
+        }
+
         do {
-            _ = try await api.addObservation(
+            _ = try await api.completeVerdict(
                 slug: entry.plant.slug,
-                observation: NewObservation(kind: kind, body: note.isEmpty ? nil : note)
+                verdictID: entry.verdict.id,
+                kind: kind,
+                note: note,
+                idempotencyKey: attempt.id
             )
+            completionAttempts.removeValue(forKey: entry.verdict.id)
+            resolvedIDs.insert(entry.verdict.id)
+            return nil
         } catch {
             let failure = PlantyError.from(error)
             actionError = failure
             return failure
-        }
-
-        do {
-            try await api.acknowledge(verdictID: entry.verdict.id)
-            resolvedIDs.insert(entry.verdict.id)
-            return nil
-        } catch {
-            actionError = .stillAsking
-            return .stillAsking
         }
     }
 
@@ -217,6 +236,16 @@ final class TodayStore {
     }
 
     func clearError() { error = nil }
+}
+
+private struct CompletionIdentity: Equatable {
+    let kind: ObservationKind
+    let note: String
+}
+
+private struct CompletionAttempt {
+    let id: UUID
+    let identity: CompletionIdentity
 }
 
 enum PostponeInterval: String, CaseIterable, Sendable, Identifiable {
