@@ -10,7 +10,7 @@ They live here until you have read them.
 FLUX=<your-flux-repo>/clusters/<cluster>/planty
 mkdir -p "$FLUX"
 cp deploy/*.yaml "$FLUX"/
-rm "$FLUX"/secret.yaml.example      # the example never belongs in the cluster
+rm "$FLUX/secret.yaml.example"      # the example never belongs in the cluster
 ```
 
 Then create the real secret from the example, SOPS-encrypt it, and commit.
@@ -25,7 +25,9 @@ Then create the real secret from the example, SOPS-encrypt it, and commit.
 | `deployment.yaml` | The API, plus its ClusterIP service |
 | `cronjobs.yaml` | Sensor ingest, the thirst report, the daily digest, the chase, the away pass, and the cold snap watch. No watering |
 | `configmap.yaml` | Non-secret configuration |
-| `secret.yaml.example` | Template for the database DSN, the Home Assistant token, the MinIO keys, and whichever credential the judge is being paid with |
+| `secret.yaml.example` | Template for the database DSN, Home Assistant token, APNs credentials, MinIO keys, and whichever credential the judge is being paid with |
+
+Every CronJob imports the same `planty-secrets` Secret as the service. That includes the APNs key/team/private-key values used for native push delivery.
 
 ## Signing the judge in
 
@@ -86,14 +88,14 @@ It needs `PLANTY_PUMP_SWITCH`, and optionally `PLANTY_PUMP_SECONDS` (default 120
 
 The safety model is that the run duration is held by the process rather than by a Home Assistant `for:` trigger, and the pump-off call is deferred so a cancelled context or a crash still closes it. A `for:` trigger re-stamps `last_changed` on every restart, which is how a valve here once ran 14h33m past a 45 minute cap.
 
-**A single wet plant vetoes the whole run.** One pump waters everything on the line, so if one plant is dry and another is already soaked, watering would drown the second. The job notifies instead of choosing a victim.
+**A single wet plant vetoes the whole run.** One pump waters everything on the line, so if one plant is dry and another is already soaked, watering would drown the second. The job sends a native Planty push instead of choosing a victim.
 
 ## Before the cold snap job is useful
 
 `planty cold` queries plants by `min_temp_f`, which the seed sets to 55F for every one of the friend's plants.
-It needs the Home Assistant token to have forecast read access and permission to call `notify`.
+It needs the Home Assistant token only for forecast read access. Alert delivery goes through APNs and requires the APNs credentials plus at least one registered Planty device.
 
-Run it once by hand to confirm the forecast comes back before relying on it:
+Run it once by hand to confirm the forecast comes back and native push is configured before relying on it:
 
 ```sh
 kubectl -n planty exec deploy/planty -- /planty cold

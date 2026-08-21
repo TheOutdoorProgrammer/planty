@@ -56,6 +56,8 @@ Scheduled work, one command each, wired as CronJobs in `deploy/`:
 | `planty remind` | hourly | The chores nothing measures: misting, feeding, hand watering |
 | `planty autopsy <slug>` | on demand | Work out what killed a plant |
 
+Scheduled alerts are delivered directly to the iOS app through APNs. Home Assistant supplies sensor data, forecasts, and actuator calls only; it is never a notification fallback.
+
 ## Who pays for the judgment
 
 Every model call goes through one interface with two implementations, chosen by `PLANTY_JUDGE`.
@@ -95,9 +97,8 @@ Kits live four to eight weeks, the variable that matters is airflow rather than 
 An RH threshold misting automation over mists, and over misting is precisely how bacterial blotch happens.
 A daily reminder and a fan on a plug is the entire correct implementation, and it lives in `docs/home-assistant.md`.
 
-**It does not nag.**
-One digest a day, usually saying nothing needs doing.
-The house speakers are reserved for a plant actually at risk, because a system that cries wolf gets ignored, and then it is worse than nothing.
+**It does not route alerts through the house.**
+Notifications belong to Planty and go directly through APNs to registered iOS devices. If native push cannot deliver, the scheduled job fails loudly rather than switching to Home Assistant notify services or speakers.
 
 **It has no authentication, on purpose.**
 Keep it on the LAN.

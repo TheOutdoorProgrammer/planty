@@ -51,8 +51,6 @@ func main() {
 	}
 }
 
-// Set by the linker at release. A binary somebody installed from a tap has to
-// be able to say what it is without a database in front of it.
 var (
 	version = "dev"
 	commit  = "none"
@@ -64,14 +62,11 @@ func run(log *slog.Logger) error {
 		return errors.New("no command given")
 	}
 
-	// Answered before the database is demanded, so `planty version` works on a
-	// laptop that has never seen the cluster.
 	if os.Args[1] == "version" {
 		fmt.Printf("planty %s (%s)\n", version, commit)
 		return nil
 	}
 
-	// A hook answers on every tool call and has no business opening Postgres.
 	if os.Args[1] == "gate" {
 		os.Exit(agent.Gate(os.Stdin, os.Stderr))
 	}
@@ -84,8 +79,6 @@ func run(log *slog.Logger) error {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	// A model reads the agent's output verbatim and shows it to whoever asked,
-	// so it must not open with the migration runner clearing its throat.
 	if os.Args[1] == "agent" {
 		store.SilenceMigrations()
 	}
@@ -100,6 +93,8 @@ func run(log *slog.Logger) error {
 		return err
 	}
 
+	notifications := push.NewFromEnv(db, log)
+
 	switch os.Args[1] {
 	case "serve":
 		return serve(ctx, db, log)
@@ -107,33 +102,32 @@ func run(log *slog.Logger) error {
 		log.Info("migrations applied")
 		return nil
 	case "ingest":
-		return job.Ingest{Store: db, HA: homeAssistant(db, log), Log: log}.Run(ctx)
+		return job.Ingest{Store: db, HA: homeAssistant(), Log: log}.Run(ctx)
 	case "daily":
-		return daily(db, log).Run(ctx)
+		return daily(db, log, notifications).Run(ctx)
 	case "cold":
-		return coldWatch(db, log).Run(ctx)
+		return coldWatch(db, log, notifications).Run(ctx)
 	case "away":
-		return job.Away{Store: db, HA: homeAssistant(db, log), Log: log, Notifier: notifier()}.Run(ctx)
+		return job.Away{Store: db, Log: log, Notifications: notifications}.Run(ctx)
 	case "chase":
-		return job.Escalate{Store: db, HA: homeAssistant(db, log), Log: log, Notifier: notifier()}.Run(ctx)
+		return job.Escalate{Store: db, Log: log, Notifications: notifications}.Run(ctx)
 	case "remind":
 		sent, err := job.Remind{
-			Store: db, HA: homeAssistant(db, log), Log: log, Notifier: notifier(),
+			Store: db, Log: log, Notifications: notifications,
 		}.Run(ctx)
 		if err == nil {
 			log.Info("reminders sent", "count", sent)
 		}
 		return err
 	case "thirst":
-		return job.Thirst{Store: db, HA: homeAssistant(db, log), Log: log, Notifier: notifier()}.Run(ctx)
+		return job.Thirst{Store: db, Log: log, Notifications: notifications}.Run(ctx)
 	case "water":
-		return water(ctx, db, log)
+		return water(ctx, db, log, notifications)
 	case "autopsy":
 		return autopsy(ctx, db, log)
 	case "agent":
-		// The agent's water verb runs the same surveyed LetPot pass as `water`.
 		return agent.Run(ctx, agent.Deps{Store: db, Water: func(ctx context.Context) error {
-			return water(ctx, db, log)
+			return water(ctx, db, log, notifications)
 		}},
 			os.Stdout, os.Args[2:])
 	case "seed":
@@ -152,7 +146,6 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
 
 	server := api.New(db, log)
 	if store, err := photoStore(ctx); err != nil {
-		// Photos are worth having, not worth refusing to serve plants over.
 		log.Warn("photo storage unavailable, photo routes disabled", "error", err)
 	} else if store != nil {
 		seat := judge.New().Able(acting())
@@ -180,8 +173,6 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
 	return nil
 }
 
-// photoStore returns nil without error when object storage is not configured,
-// which is the normal state before MinIO credentials are set.
 func photoStore(ctx context.Context) (*photos.Store, error) {
 	endpoint := os.Getenv("PLANTY_S3_ENDPOINT")
 	if endpoint == "" {
@@ -202,30 +193,21 @@ func photoStore(ctx context.Context) (*photos.Store, error) {
 	})
 }
 
-// homeAssistant keeps HA as the sensor, weather and actuator bus. When APNs is
-// configured, only notifications addressed to Planty's primary notifier are
-// intercepted; named backup-person services still go to HA.
-func homeAssistant(db *store.Store, log *slog.Logger) *ha.Client {
-	client := ha.New(os.Getenv("PLANTY_HA_URL"), os.Getenv("PLANTY_HA_TOKEN"))
-	if sender := push.NewFromEnv(db, log); sender != nil {
-		client.WithNotificationTransport(notifier(), sender)
-	}
-	return client
+// Home Assistant is only Planty's sensor, weather, and actuator bus. Notification
+// delivery is intentionally not attached here; scheduled alerts go straight to APNs.
+func homeAssistant() *ha.Client {
+	return ha.New(os.Getenv("PLANTY_HA_URL"), os.Getenv("PLANTY_HA_TOKEN"))
 }
 
-func daily(db *store.Store, log *slog.Logger) job.Daily {
+func daily(db *store.Store, log *slog.Logger, notifications job.Notifier) job.Daily {
 	return job.Daily{
-		Store:    db,
-		HA:       homeAssistant(db, log),
-		Judge:    judge.New(),
-		Log:      log,
-		Notifier: notifier(),
+		Store:         db,
+		Judge:         judge.New(),
+		Log:           log,
+		Notifications: notifications,
 	}
 }
 
-// acting is what a conversation may write, nil when it may write nothing.
-// Only `serve` asks: a scheduled verdict that recorded observations would be
-// judging evidence it wrote itself. PLANTY_JUDGE_CAN_ACT=false switches it off.
 func acting() *judge.Acting {
 	if os.Getenv("PLANTY_JUDGE_CAN_ACT") == "false" {
 		return nil
@@ -242,8 +224,6 @@ func acting() *judge.Acting {
 	}
 }
 
-// backendName says which way judgments are being bought, which is the first
-// thing to check when a verdict is missing or a bill is a surprise.
 func backendName(j *judge.Judge) string {
 	if j == nil {
 		return "none"
@@ -251,33 +231,33 @@ func backendName(j *judge.Judge) string {
 	return j.Backend()
 }
 
-func coldWatch(db *store.Store, log *slog.Logger) job.ColdWatch {
+func coldWatch(db *store.Store, log *slog.Logger, notifications job.Notifier) job.ColdWatch {
 	weather := os.Getenv("PLANTY_WEATHER_ENTITY")
 	if weather == "" {
 		weather = "weather.nws_home"
 	}
 	return job.ColdWatch{
-		Store:    db,
-		HA:       homeAssistant(db, log),
-		Log:      log,
-		Weather:  weather,
-		Notifier: notifier(),
+		Store:         db,
+		HA:            homeAssistant(),
+		Log:           log,
+		Weather:       weather,
+		Notifications: notifications,
 	}
 }
 
-func water(ctx context.Context, db *store.Store, log *slog.Logger) error {
+func water(ctx context.Context, db *store.Store, log *slog.Logger, notifications job.Notifier) error {
 	runFor, err := pumpDuration(os.Getenv("PLANTY_PUMP_SECONDS"))
 	if err != nil {
 		return err
 	}
 	return job.Water{
-		Store:      db,
-		HA:         homeAssistant(db, log),
-		Log:        log,
-		Notifier:   notifier(),
-		PumpSwitch: os.Getenv("PLANTY_PUMP_SWITCH"),
-		PumpSensor: os.Getenv("PLANTY_PUMP_SENSOR"),
-		RunFor:     runFor,
+		Store:         db,
+		HA:            homeAssistant(),
+		Log:           log,
+		Notifications: notifications,
+		PumpSwitch:    os.Getenv("PLANTY_PUMP_SWITCH"),
+		PumpSensor:    os.Getenv("PLANTY_PUMP_SENSOR"),
+		RunFor:        runFor,
 	}.Run(ctx)
 }
 
@@ -297,7 +277,6 @@ func autopsy(ctx context.Context, db *store.Store, log *slog.Logger) error {
 	if len(os.Args) < 3 {
 		return errors.New("usage: planty autopsy <slug>")
 	}
-	// Asked for by hand, so refusing outright beats a nil judge panicking.
 	seat := judge.New()
 	if seat == nil {
 		return errors.New("an autopsy needs a model: set ANTHROPIC_API_KEY, " +
@@ -316,11 +295,4 @@ func autopsy(ctx context.Context, db *store.Store, log *slog.Logger) error {
 	fmt.Printf("\nLikely cause: %s\n\n%s\n\nLesson: %s\n",
 		record.LikelyCause, record.Narrative, record.Lesson)
 	return nil
-}
-
-func notifier() string {
-	if n := os.Getenv("PLANTY_NOTIFY_SERVICE"); n != "" {
-		return n
-	}
-	return "notify"
 }

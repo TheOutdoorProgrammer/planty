@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -17,12 +16,10 @@ import (
 const PrepLead = 36 * time.Hour
 
 // Away changes behaviour around a trip rather than muting notifications.
-// Nagging a phone nobody is holding protects nothing.
 type Away struct {
-	Store    *store.Store
-	HA       *ha.Client
-	Log      *slog.Logger
-	Notifier string
+	Store         *store.Store
+	Log           *slog.Logger
+	Notifications Notifier
 }
 
 // Run does whichever of the three away jobs the calendar calls for.
@@ -45,8 +42,6 @@ func (a Away) Run(ctx context.Context) error {
 	return nil
 }
 
-// prepare names what to water before leaving, weighted toward the plants that
-// depend on a person being there.
 func (a Away) prepare(ctx context.Context, trip plant.AwayPeriod) error {
 	plants, err := a.Store.ListPlants(ctx, store.PlantFilter{Status: plant.StatusAlive})
 	if err != nil {
@@ -73,15 +68,15 @@ func (a Away) prepare(ctx context.Context, trip plant.AwayPeriod) error {
 		}
 	}
 	if trip.BackupContact == "" {
-		b.WriteString("\n\nNo backup contact is recorded for this trip. Nobody will be told if something goes wrong.")
+		b.WriteString("\n\nNo backup contact is recorded for this trip.")
+	} else {
+		fmt.Fprintf(&b, "\n\n%s is recorded as the backup contact.", trip.BackupContact)
 	}
 
 	a.Log.Info("pre-departure pass", "plants", len(needy))
-	return a.HA.Notify(ctx, a.Notifier, "Water these before you go", b.String(), nil)
+	return notify(ctx, a.Notifications, "Water these before you go", b.String(), nil)
 }
 
-// briefOnReturn reports what happened while away, once, on the first run after
-// a trip ends. Anything unacknowledged from the trip is what needs you.
 func (a Away) briefOnReturn(ctx context.Context) error {
 	digest, err := a.Store.Digest(ctx, plant.StaleAfter)
 	if err != nil {
@@ -100,7 +95,7 @@ func (a Away) briefOnReturn(ctx context.Context) error {
 		b.WriteString("\n\nReadings are stale, so this may not be the whole picture.")
 	}
 
-	return a.HA.Notify(ctx, a.Notifier, "Back home: what needs you", b.String(), nil)
+	return notify(ctx, a.Notifications, "Back home: what needs you", b.String(), nil)
 }
 
 func until(t time.Time) string {

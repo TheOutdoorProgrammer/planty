@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -17,15 +16,12 @@ import (
 // mushroom kit misted at eight and again at eight is two separate reminders,
 // and a once-a-day job can only ever send one of them.
 type Remind struct {
-	Store    *store.Store
-	HA       *ha.Client
-	Log      *slog.Logger
-	Notifier string
-	Now      func() time.Time
+	Store         *store.Store
+	Log           *slog.Logger
+	Notifications Notifier
+	Now           func() time.Time
 }
 
-// Run notifies about every reminder that is owed and not already sent for this
-// slot, and reports how many went out.
 func (r Remind) Run(ctx context.Context) (int, error) {
 	now := time.Now()
 	if r.Now != nil {
@@ -43,12 +39,10 @@ func (r Remind) Run(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 
-	if err := r.HA.Notify(ctx, r.Notifier, title(owed), body(owed, now), nil); err != nil {
+	if err := notify(ctx, r.Notifications, title(owed), body(owed, now), nil); err != nil {
 		return 0, fmt.Errorf("notify: %w", err)
 	}
 
-	// Marked only after the notification actually went out, so a failed send
-	// is retried on the next hour rather than silently swallowed.
 	for _, due := range owed {
 		if err := r.Store.MarkReminderSent(ctx, due.Reminder.ID, now); err != nil {
 			r.Log.Error("could not mark reminder sent",
@@ -58,8 +52,6 @@ func (r Remind) Run(ctx context.Context) (int, error) {
 	return len(owed), nil
 }
 
-// Owed filters to the reminders that are due and have not already been sent
-// for the slot they are due against.
 func Owed(reminders []store.DueReminder, now time.Time) []store.DueReminder {
 	out := make([]store.DueReminder, 0)
 	for _, due := range reminders {
@@ -72,16 +64,12 @@ func Owed(reminders []store.DueReminder, now time.Time) []store.DueReminder {
 		out = append(out, due)
 	}
 
-	// Never-done first, then longest neglected: the plant most likely to be
-	// forgotten belongs at the top of a notification nobody reads to the end.
 	sort.SliceStable(out, func(i, j int) bool {
 		return waited(out[i], now) > waited(out[j], now)
 	})
 	return out
 }
 
-// waited is how long this has gone undone, with never-done sorting above
-// everything that has at least happened once.
 func waited(due store.DueReminder, now time.Time) time.Duration {
 	if due.LastDone == nil {
 		return 1 << 62
@@ -116,8 +104,6 @@ func body(owed []store.DueReminder, now time.Time) string {
 	return strings.TrimSpace(b.String())
 }
 
-// verb says what to do rather than what was recorded, because a notification
-// is an instruction and "watered" is not one.
 func verb(kind plant.ObservationKind) string {
 	switch kind {
 	case plant.ObservedWatered:

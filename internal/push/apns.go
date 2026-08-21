@@ -1,6 +1,5 @@
-// Package push sends Planty's own iOS notifications through APNs. Home
-// Assistant remains the sensor/weather bus; this package replaces only its
-// role as the operator's notification transport.
+// Package push sends Planty's own iOS notifications directly through APNs.
+// Home Assistant remains the sensor, weather, and actuator bus only.
 package push
 
 import (
@@ -30,9 +29,8 @@ const (
 	sandboxEndpoint    = "https://api.sandbox.push.apple.com"
 )
 
-// Sender implements the notification transport consumed by Home Assistant's
-// compatibility adapter. It owns APNs authentication and fans one message out
-// to every registered Planty device in the configured environment.
+// Sender owns APNs authentication and fans one message out to every registered
+// Planty device in the configured environment.
 type Sender struct {
 	store       *store.Store
 	log         *slog.Logger
@@ -48,9 +46,9 @@ type Sender struct {
 	jwtIssued time.Time
 }
 
-// NewFromEnv returns nil until the four APNs credentials are configured. That
-// deliberate nil lets the existing HA notify service remain a rollout fallback
-// instead of silently dropping an alert before the first signed build lands.
+// NewFromEnv returns nil until the APNs credentials are configured. Scheduled
+// jobs treat a nil sender as a delivery error when they actually have an alert;
+// there is deliberately no Home Assistant notification fallback.
 func NewFromEnv(s *store.Store, log *slog.Logger) *Sender {
 	keyID := strings.TrimSpace(os.Getenv("PLANTY_APNS_KEY_ID"))
 	teamID := strings.TrimSpace(os.Getenv("PLANTY_APNS_TEAM_ID"))
@@ -82,8 +80,8 @@ func NewFromEnv(s *store.Store, log *slog.Logger) *Sender {
 	}
 }
 
-// Send matches ha.NotificationTransport. The extra map is carried forward from
-// the old HA notifier so existing jobs keep their collapse tags and urgency.
+// Send implements job.Notifier without importing the job package. Extra data
+// carries collapse tags and urgency metadata from scheduled jobs.
 func (s *Sender) Send(ctx context.Context, title, body string, extra map[string]any) error {
 	tokens, err := s.store.PushDeviceTokens(ctx, s.environment)
 	if err != nil {

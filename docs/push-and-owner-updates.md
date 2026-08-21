@@ -2,7 +2,7 @@
 
 ## Push notifications
 
-Planty now sends the operator's notifications directly through Apple Push Notification service (APNs). Home Assistant remains responsible for sensors, weather and actuators.
+Planty sends scheduled notifications directly through Apple Push Notification service (APNs). Home Assistant remains responsible only for sensors, weather and actuators; it is not a notification transport or fallback.
 
 The iOS app asks for notification permission, registers its APNs device token with `POST /v1/push-devices`, and refreshes that registration whenever the Planty service URL changes.
 
@@ -16,7 +16,9 @@ The server needs an Apple Push Notification auth key from Certificates, Identifi
 
 These are not the App Store Connect API credentials used by the release workflow.
 
-When APNs is configured, notifications addressed to Planty's primary notifier service go to APNs first and Home Assistant announcements are suppressed. A named backup-person notifier still goes through Home Assistant. If APNs cannot deliver at all, the existing HA notify service is used as a failure fallback so a configuration rollout cannot silently lose an alert.
+If an alert is due and APNs is not configured, has no registered device, or cannot deliver to any registered device, the scheduled job returns an error. Planty does not retry through Home Assistant, Home Assistant mobile-app notify services, or house announcements.
+
+Away-period backup contact information is still included in relevant alert text, but `backup_notify` is legacy metadata and is not used as a delivery route. Native Planty push remains the only notification channel.
 
 The release workflow signs Planty with the production `aps-environment` entitlement. The `zone.stout.Planty` App ID must have Push Notifications enabled in the Apple Developer portal so automatic provisioning can include that entitlement.
 

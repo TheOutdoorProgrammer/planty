@@ -28,7 +28,6 @@ func testStore(t *testing.T) (*store.Store, context.Context) {
 	return s, ctx
 }
 
-// tender creates a plant that has to come in below the given temperature.
 func tender(t *testing.T, s *store.Store, ctx context.Context, name, steward string, minTempF float64) plant.Plant {
 	t.Helper()
 
@@ -53,12 +52,10 @@ func tender(t *testing.T, s *store.Store, ctx context.Context, name, steward str
 func coldWatch(s *store.Store, f *fakeHA) ColdWatch {
 	return ColdWatch{
 		Store: s, HA: f.client(), Log: quietLog(),
-		Weather: weatherEntity, Notifier: "notify",
+		Weather: weatherEntity, Notifications: f,
 	}
 }
 
-// The whole point of the job: a cold night has to reach the person who can
-// carry the pots indoors, and it has to name them.
 func TestAColdNightNamesThePlantsAndTheirOwner(t *testing.T) {
 	s, ctx := testStore(t)
 	p := tender(t, s, ctx, "Peace lily", "Marcus", 55)
@@ -82,16 +79,17 @@ func TestAColdNightNamesThePlantsAndTheirOwner(t *testing.T) {
 	if !f.said("48") {
 		t.Errorf("the warning does not give the forecast:\n%+v", f.notified)
 	}
+	if len(f.haNotifications) != 0 {
+		t.Fatalf("cold watch routed a notification through Home Assistant: %v", f.haNotifications)
+	}
 }
 
-// The margin exists because a porch at 3am is colder than the airport the
-// forecast came from, so a night at the threshold still warns.
 func TestTheMarginWarnsBeforeTheThresholdIsReached(t *testing.T) {
 	s, ctx := testStore(t)
 	tender(t, s, ctx, "Marginal", plant.StewardSelf, 55)
 
 	f := newFakeHA(t, weatherEntity)
-	f.forecast(70, 57) // above 55, but inside the 3F margin
+	f.forecast(70, 57)
 
 	if err := coldWatch(s, f).Run(ctx); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -118,8 +116,6 @@ func TestAWarmNightSaysNothing(t *testing.T) {
 	}
 }
 
-// A plant already indoors must not be warned about again, or the job repeats
-// itself every afternoon until the weather turns.
 func TestAShelteredPlantIsNotWarnedAboutTwice(t *testing.T) {
 	s, ctx := testStore(t)
 	p := tender(t, s, ctx, "Already inside", plant.StewardSelf, 55)
@@ -139,8 +135,6 @@ func TestAShelteredPlantIsNotWarnedAboutTwice(t *testing.T) {
 	}
 }
 
-// The half nobody builds. Left in a dark room for a week is its own way of
-// killing them, and nothing else would ever say so.
 func TestPlantsAreToldToGoBackOutOnceItIsWarm(t *testing.T) {
 	s, ctx := testStore(t)
 	p := tender(t, s, ctx, "Wants out", plant.StewardSelf, 55)
@@ -150,7 +144,7 @@ func TestPlantsAreToldToGoBackOutOnceItIsWarm(t *testing.T) {
 	}
 
 	f := newFakeHA(t, weatherEntity)
-	f.forecast(78, 66) // clears 55 plus the margin
+	f.forecast(78, 66)
 
 	if err := coldWatch(s, f).Run(ctx); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -163,8 +157,6 @@ func TestPlantsAreToldToGoBackOutOnceItIsWarm(t *testing.T) {
 	}
 }
 
-// Every sheltered plant has to clear its own threshold, not just the hardiest,
-// or the tender one goes back out into a night it cannot survive.
 func TestTheTenderestShelteredPlantGatesGoingBackOut(t *testing.T) {
 	s, ctx := testStore(t)
 	hardy := tender(t, s, ctx, "Hardy one", plant.StewardSelf, 40)
@@ -175,7 +167,7 @@ func TestTheTenderestShelteredPlantGatesGoingBackOut(t *testing.T) {
 	}
 
 	f := newFakeHA(t, weatherEntity)
-	f.forecast(70, 55) // fine for the hardy one, too cold for the fragile one
+	f.forecast(70, 55)
 
 	if err := coldWatch(s, f).Run(ctx); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -185,9 +177,9 @@ func TestTheTenderestShelteredPlantGatesGoingBackOut(t *testing.T) {
 	}
 }
 
-// While away, the warning has to reach whoever is actually there. Nagging a
-// phone nobody is holding protects nothing.
-func TestWhileAwayTheWarningGoesToTheBackup(t *testing.T) {
+// Away metadata still names who is covering, but delivery stays on Planty's
+// registered APNs devices; a backup Home Assistant notify service is ignored.
+func TestWhileAwayTheWarningStillUsesNativePush(t *testing.T) {
 	s, ctx := testStore(t)
 	tender(t, s, ctx, "Left behind", "Marcus", 55)
 
@@ -210,15 +202,14 @@ func TestWhileAwayTheWarningGoesToTheBackup(t *testing.T) {
 	if len(f.notified) == 0 {
 		t.Fatal("nothing was sent")
 	}
-	if got := f.notified[0].service; got != "mobile_app_sam" {
-		t.Errorf("sent to %q, want the backup contact's device", got)
-	}
 	if !f.said("Sam next door") {
 		t.Errorf("the message should say who is covering:\n%+v", f.notified)
 	}
+	if len(f.haNotifications) != 0 {
+		t.Fatalf("away warning used Home Assistant notify: %v", f.haNotifications)
+	}
 }
 
-// A plant with no threshold recorded is not a plant that tolerates anything.
 func TestAPlantWithNoThresholdIsNotWarnedAbout(t *testing.T) {
 	s, ctx := testStore(t)
 
@@ -247,8 +238,6 @@ func TestAPlantWithNoThresholdIsNotWarnedAbout(t *testing.T) {
 	}
 }
 
-// A forecast that cannot be read is an error, not a quiet decision to do
-// nothing on the night it matters.
 func TestAnUnreadableForecastIsAnError(t *testing.T) {
 	s, ctx := testStore(t)
 	tender(t, s, ctx, "At risk", plant.StewardSelf, 55)
