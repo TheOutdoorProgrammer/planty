@@ -14,9 +14,10 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
-// Model is the judgment model. Plant care is fuzzy reasoning over sparse,
-// noisy evidence, which is where the capable model earns its cost.
-const Model = "claude-opus-5"
+// DefaultModel answers any job with no assignment of its own. Plant care is
+// fuzzy reasoning over sparse, noisy evidence, which is where the capable
+// model earns its cost.
+const DefaultModel = "claude-opus-5"
 
 // Judge turns evidence into a verdict.
 type Judge struct {
@@ -60,7 +61,7 @@ func New() *Judge {
 func (j *Judge) Backend() string { return j.backend.Name() }
 
 func backendFor(choice string) Backend {
-	model := Model
+	model := DefaultModel
 	if override := os.Getenv("PLANTY_JUDGE_MODEL"); override != "" {
 		model = override
 	}
