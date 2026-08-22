@@ -21,16 +21,45 @@ Comment inline on anything here before I build it.
 | `Postmortem` | `internal/judge/postmortem.go:67` | no | no | high | on death |
 | `OwnerUpdate` | `internal/judge/owner_update.go:40` | no | no | medium | interactive |
 
-### Constraint worth arguing about
+### The tool loop
 
 `Consult` and `Ask` grant the model `Bash(planty agent *)` plus fetching from an allowlist.
-That agentic loop lives entirely in the Claude Code CLI backend; the harness answers in one shot and runs nothing.
-So **those two jobs cannot move to an OpenAI provider without also writing a tool loop**, which is out of scope here.
+That agentic loop lives entirely in the Claude Code CLI backend, which runs the tools itself.
+The harness has to run them, so the harness gets a function-calling loop.
 
-I propose the picker **refuses** OpenAI providers for `Consult` and `Ask` rather than silently dropping their tools.
-Losing the ability to say "water it" mid-conversation is not a degradation somebody should discover by accident.
-Four of six jobs move; two stay on Claude until a tool loop exists.
-Say the word if you want the tool loop in this change instead, and it becomes a much bigger one.
+Two functions are offered, and only when `Acting` is set:
+
+- **`planty_agent(command)`** runs `<binary> agent <verb> …`.
+  Every command passes through the same refusal logic the Claude Code hook uses.
+  `internal/agent/gate.go` already implements it as an unexported `refuse(command) string`; it gets exported as `Refuse` and `Gate` keeps calling it, so both paths share one boundary rather than growing a second copy that drifts.
+- **`web_fetch(url)`** fetches a page and returns its text, refusing any host outside `agent.Trusted`.
+
+There is deliberately no `web_search`.
+The service has no fetcher or search provider of its own today (Claude Code supplied both), and every trusted site exposes its own search as a URL on that same host, so searching is `web_fetch` against a search page.
+That keeps the allowlist as the single boundary and avoids introducing a search API key and a new secret for five known sites.
+
+The loop caps iterations and total tool calls, and turns each round into `judge.Step` entries (`StepThought` for reasoning, `StepAction` for a call and its output) so the phone keeps showing what the model actually did.
+That matters because `Answer.Steps` is already rendered by `StepsDisclosure.swift`; a job that moved provider and silently stopped explaining itself would be a regression.
+
+### Capability gating is enforced, not advertised
+
+A model that cannot read an image is **unassignable** to a job that shows it one.
+This is enforced in the store and the handler, not just filtered in the picker: the API returns 422 for an incapable pairing, and the resolver refuses to start with one.
+A picker that merely hides bad options still lets a stale client, a direct `PUT`, or a hand-edited row put `Assess` on a blind model.
+
+Required capabilities per job, derived from the call sites:
+
+| Job | Needs vision | Needs schema | Needs tools |
+| --- | --- | --- | --- |
+| `Assess` | no | yes | no |
+| `Identify` | **yes** | yes | no |
+| `Consult` | **yes** | yes | **yes** |
+| `Ask` | **yes** | yes | **yes** |
+| `Postmortem` | no | yes | no |
+| `OwnerUpdate` | no | yes | no |
+
+Every job needs schema, because every call site unmarshals a validated result.
+On the verified Go roster that alone rules out `deepseek-v4-flash-vision-exp`, and vision rules out `gpt-5.6-luna` for three jobs.
 
 ## Server
 
@@ -68,7 +97,7 @@ New `internal/judge/openai.go`, `openaiBackend`:
 | `Schema` | `response_format: {type: "json_schema", json_schema: {name, strict: true, schema}}` |
 | `Effort` | `reasoning_effort` |
 | `MaxTokens` | `max_completion_tokens` |
-| `Acting` | **unsupported**, returns an error rather than silently dropping tools |
+| `Acting` | `tools` function definitions plus the loop described above |
 
 Written against `net/http` + `encoding/json`, not an SDK.
 The surface used here is six fields of one endpoint, an SDK is a dependency and a version treadmill for no gain, and hand-rolling keeps "any OpenAI-compatible endpoint" honest instead of inheriting a vendor client's assumptions.
@@ -145,12 +174,14 @@ Tests in `ios/PlantyTests` with swift-testing and `IsolatedStubTransport`, follo
 Each commit stands alone as a PR.
 
 1. `feat(judge): carry the model and report it on the outcome` : `Request.Model`, `Outcome.Model`, both existing backends, `daily.go` provenance fix.
-2. `feat(judge): answer through any OpenAI-compatible endpoint` : provider config + `openaiBackend` + tests.
-3. `feat(store): persist a model per job` : migration + store + tests.
-4. `feat(api): expose the model catalogue and assignments` : openapi.json + regen + handlers + tests.
-5. `feat(judge): resolve the model per job` : resolver, call sites pass their job.
-6. `feat(ios): choose a model per job in settings` : client, model, store, settings section, tests.
-7. `docs: record how models are chosen` : README + `deploy/README.md` + configmap.
+2. `feat(judge): describe what each job needs and each model can do` : `Job`, capabilities, catalogue, provider config.
+3. `feat(judge): answer through any OpenAI-compatible endpoint` : `openaiBackend` one-shot + tests.
+4. `feat(judge): let the harness run planty and read trusted pages` : exported `agent.Refuse`, the tool loop, `web_fetch` + tests.
+5. `feat(store): persist a model per job` : migration + store + capability validation + tests.
+6. `feat(api): expose the model catalogue and assignments` : openapi.json + regen + handlers + tests.
+7. `feat(judge): resolve the model per job` : resolver, call sites pass their job.
+8. `feat(ios): choose a model per job in settings` : client, model, store, settings section, tests.
+9. `docs: record how models are chosen` : README + `deploy/README.md` + configmap.
 
 ## Verified against the live endpoint
 
@@ -182,9 +213,9 @@ Findings that change the plan:
 **The verified vision + schema set on OpenCode Go is exactly three: `qwen3.8-max`, `kimi-k3`, `mimo-v2.5`.**
 `qwen3.8-max` is also the best benchmarked of the three for identification, so it stands as the pick on evidence rather than inference.
 
-## Open questions
+## Decisions taken
 
-1. **Provider config shape**: one `PLANTY_PROVIDERS` JSON blob, or per-provider env vars? I lean JSON.
-2. **`Consult` / `Ask`**: refuse OpenAI providers (my proposal), or build the tool loop in this change?
-3. **Default assignments** shipped in the configmap: I propose `Identify` stays Claude, and `Assess` / `Postmortem` / `OwnerUpdate` move to `opencode-go/gpt-5.6-luna`. Confirm.
-4. ~~Live verification of the endpoint.~~ Resolved above. The key is in 1Password as `Opencode GO Planty Key` and reachable with `joey vault get`; it still needs adding to `~/secrets.sh` as `OPENCODE_API_KEY` and to the `planty-secrets` k8s secret before the deployment can use it.
+1. **Provider config** is one `PLANTY_PROVIDERS` JSON blob, so a provider is one secret rather than four correlated variables.
+2. **The tool loop is in scope**, so all six jobs can move to an OpenAI provider.
+3. **Defaults shipped in the configmap**: `Identify` stays on Claude, and `Assess` / `Postmortem` / `OwnerUpdate` go to `opencode-go/gpt-5.6-luna`. `Consult` and `Ask` stay on Claude by default, because they are interactive and the tool loop deserves real use before it becomes the default path for a conversation.
+4. ~~Live verification of the endpoint.~~ Resolved above. The key is in 1Password as `Opencode GO Planty Key` and reachable with `joey vault get`; it still needs adding to `~/secrets.sh` as `OPENCODE_API_KEY`, and to the `planty-secrets` k8s secret, which this change does.
