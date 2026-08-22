@@ -20,6 +20,17 @@ data:
   PLANTY_JUDGE: "cli"
   PLANTY_FRIEND_NAME: "friend"
 
+  # Where models can be reached. An openai provider whose key is absent is
+  # skipped rather than offered, so removing the key disables it. Which model
+  # answers which job is chosen in the app, not here.
+  PLANTY_PROVIDERS: |
+    [
+      {"id": "claude", "kind": "claude"},
+      {"id": "opencode-go", "kind": "openai",
+       "base_url": "https://opencode.ai/zen/go/v1",
+       "api_key_env": "OPENCODE_API_KEY"}
+    ]
+
   # Object storage for photos. Leave the endpoint empty to disable the photo
   # routes rather than failing the whole service.
   PLANTY_S3_ENDPOINT: ""
