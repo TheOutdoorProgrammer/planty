@@ -152,9 +152,39 @@ Each commit stands alone as a PR.
 6. `feat(ios): choose a model per job in settings` : client, model, store, settings section, tests.
 7. `docs: record how models are chosen` : README + `deploy/README.md` + configmap.
 
+## Verified against the live endpoint
+
+Probed `https://opencode.ai/zen/go/v1/chat/completions` directly on 2026-08-22.
+`GET /v1/models` returns 29 ids, so the catalogue endpoint can be built dynamically as planned.
+
+| Model | text | `response_format` | `reasoning_effort` | image via data URI |
+| --- | --- | --- | --- | --- |
+| `qwen3.8-max` | 200 | 200 | 200 | **200**, answered correctly |
+| `kimi-k3` | not tested | 200 | not tested | **200** |
+| `mimo-v2.5` | not tested | 200 | not tested | **200** |
+| `gpt-5.6-luna` | 200 | 200 | 200 | **400** |
+| `deepseek-v4-flash` | 200 | 200 | 200 | 400, text-only |
+| `deepseek-v4-pro` | not tested | not tested | not tested | 400, no image support |
+| `deepseek-v4-flash-vision-exp` | not tested | **400, no `response_format`** | not tested | 400 |
+| `muse-spark-1.2-contributor` | not tested | not tested | not tested | 400 |
+| `grok-4.5` | **503** | **503** | **503** | **503** |
+
+Findings that change the plan:
+
+- **`qwen3.8-max` answers on `/chat/completions`.** models.dev was right and the Zen docs' Qwen-routes-to-`/messages` note does not apply to the Go endpoint. The identification pick is reachable through this harness.
+- **`grok-4.5` is unavailable**, text and vision alike: "Endpoint is unavailable" on every call despite being listed in `/v1/models`. Drop it from consideration.
+- **`gpt-5.6-luna` cannot accept images here.** It is a Responses-API model and the chat/completions shim returns 400 with an empty message body for multimodal content. It stays the text workhorse and must never be offered for a job that shows photographs.
+- **The registry is wrong in both directions.** `deepseek-v4-flash-vision-exp` advertises `structured_output: true` and rejects `response_format` outright; `mimo-v2.5` leaves it unset and handles it fine. A static capability table copied from models.dev would misinform the picker, so the catalogue must record what was actually observed and be correctable.
+- `muse-spark-1.2-contributor` fails vision, which retires the model-trains-on-your-data tradeoff without needing a decision.
+- Responses carry `"cost": "0"`, confirming subscription metering rather than per-request billing.
+- `gpt-5.6-luna` returns `"finish_reason": null` on success. The harness must not depend on `finish_reason`.
+
+**The verified vision + schema set on OpenCode Go is exactly three: `qwen3.8-max`, `kimi-k3`, `mimo-v2.5`.**
+`qwen3.8-max` is also the best benchmarked of the three for identification, so it stands as the pick on evidence rather than inference.
+
 ## Open questions
 
 1. **Provider config shape**: one `PLANTY_PROVIDERS` JSON blob, or per-provider env vars? I lean JSON.
 2. **`Consult` / `Ask`**: refuse OpenAI providers (my proposal), or build the tool loop in this change?
-3. **Default assignments** shipped in the configmap: I propose `Identify` stays Claude, `Assess` / `Postmortem` / `OwnerUpdate` move to OpenCode Go. Confirm.
-4. **I cannot live-test.** There is no `OPENCODE_API_KEY` in the environment and your keys live in the cluster secret. I need either the key somewhere readable or permission to test from inside the cluster. Specifically unresolved: whether `qwen3.8-max` answers on `/chat/completions` (models.dev says yes) or `/messages` (the Zen docs say Qwen routes there). That decides whether your identification pick is reachable through the harness at all.
+3. **Default assignments** shipped in the configmap: I propose `Identify` stays Claude, and `Assess` / `Postmortem` / `OwnerUpdate` move to `opencode-go/gpt-5.6-luna`. Confirm.
+4. ~~Live verification of the endpoint.~~ Resolved above. The key is in 1Password as `Opencode GO Planty Key` and reachable with `joey vault get`; it still needs adding to `~/secrets.sh` as `OPENCODE_API_KEY` and to the `planty-secrets` k8s secret before the deployment can use it.
