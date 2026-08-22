@@ -20,13 +20,6 @@ type Frame struct {
 	Caption string
 }
 
-func caption(f Frame) string {
-	if f.Caption == "" {
-		return ""
-	}
-	return " (" + f.Caption + ")"
-}
-
 // describePot reports the drainage hole independently of the other pot
 // details, because a pot with no hole is the most common way a plant drowns
 // and it used to be dropped whenever nobody recorded the material.

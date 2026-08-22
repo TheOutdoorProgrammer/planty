@@ -109,7 +109,7 @@ func (d Daily) judgeOne(ctx context.Context, p plant.Plant) error {
 		Action:     result.Action,
 		Reasoning:  result.Reasoning,
 		Confidence: result.Confidence,
-		Evidence:   plant.Evidence{SensorSummary: result.Summary, ModelVersion: judge.Model},
+		Evidence:   plant.Evidence{SensorSummary: result.Summary, ModelVersion: result.Model},
 	})
 	return err
 }

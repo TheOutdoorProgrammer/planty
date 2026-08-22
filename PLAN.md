@@ -61,6 +61,21 @@ Required capabilities per job, derived from the call sites:
 Every job needs schema, because every call site unmarshals a validated result.
 On the verified Go roster that alone rules out `deepseek-v4-flash-vision-exp`, and vision rules out `gpt-5.6-luna` for three jobs.
 
+### Claude is a choice in the picker, not the fallback underneath it
+
+The catalogue lists Claude models alongside every other provider, so a job can be moved onto or back off Claude from the phone like any other option.
+**Choosing a Claude model runs `claude -p`**, the existing `cliBackend`, which spends the subscription rather than a metered key. That is what ADR 0001 decided and nothing here reverses it.
+
+Capability is the intersection of what the model can do and what its **backend kind** can do:
+
+| Provider kind | Vision | Schema | Tools | Effort |
+| --- | --- | --- | --- | --- |
+| `claude-cli` (subscription, `claude -p`) | yes | yes | **yes** | yes |
+| `openai` (any compatible endpoint) | per model | per model | **yes**, via the loop | per model |
+
+The metered `anthropic` backend stays in the code and stays selectable by environment (`PLANTY_JUDGE=api`) for anyone without a subscription, but it is **not offered in the picker**.
+It has never implemented `Acting` and would be silently tool-less for two jobs, and putting a second way to buy the same Claude models in front of a person is a bill waiting to be run up by accident.
+
 ## Server
 
 ### 1. Model onto the Request

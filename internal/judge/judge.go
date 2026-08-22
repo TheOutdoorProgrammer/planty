@@ -121,6 +121,9 @@ type Result struct {
 	Reasoning  string       `json:"reasoning"`
 	Confidence float64      `json:"confidence"`
 	Summary    string       `json:"sensor_summary"`
+
+	// Model is what answered. Filled in after decoding, not by it.
+	Model string `json:"-"`
 }
 
 // ErrRefused reports that safety classifiers declined the request.
@@ -171,6 +174,7 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
 		return Result{}, fmt.Errorf("decode verdict: %w", err)
 	}
+	out.Model = outcome.Model
 	return out, nil
 }
 

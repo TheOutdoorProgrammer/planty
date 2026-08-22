@@ -37,8 +37,9 @@ func (b *apiBackend) Judge(ctx context.Context, req Request) (Outcome, error) {
 		output.Effort = anthropic.OutputConfigEffortHigh
 	}
 
+	model := modelFor(req, b.model)
 	message, err := b.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:        anthropic.Model(b.model),
+		Model:        anthropic.Model(model),
 		MaxTokens:    req.MaxTokens,
 		System:       []anthropic.TextBlockParam{{Text: req.System}},
 		Messages:     messagesFor(withOffers(req)),
@@ -53,7 +54,7 @@ func (b *apiBackend) Judge(ctx context.Context, req Request) (Outcome, error) {
 
 	for _, block := range message.Content {
 		if answer, ok := block.AsAny().(anthropic.TextBlock); ok {
-			return Outcome{Answer: answer.Text}, nil
+			return Outcome{Answer: answer.Text, Model: model}, nil
 		}
 	}
 	return Outcome{}, fmt.Errorf("no answer in the reply")

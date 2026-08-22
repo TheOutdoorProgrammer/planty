@@ -94,7 +94,12 @@ func (b *cliBackend) run(ctx context.Context, req Request, resuming bool) (Outco
 		}
 		return Outcome{}, fmt.Errorf("claude: %w: %s", err, complaint)
 	}
-	return outcomeFrom(stdout.Bytes())
+	out, err := outcomeFrom(stdout.Bytes())
+	if err != nil {
+		return Outcome{}, err
+	}
+	out.Model = modelFor(req, b.model)
+	return out, nil
 }
 
 // errSessionGone reports that a session we expected to continue is not there,
@@ -124,7 +129,7 @@ func (b *cliBackend) arguments(req Request, resuming bool) ([]string, error) {
 		// the difference between "I looked it up" and something checkable.
 		"--output-format", "stream-json",
 		"--verbose",
-		"--model", b.model,
+		"--model", modelFor(req, b.model),
 		"--json-schema", string(schema),
 		// Isolation, and not --safe-mode: that leaves ambient permission rules
 		// in force and silently disables hooks. These two exclude the settings

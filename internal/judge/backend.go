@@ -18,6 +18,11 @@ type Backend interface {
 type Outcome struct {
 	Answer string
 	Steps  []Step
+
+	// Model is what actually answered. Recorded because a verdict that cannot
+	// name the model behind it stops being auditable the moment six jobs can
+	// each use a different one.
+	Model string
 }
 
 // Step is one thing the model did on the way to answering: a thought, a
@@ -67,6 +72,10 @@ type Request struct {
 	MaxTokens int64
 	Session   *Session
 	Acting    *Acting
+
+	// Model overrides the backend's own; empty keeps it. Per-request because
+	// one Judge is shared by every call site.
+	Model string
 
 	// True when a person is on the other end right now. Reaches the command
 	// as PLANTY_CHAT, so a verb that only makes sense with nobody there can
@@ -136,6 +145,14 @@ type Image struct {
 	Bytes []byte
 }
 
+// modelFor is the request's model, or the backend's own when it names none.
+func modelFor(req Request, fallback string) string {
+	if req.Model != "" {
+		return req.Model
+	}
+	return fallback
+}
+
 func text(s string) Part { return Part{Text: s} }
 
 func picture(media string, raw []byte) Part {
@@ -151,15 +168,3 @@ func answered(body string) Turn {
 	return Turn{Role: RoleAssistant, Parts: []Part{text(body)}}
 }
 
-// images counts the photographs in a conversation.
-func (r Request) images() int {
-	n := 0
-	for _, turn := range r.Turns {
-		for _, part := range turn.Parts {
-			if part.Image != nil {
-				n++
-			}
-		}
-	}
-	return n
-}
