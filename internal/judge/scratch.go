@@ -74,7 +74,8 @@ func (j *Judge) Ask(ctx context.Context, asked string, shown []Offer,
 	}
 	turns = append(turns, ask(text(opening)))
 
-	outcome, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.dispatch(ctx, Request{
+		Job:       JobAsk,
 		System:    system,
 		Turns:     turns,
 		Offered:   shown,

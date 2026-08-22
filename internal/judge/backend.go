@@ -77,6 +77,9 @@ type Request struct {
 	// one Judge is shared by every call site.
 	Model string
 
+	// Job is which question this is, and so which assignment answers it.
+	Job Job
+
 	// True when a person is on the other end right now. Reaches the command
 	// as PLANTY_CHAT, so a verb that only makes sense with nobody there can
 	// refuse rather than rely on the prompt being obeyed.
@@ -103,6 +106,11 @@ type Acting struct {
 	// drift. Passed in rather than imported: the package that defines these
 	// verbs reaches the store, and the store reaches back here.
 	Usage string
+
+	// Refuse says why a command may not run, or nothing when it may. Passed in
+	// for the same reason Usage is. A nil Refuse refuses everything, so a
+	// backend that runs commands itself cannot do so ungated by omission.
+	Refuse func(command string) string
 }
 
 // Session lets a backend continue a conversation instead of re-reading it.

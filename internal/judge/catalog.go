@@ -89,9 +89,9 @@ func (m Model) CanDo(job Job) error {
 // from the model.
 var claudeSkills = Skills{Vision: true, Schema: true, Tools: true}
 
-// known records observed capability, not advertised capability: models.dev was
-// wrong both ways against the live endpoint (deepseek-v4-flash-vision-exp
-// claims structured output and rejects it; mimo-v2.5 omits it and handles it).
+// known records observed capability, never advertised capability: gpt-5.6-luna
+// accepts response_format, answers 200, and ignores it, so it is absent here.
+// openai_live_test.go is what keeps this table honest.
 var known = []Model{
 	{Provider: "claude", ID: "claude-opus-5", Name: "Claude Opus 5", Rank: 1, Skills: claudeSkills},
 	{Provider: "claude", ID: "claude-sonnet-5", Name: "Claude Sonnet 5", Rank: 2, Skills: claudeSkills},
@@ -99,19 +99,13 @@ var known = []Model{
 
 	{Provider: "opencode-go", ID: "kimi-k3", Name: "Kimi K3", Rank: 10,
 		Skills: Skills{Vision: true, Schema: true, Tools: true},
-		Note:   "Only reasons at maximum effort, so it is slower than its rank suggests."},
+		Note: "Only reasons at maximum effort, and has the smallest request " +
+			"allowance of any model here, so it occasionally refuses outright."},
 	{Provider: "opencode-go", ID: "qwen3.8-max", Name: "Qwen3.8 Max", Rank: 11,
 		Skills: Skills{Vision: true, Schema: true, Tools: true},
 		Note:   "Best measured at identifying things from a photograph."},
-	{Provider: "opencode-go", ID: "glm-5.3", Name: "GLM-5.3", Rank: 13,
-		Skills: Skills{Schema: true, Tools: true}, Note: "Text only."},
 	{Provider: "opencode-go", ID: "glm-5.2", Name: "GLM-5.2", Rank: 14,
 		Skills: Skills{Schema: true, Tools: true}, Note: "Text only."},
-	{Provider: "opencode-go", ID: "deepseek-v4-pro", Name: "DeepSeek V4 Pro", Rank: 16,
-		Skills: Skills{Schema: true, Tools: true}, Note: "Text only, and only reasons at high effort or above."},
-	{Provider: "opencode-go", ID: "gpt-5.6-luna", Name: "GPT-5.6 Luna", Rank: 17,
-		Skills: Skills{Schema: true, Tools: true},
-		Note:   "Text only here: it is a Responses API model and rejects images over chat completions."},
 	{Provider: "opencode-go", ID: "mimo-v2.5", Name: "MiMo-V2.5", Rank: 18,
 		Skills: Skills{Vision: true, Schema: true, Tools: true},
 		Note:   "The cheapest model that can still see and return a validated answer."},

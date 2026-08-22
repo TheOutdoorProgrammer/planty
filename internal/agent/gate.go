@@ -60,17 +60,17 @@ func Gate(in io.Reader, explain io.Writer) int {
 	}
 
 	command := strings.TrimSpace(payload.ToolInput.Command)
-	if reason := refuse(command); reason != "" {
+	if reason := Refuse(command); reason != "" {
 		_, _ = fmt.Fprintf(explain, "planty gate: %s\n", reason)
 		return Blocked
 	}
 	return 0
 }
 
-// refuse names why a command is not allowed, or is empty when it is. It reads
+// Refuse names why a command is not allowed, or is empty when it is. It reads
 // the command as bash would rather than scanning the raw string, which used to
 // refuse a note containing "toxic/non-toxic" or a semicolon inside a sentence.
-func refuse(command string) string {
+func Refuse(command string) string {
 	if reason := checkQuoting(command); reason != "" {
 		return reason
 	}

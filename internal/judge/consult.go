@@ -156,7 +156,8 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 	}
 	turns = append(turns, ask(text(asked)))
 
-	outcome, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.dispatch(ctx, Request{
+		Job:       JobConsult,
 		System:    system,
 		Turns:     turns,
 		Offered:   offered,

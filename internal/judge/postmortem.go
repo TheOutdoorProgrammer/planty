@@ -64,7 +64,8 @@ func (j *Judge) Postmortem(ctx context.Context, h History) (Autopsy, error) {
 		return Autopsy{}, err
 	}
 
-	outcome, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.dispatch(ctx, Request{
+		Job:       JobPostmortem,
 		System:    postmortemSystem,
 		Turns:     []Turn{ask(text(narrate(h)))},
 		Schema:    schema,

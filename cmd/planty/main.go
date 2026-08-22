@@ -221,6 +221,7 @@ func acting() *judge.Acting {
 		Usage:   agent.Usage,
 		Trusted: agent.Trusted,
 		Sources: agent.Sources,
+		Refuse:  agent.Refuse,
 	}
 }
 

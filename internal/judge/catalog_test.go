@@ -9,9 +9,9 @@ import (
 // for the jobs that show it a photograph, rather than failing in a garden
 // centre when somebody points a phone at a plant.
 func TestABlindModelIsRefusedTheJobsThatShowPhotographs(t *testing.T) {
-	blind, ok := Lookup("opencode-go", "gpt-5.6-luna")
+	blind, ok := Lookup("opencode-go", "deepseek-v4-flash")
 	if !ok {
-		t.Fatal("gpt-5.6-luna is missing from the catalogue")
+		t.Fatal("deepseek-v4-flash is missing from the catalogue")
 	}
 
 	for _, job := range []Job{JobIdentify, JobConsult, JobAsk} {

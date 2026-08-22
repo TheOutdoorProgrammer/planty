@@ -73,7 +73,8 @@ func (j *Judge) Identify(ctx context.Context, image Frame, seen Sighting) ([]Can
 		return nil, err
 	}
 
-	outcome, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.dispatch(ctx, Request{
+		Job:    JobIdentify,
 		System: identifySystem,
 		Turns: []Turn{ask(
 			picture(image.Media, image.Bytes),
