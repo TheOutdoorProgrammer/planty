@@ -175,4 +175,3 @@ func ask(parts ...Part) Turn { return Turn{Role: RoleUser, Parts: parts} }
 func answered(body string) Turn {
 	return Turn{Role: RoleAssistant, Parts: []Part{text(body)}}
 }
-

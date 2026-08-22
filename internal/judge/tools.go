@@ -20,8 +20,8 @@ import (
 const rounds = 12
 
 type toolDef struct {
-	Type     string       `json:"type"`
-	Function functionDef  `json:"function"`
+	Type     string      `json:"type"`
+	Function functionDef `json:"function"`
 }
 
 type functionDef struct {

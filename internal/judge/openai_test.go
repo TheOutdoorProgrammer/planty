@@ -55,7 +55,7 @@ func quote(t *testing.T, s string) string {
 }
 
 func TestTheSchemaAndEffortReachTheWire(t *testing.T) {
-	backend, seen := serve(t, replied(t,`{"ok":true}`))
+	backend, seen := serve(t, replied(t, `{"ok":true}`))
 
 	out, err := backend.Judge(context.Background(), Request{
 		System:    "be brief",
@@ -93,7 +93,7 @@ func TestTheSchemaAndEffortReachTheWire(t *testing.T) {
 }
 
 func TestAPhotographRidesAsADataURI(t *testing.T) {
-	backend, seen := serve(t, replied(t,`{}`))
+	backend, seen := serve(t, replied(t, `{}`))
 
 	_, err := backend.Judge(context.Background(), Request{
 		Turns: []Turn{ask(picture("image/png", []byte("pretend-png")), text("what is it?"))},
@@ -128,7 +128,7 @@ func TestTheLoopRunsAToolAndFeedsTheResultBack(t *testing.T) {
 	call := `{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[
 		{"id":"c1","type":"function","function":{"name":"planty_agent",
 		 "arguments":"{\"command\":\"planty agent today\"}"}}]}}]}`
-	backend, seen := serve(t, call, replied(t,`{"reply":"done"}`))
+	backend, seen := serve(t, call, replied(t, `{"reply":"done"}`))
 
 	out, err := backend.Judge(context.Background(), Request{
 		Turns: []Turn{ask(text("what needs doing?"))},
@@ -167,7 +167,7 @@ func TestTheLoopRunsAToolAndFeedsTheResultBack(t *testing.T) {
 }
 
 func TestNoToolsAreOfferedWithoutActing(t *testing.T) {
-	backend, seen := serve(t, replied(t,`{}`))
+	backend, seen := serve(t, replied(t, `{}`))
 	if _, err := backend.Judge(context.Background(), Request{
 		Turns: []Turn{ask(text("hi"))},
 	}); err != nil {
