@@ -129,6 +129,16 @@ final class AppSession {
         ConsultStore(api: api, plant: plant, pending: question)
     }
 
+    /// Keeps the exact Today recommendation attached to the conversation while
+    /// showing only the user's own words in the transcript.
+    func consultStore(for entry: DigestEntry) -> ConsultStore {
+        ConsultStore(
+            api: api,
+            plant: entry.plant,
+            origin: .todayFinding(entry)
+        )
+    }
+
     /// A chat about a photograph. With a plant it joins that plant's story;
     /// with none it creates nothing and touches no timeline.
     func photoConsultStore(plant: Plant?, photo: Data?) -> ConsultStore {

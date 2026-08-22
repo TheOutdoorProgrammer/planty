@@ -112,6 +112,53 @@ struct ConsultStoreTests {
         #expect(store.composer == "anything", "the cancelled question was not recoverable")
         #expect(store.failed == nil)
     }
+
+    @Test("A Today question carries the card without rewriting the chat bubble")
+    @MainActor
+    func todayFindingContextIsHiddenFromTheTranscript() async {
+        let api = FakeAPI()
+        let plant = Plant.fixture(commonName: "Mona")
+        let entry = todayEntry(for: plant)
+        let store = ConsultStore(
+            api: api,
+            plant: plant,
+            origin: .todayFinding(entry)
+        )
+        let question = "Can this wait until tomorrow?"
+
+        await store.send(question)
+
+        let sent = api.asked.first?.1.message ?? ""
+        #expect(sent.contains("<today_finding>"))
+        #expect(sent.contains("Recommended action: \(entry.verdict.action.instruction)"))
+        #expect(sent.contains("Evidence summary: Moisture stayed below the calibrated range"))
+        #expect(sent.contains("User's question:\n\(question)"))
+        #expect(store.messages.first?.text == question)
+        #expect(store.openingTitle == "Ask about today's finding.")
+        #expect(store.openers.first == "Why is Planty recommending this?")
+    }
+
+    @Test("A Today finding is not repeated after the conversation starts")
+    @MainActor
+    func todayFindingContextIsOnlySentOnce() async {
+        let conversation = UUID()
+        let api = FakeAPI()
+        api.answer = .fixture(conversationID: conversation)
+        let plant = Plant.fixture()
+        let store = ConsultStore(
+            api: api,
+            plant: plant,
+            origin: .todayFinding(todayEntry(for: plant))
+        )
+
+        await store.send("Why this recommendation?")
+        await store.send("What should I watch for next?")
+
+        #expect(api.asked.count == 2)
+        #expect(api.asked.first?.1.message.contains("<today_finding>") == true)
+        #expect(api.asked.last?.1.message == "What should I watch for next?")
+        #expect(api.asked.last?.1.conversationID == conversation)
+    }
 }
 
 /// Retyping what you just said is the worst possible response to a failure,
@@ -171,4 +218,28 @@ struct ConsultRecoveryTests {
 
         #expect(store.composer == "half a thought")
     }
+}
+
+private func todayEntry(for plant: Plant) -> DigestEntry {
+    DigestEntry(
+        plant: plant,
+        verdict: Verdict(
+            id: UUID(),
+            plantID: plant.id,
+            forDate: .reference,
+            action: .water,
+            reasoning: "The soil has stayed dry for two days.",
+            confidence: 0.82,
+            evidence: Evidence(
+                readingIDs: [UUID(), UUID()],
+                observationIDs: [UUID()],
+                photoIDs: [UUID()],
+                sensorSummary: "Moisture stayed below the calibrated range for two days.",
+                modelVersion: "test-model"
+            ),
+            createdAt: .reference,
+            acknowledgedAt: nil
+        ),
+        risk: 3
+    )
 }

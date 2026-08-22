@@ -97,17 +97,59 @@ struct TodayActionScreen: View {
                     .foregroundStyle(PlantyColor.secondaryText)
             }
 
-            if !entry.verdict.evidence.isEmpty {
-                DisclosureGroup("Why Planty thinks this") {
-                    EvidenceDetail(verdict: entry.verdict)
-                        .padding(.top, 8)
-                }
-                .font(.footnote.weight(.semibold))
-                .tint(PlantyColor.cyan)
-            }
+            recommendationTools
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .plantyCard(border: state.color.opacity(0.4))
+    }
+
+    /// The explanation and its follow-up conversation are peers. On a narrow
+    /// screen or at a large Dynamic Type size they stack instead of competing
+    /// for a cramped row.
+    @ViewBuilder
+    private var recommendationTools: some View {
+        if entry.verdict.evidence.isEmpty {
+            chatLink
+        } else {
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    evidenceDisclosure
+                    Spacer(minLength: 8)
+                    chatLink
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    evidenceDisclosure
+                    chatLink
+                }
+            }
+        }
+    }
+
+    private var evidenceDisclosure: some View {
+        DisclosureGroup("Why Planty thinks this") {
+            EvidenceDetail(verdict: entry.verdict)
+                .padding(.top, 8)
+        }
+        .font(.footnote.weight(.semibold))
+        .tint(PlantyColor.cyan)
+    }
+
+    private var chatLink: some View {
+        NavigationLink {
+            ConsultScreen(store: session.consultStore(for: entry))
+        } label: {
+            Label(
+                "Chat with Planty",
+                systemImage: "bubble.left.and.text.bubble.right.fill"
+            )
+        }
+        .buttonStyle(.plain)
+        .font(.footnote.weight(.semibold))
+        .foregroundStyle(PlantyColor.pink)
+        .frame(minHeight: 44)
+        .accessibilityLabel(
+            "Chat with Planty about this finding for \(entry.plant.commonName)"
+        )
     }
 
     private var actionSection: some View {

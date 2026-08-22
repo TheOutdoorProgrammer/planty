@@ -68,24 +68,9 @@ struct ConsultScreen: View {
         .plantyCard(padding: 16)
     }
 
-    private var openingTitle: String {
-        guard let plant = store.plant else { return "Ask about anything." }
-        return "Ask me anything about \(plant.commonName)."
-    }
+    private var openingTitle: String { store.openingTitle }
 
-    private var openingBody: String {
-        guard store.plant != nil else {
-            return """
-                This one is not about a plant you keep. Nothing is created and \
-                nothing is saved to any plant's story.
-                """
-        }
-        return """
-            I have its watering log, its readings and what earlier photos \
-            showed. I will only open a photo if seeing one would change \
-            the answer.
-            """
-    }
+    private var openingBody: String { store.openingBody }
 
     @ViewBuilder
     private func row(_ message: ConsultMessage) -> some View {
