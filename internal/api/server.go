@@ -87,6 +87,10 @@ func (s *Server) Handler() http.Handler {
 	// phone may register before the server is configured to send; delivery then
 	// starts automatically as soon as credentials land.
 	mux.HandleFunc(routeRegisterPushDevice, s.registerPushDevice)
+	mux.HandleFunc(routeListModels, s.listModels)
+	mux.HandleFunc(routeListModelAssignments, s.listModelAssignments)
+	mux.HandleFunc(routeSetModelAssignment, s.setModelAssignment)
+	mux.HandleFunc(routeClearModelAssignment, s.clearModelAssignment)
 
 	// No slug: a question about something in a shop is not a plant you own.
 	mux.HandleFunc(routeAsk, s.ask)
