@@ -37,7 +37,8 @@ func (j *Judge) OwnerUpdate(ctx context.Context, steward string, week []OwnerPla
 			"summary": map[string]any{"type": "string"},
 		},
 	}
-	outcome, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.dispatch(ctx, Request{
+		Job:    JobOwnerUpdate,
 		System: ownerUpdateSystem,
 		Turns:  []Turn{ask(text(describeOwnerWeek(steward, week)))},
 		Schema: schema, MaxTokens: 1200, Effort: EffortMedium,

@@ -16,6 +16,7 @@ struct SettingsScreen: View {
                 connectionSection
                 householdSection
                 freshnessSection
+                modelsSection
                 sensorsSection
                 aboutSection
             }
@@ -105,6 +106,37 @@ struct SettingsScreen: View {
                     .foregroundStyle(PlantyColor.secondaryText)
             }
         }
+    }
+
+    /// One row per job. Each offers only the models the server says can do that
+    /// job, so a model that cannot read a photograph is absent from the jobs
+    /// that show one rather than merely discouraged.
+    private var modelsSection: some View {
+        Section {
+            if let error = session.models.error {
+                Text(error.errorDescription ?? "The models could not be loaded.")
+                    .foregroundStyle(PlantyColor.secondaryText)
+            } else if !session.models.hasLoaded {
+                Text("Loading…").foregroundStyle(PlantyColor.secondaryText)
+            } else {
+                ForEach(AIJob.allCases.filter { $0 != .unknown }, id: \.self) { job in
+                    let assignment = session.models.assignment(for: job)
+                    ModelPickerField(
+                        job: job,
+                        choices: session.models.choices(for: job),
+                        current: session.models.model(ref: assignment?.ref),
+                        isDefault: assignment?.isDefault ?? true,
+                        onChoose: { await session.models.assign($0, to: job) },
+                        onUseDefault: { await session.models.useDefault(for: job) }
+                    )
+                }
+            }
+        } header: {
+            Text("Which model answers what")
+        } footer: {
+            Text("Listed most capable first. A job only offers models that can actually do it.")
+        }
+        .task { await session.models.loadIfNeeded() }
     }
 
     private var sensorsSection: some View {

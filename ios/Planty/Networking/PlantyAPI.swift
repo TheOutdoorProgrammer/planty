@@ -26,6 +26,10 @@ protocol PlantyAPI: Sendable {
     func sensors() async throws -> [SensorLink]
     func homeAssistantEntities() async throws -> [HomeAssistantEntity]
     func managedChoices() async throws -> ManagedChoices
+    func aiModels() async throws -> [AIModel]
+    func jobAssignments() async throws -> [JobAssignment]
+    func assign(job: AIJob, provider: String, model: String) async throws -> JobAssignment
+    func clearAssignment(job: AIJob) async throws -> JobAssignment
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest
     func harvests(slug: String?) async throws -> [Harvest]
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink
@@ -65,6 +69,18 @@ extension PlantyAPI {
     }
 
     func managedChoices() async throws -> ManagedChoices { .empty }
+
+    func aiModels() async throws -> [AIModel] { [] }
+
+    func jobAssignments() async throws -> [JobAssignment] { [] }
+
+    func assign(job: AIJob, provider: String, model: String) async throws -> JobAssignment {
+        throw PlantyError.server(status: 503, message: "Choosing a model is unavailable from this client.")
+    }
+
+    func clearAssignment(job: AIJob) async throws -> JobAssignment {
+        throw PlantyError.server(status: 503, message: "Choosing a model is unavailable from this client.")
+    }
 
     /// Production overrides this with the atomic endpoint. The fallback keeps
     /// small test doubles source-compatible while still modeling the old two

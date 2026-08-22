@@ -8,20 +8,73 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
-// Model is the judgment model. Plant care is fuzzy reasoning over sparse,
-// noisy evidence, which is where the capable model earns its cost.
-const Model = "claude-opus-5"
+// DefaultModel answers any job with no assignment of its own. Plant care is
+// fuzzy reasoning over sparse, noisy evidence, which is where the capable
+// model earns its cost.
+const DefaultModel = "claude-opus-5"
 
 // Judge turns evidence into a verdict.
 type Judge struct {
-	backend Backend
-	acting  *Acting
+	// backends is one per configured provider, so a job can be answered by a
+	// different provider from the one next to it.
+	backends map[string]Backend
+
+	// fallback answers a job with no assignment, and is what Planty has always
+	// done: the environment's choice of Claude.
+	fallback Backend
+
+	// assigned is consulted per call, so a model chosen on the phone takes
+	// effect without restarting the service.
+	assigned Assignments
+
+	acting *Acting
+}
+
+// Assignments names the model a job should use.
+type Assignments interface {
+	For(ctx context.Context, job Job) (Model, bool)
+}
+
+// Assigned attaches the store the assignments live in.
+func (j *Judge) Assigned(a Assignments) *Judge {
+	if j == nil {
+		return nil
+	}
+	j.assigned = a
+	return j
+}
+
+// dispatch sends one request to whichever backend answers for its job. An
+// assignment naming a model the job cannot do is refused rather than attempted,
+// because failing here names the misconfiguration instead of the symptom.
+func (j *Judge) dispatch(ctx context.Context, req Request) (Outcome, error) {
+	backend, model := j.fallback, ""
+
+	if j.assigned != nil && req.Job != "" {
+		if chosen, ok := j.assigned.For(ctx, req.Job); ok {
+			if err := chosen.CanDo(req.Job); err != nil {
+				return Outcome{}, err
+			}
+			picked, ok := j.backends[chosen.Provider]
+			if !ok {
+				return Outcome{}, fmt.Errorf("provider %q is not configured", chosen.Provider)
+			}
+			backend, model = picked, chosen.ID
+		}
+	}
+	if backend == nil {
+		return Outcome{}, fmt.Errorf("nothing can answer %s", req.Job)
+	}
+
+	req.Model = model
+	return backend.Judge(ctx, req)
 }
 
 // Able lets a judge write to a plant's record as well as read it. Only the
@@ -38,7 +91,7 @@ func (j *Judge) Able(a *Acting) *Judge {
 // CLIBinary is the command the model would be allowed to run, empty when this
 // judge does not shell out to anything.
 func (j *Judge) CLIBinary() string {
-	cli, ok := j.backend.(*cliBackend)
+	cli, ok := j.fallback.(*cliBackend)
 	if !ok {
 		return ""
 	}
@@ -47,20 +100,57 @@ func (j *Judge) CLIBinary() string {
 
 // New builds a judge, or nil when nothing can answer, because the watering
 // line has to keep running on a morning the model cannot be reached.
-// PLANTY_JUDGE names the backend; unset, an API key wins over the CLI.
+// PLANTY_JUDGE names the fallback backend; unset, an API key wins over the CLI.
 func New() *Judge {
-	backend := backendFor(os.Getenv("PLANTY_JUDGE"))
-	if backend == nil {
+	fallback := backendFor(os.Getenv("PLANTY_JUDGE"))
+	backends := map[string]Backend{}
+
+	// A provider that cannot be built is left out rather than fatal: one
+	// unreachable provider must not stop the others answering.
+	if providers, err := Providers(); err == nil {
+		for id, p := range providers {
+			if built := backendForProvider(p); built != nil {
+				backends[id] = built
+			}
+		}
+	}
+	if fallback == nil && len(backends) == 0 {
 		return nil
 	}
-	return &Judge{backend: backend}
+	return &Judge{backends: backends, fallback: fallback}
 }
 
-// Backend names which of the two answered, for logs and error messages.
-func (j *Judge) Backend() string { return j.backend.Name() }
+// Providers names what this judge can reach, for logs and error messages.
+func (j *Judge) Providers() []string {
+	out := make([]string, 0, len(j.backends))
+	for id := range j.backends {
+		out = append(out, id)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// Backend names what answers a job with no assignment.
+func (j *Judge) Backend() string {
+	if j.fallback == nil {
+		return "none"
+	}
+	return j.fallback.Name()
+}
+
+func backendForProvider(p Provider) Backend {
+	switch p.Kind {
+	case KindClaude:
+		return cliIfInstalled(DefaultModel)
+	case KindOpenAI:
+		return newOpenAIBackend(p, "")
+	default:
+		return nil
+	}
+}
 
 func backendFor(choice string) Backend {
-	model := Model
+	model := DefaultModel
 	if override := os.Getenv("PLANTY_JUDGE_MODEL"); override != "" {
 		model = override
 	}
@@ -121,6 +211,9 @@ type Result struct {
 	Reasoning  string       `json:"reasoning"`
 	Confidence float64      `json:"confidence"`
 	Summary    string       `json:"sensor_summary"`
+
+	// Model is what answered. Filled in after decoding, not by it.
+	Model string `json:"-"`
 }
 
 // ErrRefused reports that safety classifiers declined the request.
@@ -154,7 +247,8 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 		return Result{}, err
 	}
 
-	outcome, err := j.backend.Judge(ctx, Request{
+	outcome, err := j.dispatch(ctx, Request{
+		Job:       JobAssess,
 		System:    system,
 		Turns:     []Turn{ask(text(describe(e)))},
 		Schema:    schema,
@@ -171,6 +265,7 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
 		return Result{}, fmt.Errorf("decode verdict: %w", err)
 	}
+	out.Model = outcome.Model
 	return out, nil
 }
 

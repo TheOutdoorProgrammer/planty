@@ -32,6 +32,7 @@ final class AppSession {
     let capture: CaptureStore
     let garden: GardenStore
     let choices: ManagedChoicesStore
+    let models: ModelSettingsStore
     private(set) var identification: IdentificationStore
     let updates: UpdateStore
 
@@ -57,6 +58,7 @@ final class AppSession {
         capture = CaptureStore(api: client)
         garden = GardenStore(api: client, isConfigured: resolved.isConfigured)
         choices = ManagedChoicesStore(api: client, isConfigured: resolved.isConfigured)
+        models = ModelSettingsStore(api: client, isConfigured: resolved.isConfigured)
         identification = IdentificationStore(
             pipeline: Self.pipeline(client: client, configured: resolved.isConfigured)
         )
@@ -96,6 +98,7 @@ final class AppSession {
         capture.replace(api: client)
         garden.replace(api: client, isConfigured: configuration.isConfigured)
         choices.replace(api: client, isConfigured: configuration.isConfigured)
+        models.replace(api: client, isConfigured: configuration.isConfigured)
         identification = IdentificationStore(
             pipeline: Self.pipeline(client: client, configured: configuration.isConfigured)
         )

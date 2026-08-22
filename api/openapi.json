@@ -68,6 +68,12 @@
     "/v1/questions/{id}/answer": {"post": {"operationId": "answerQuestion"}},
     "/v1/owner-update": {"post": {"operationId": "createOwnerUpdate"}},
     "/v1/push-devices": {"post": {"operationId": "registerPushDevice"}},
+    "/v1/models": {"get": {"operationId": "listModels"}},
+    "/v1/model-assignments": {"get": {"operationId": "listModelAssignments"}},
+    "/v1/model-assignments/{job}": {
+      "put": {"operationId": "setModelAssignment"},
+      "delete": {"operationId": "clearModelAssignment"}
+    },
     "/v1/away": {
       "get": {"operationId": "listAway"},
       "post": {"operationId": "createAway"}
@@ -91,6 +97,7 @@
       "ObservationKind": {"type": "string", "enum": ["watered", "misted", "repotted", "fertilized", "pruned", "harvested", "moved", "symptom", "note", "died"]},
       "ObservationSource": {"type": "string", "enum": ["app", "agent", "automation"]},
       "SensorRole": {"type": "string", "enum": ["soil_moisture", "ambient_temp", "ambient_humidity", "illuminance"]},
+      "AIJob": {"type": "string", "enum": ["assess", "identify", "consult", "ask", "postmortem", "owner_update"]},
       "APIError": {
         "type": "object",
         "x-swift-name": "APIErrorBody",

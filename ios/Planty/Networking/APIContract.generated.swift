@@ -12,6 +12,7 @@ enum APIPath {
     static let ask = "/v1/ask"
     static func askPlant(slug: String) -> String { "/v1/plants/\(slug)/ask" }
     static func calibrateSensor(id: String) -> String { "/v1/sensors/\(id)" }
+    static func clearModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
     static let coldWatch = "/v1/cold-watch"
     static func completeReminder(id: String) -> String { "/v1/reminders/\(id)/complete" }
     static func completeVerdict(id: String) -> String { "/v1/verdicts/\(id)/complete" }
@@ -34,6 +35,8 @@ enum APIPath {
     static let listHarvests = "/v1/harvests"
     static let listHomeAssistantEntities = "/v1/home-assistant/entities"
     static let listHouseholdNotes = "/v1/notes"
+    static let listModelAssignments = "/v1/model-assignments"
+    static let listModels = "/v1/models"
     static func listObservations(slug: String) -> String { "/v1/plants/\(slug)/observations" }
     static func listPlantHarvests(slug: String) -> String { "/v1/plants/\(slug)/harvests" }
     static func listPlantNotes(slug: String) -> String { "/v1/plants/\(slug)/notes" }
@@ -43,6 +46,7 @@ enum APIPath {
     static func listReminders(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
     static let listSensors = "/v1/sensors"
     static let registerPushDevice = "/v1/push-devices"
+    static func setModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
     static func setReminder(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
     static let shelter = "/v1/shelter"
     static let today = "/v1/today"
@@ -51,6 +55,18 @@ enum APIPath {
     static func updateNote(id: String) -> String { "/v1/notes/\(id)" }
     static func updatePlant(slug: String) -> String { "/v1/plants/\(slug)" }
     static func uploadPhoto(slug: String) -> String { "/v1/plants/\(slug)/photos" }
+}
+
+enum AIJob: String, FallbackDecodable, CaseIterable {
+    case assess
+    case identify
+    case consult
+    case ask
+    case postmortem
+    case ownerUpdate = "owner_update"
+    case unknown
+
+    static let fallback = AIJob.unknown
 }
 
 struct APIErrorBody: Codable, Sendable {

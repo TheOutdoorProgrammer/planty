@@ -18,6 +18,11 @@ type Backend interface {
 type Outcome struct {
 	Answer string
 	Steps  []Step
+
+	// Model is what actually answered. Recorded because a verdict that cannot
+	// name the model behind it stops being auditable the moment six jobs can
+	// each use a different one.
+	Model string
 }
 
 // Step is one thing the model did on the way to answering: a thought, a
@@ -68,6 +73,13 @@ type Request struct {
 	Session   *Session
 	Acting    *Acting
 
+	// Model overrides the backend's own; empty keeps it. Per-request because
+	// one Judge is shared by every call site.
+	Model string
+
+	// Job is which question this is, and so which assignment answers it.
+	Job Job
+
 	// True when a person is on the other end right now. Reaches the command
 	// as PLANTY_CHAT, so a verb that only makes sense with nobody there can
 	// refuse rather than rely on the prompt being obeyed.
@@ -94,6 +106,11 @@ type Acting struct {
 	// drift. Passed in rather than imported: the package that defines these
 	// verbs reaches the store, and the store reaches back here.
 	Usage string
+
+	// Refuse says why a command may not run, or nothing when it may. Passed in
+	// for the same reason Usage is. A nil Refuse refuses everything, so a
+	// backend that runs commands itself cannot do so ungated by omission.
+	Refuse func(command string) string
 }
 
 // Session lets a backend continue a conversation instead of re-reading it.
@@ -136,6 +153,14 @@ type Image struct {
 	Bytes []byte
 }
 
+// modelFor is the request's model, or the backend's own when it names none.
+func modelFor(req Request, fallback string) string {
+	if req.Model != "" {
+		return req.Model
+	}
+	return fallback
+}
+
 func text(s string) Part { return Part{Text: s} }
 
 func picture(media string, raw []byte) Part {
@@ -149,17 +174,4 @@ func ask(parts ...Part) Turn { return Turn{Role: RoleUser, Parts: parts} }
 
 func answered(body string) Turn {
 	return Turn{Role: RoleAssistant, Parts: []Part{text(body)}}
-}
-
-// images counts the photographs in a conversation.
-func (r Request) images() int {
-	n := 0
-	for _, turn := range r.Turns {
-		for _, part := range turn.Parts {
-			if part.Image != nil {
-				n++
-			}
-		}
-	}
-	return n
 }

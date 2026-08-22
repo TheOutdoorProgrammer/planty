@@ -119,6 +119,24 @@ final class IsolatedStubTransport {
         }
     }
 
+    /// Answers each path with its own body, for the calls that make more than
+    /// one request. An unrouted path is a test bug, so it 404s rather than
+    /// quietly returning something the decoder will misread.
+    func respond(routes: [String: String], status: Int = 200) {
+        responder.install { request in
+            let path = request.url?.path ?? ""
+            let body = routes[path]
+            let response = HTTPURLResponse(
+                url: request.url ?? URL(fileURLWithPath: "/"),
+                statusCode: body == nil ? 404 : status,
+                httpVersion: "HTTP/1.1",
+                headerFields: ["Content-Type": "application/json"]
+            )
+            guard let response else { throw URLError(.badServerResponse) }
+            return (response, Data((body ?? #"{"error":"unrouted"}"#).utf8))
+        }
+    }
+
     func fail(with error: URLError.Code) {
         responder.install { _ in throw URLError(error) }
     }

@@ -148,7 +148,7 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
 	if store, err := photoStore(ctx); err != nil {
 		log.Warn("photo storage unavailable, photo routes disabled", "error", err)
 	} else if store != nil {
-		seat := judge.New().Able(acting())
+		seat := judge.New().Able(acting()).Assigned(db)
 		server = server.WithPhotos(store, seat)
 		log.Info("photo storage ready", "judge", backendName(seat), "can_act", acting() != nil)
 	}
@@ -202,7 +202,7 @@ func homeAssistant() *ha.Client {
 func daily(db *store.Store, log *slog.Logger, notifications job.Notifier) job.Daily {
 	return job.Daily{
 		Store:         db,
-		Judge:         judge.New(),
+		Judge:         judge.New().Assigned(db),
 		Log:           log,
 		Notifications: notifications,
 	}
@@ -221,6 +221,7 @@ func acting() *judge.Acting {
 		Usage:   agent.Usage,
 		Trusted: agent.Trusted,
 		Sources: agent.Sources,
+		Refuse:  agent.Refuse,
 	}
 }
 
@@ -277,7 +278,7 @@ func autopsy(ctx context.Context, db *store.Store, log *slog.Logger) error {
 	if len(os.Args) < 3 {
 		return errors.New("usage: planty autopsy <slug>")
 	}
-	seat := judge.New()
+	seat := judge.New().Assigned(db)
 	if seat == nil {
 		return errors.New("an autopsy needs a model: set ANTHROPIC_API_KEY, " +
 			"or install the claude CLI and sign it in")

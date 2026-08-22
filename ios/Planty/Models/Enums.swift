@@ -16,6 +16,38 @@ extension FallbackDecodable {
 
 // The enum cases themselves are generated from api/openapi.json. Everything
 // below is presentation behavior and deliberately remains handwritten.
+extension AIJob {
+    var label: String {
+        switch self {
+        case .assess: "Daily verdict"
+        case .identify: "Identifying a plant"
+        case .consult: "Asking about a plant"
+        case .ask: "Asking about anything"
+        case .postmortem: "Working out what killed one"
+        case .ownerUpdate: "Writing to an owner"
+        case .unknown: "Something new"
+        }
+    }
+
+    /// What the default is, named rather than left as a bare word, because
+    /// "Default" alone does not tell you what will answer.
+    var defaultDetail: String {
+        "Whatever the service is configured to use, normally Claude."
+    }
+
+    var explanation: String {
+        switch self {
+        case .assess: "Runs once a day for every plant, so this is nearly all the usage."
+        case .identify: "Reads a photograph and names the plant. A wrong name here gets a plant watered wrongly."
+        case .consult: "Answers questions about one plant, and can look things up and record what it finds."
+        case .ask: "Answers questions about a plant you do not own yet, and can look things up."
+        case .postmortem: "Runs once, when a plant dies, and the answer is the whole point of keeping the record."
+        case .ownerUpdate: "Drafts the note that goes to whoever owns the plant."
+        case .unknown: "This version of the app does not know about this job."
+        }
+    }
+}
+
 extension PlantDomain {
     var label: String {
         switch self {

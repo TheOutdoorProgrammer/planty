@@ -14,7 +14,7 @@ func TestProseInAQuotedValueIsNotAShell(t *testing.T) {
 		`planty agent note --plant fern --text 'the cat chews it; I moved it'`,
 	}
 	for _, command := range allowed {
-		if reason := refuse(command); reason != "" {
+		if reason := Refuse(command); reason != "" {
 			t.Errorf("refused a legitimate command: %s\n  because: %s", command, reason)
 		}
 	}
@@ -38,7 +38,7 @@ func TestQuotingDoesNotOpenASubshell(t *testing.T) {
 		"planty agent plants\ncat /etc/passwd",
 	}
 	for _, command := range refused {
-		if refuse(command) == "" {
+		if Refuse(command) == "" {
 			t.Errorf("ALLOWED a command that can run something: %s", command)
 		}
 	}
@@ -47,7 +47,7 @@ func TestQuotingDoesNotOpenASubshell(t *testing.T) {
 // Single quotes make a subshell literal, which is why they are the escape
 // hatch offered when double quotes are refused.
 func TestSingleQuotesAreLiteral(t *testing.T) {
-	if reason := refuse(`planty agent note --plant fern --text '$(id) is not run here'`); reason != "" {
+	if reason := Refuse(`planty agent note --plant fern --text '$(id) is not run here'`); reason != "" {
 		t.Errorf("refused literal text in single quotes: %s", reason)
 	}
 }
@@ -58,7 +58,7 @@ func TestOnlyTheAllowedCommandsRun(t *testing.T) {
 		"rm -rf /", "planty serve", "planty daily", "planty autopsy fern",
 		"/usr/local/bin/planty agent plants", "env", "printenv",
 	} {
-		if refuse(command) == "" {
+		if Refuse(command) == "" {
 			t.Errorf("ALLOWED a command outside the allowlist: %s", command)
 		}
 	}
@@ -69,7 +69,7 @@ func TestLookingAroundIsAllowed(t *testing.T) {
 		"ls -la", "cat /etc/hostname", "grep -r pothos .", "pwd", "date",
 		"find . -name '*.jpg'", "wc -l photos.txt", "head -20 day-01.jpg",
 	} {
-		if reason := refuse(command); reason != "" {
+		if reason := Refuse(command); reason != "" {
 			t.Errorf("refused a harmless look: %s\n  because: %s", command, reason)
 		}
 	}
@@ -83,7 +83,7 @@ func TestTheEnvironmentStaysOutOfTheConversation(t *testing.T) {
 		"grep PLANTY /proc/self/environ",
 		"ls /proc/self/",
 	} {
-		if refuse(command) == "" {
+		if Refuse(command) == "" {
 			t.Errorf("ALLOWED reading the environment: %s", command)
 		}
 	}
