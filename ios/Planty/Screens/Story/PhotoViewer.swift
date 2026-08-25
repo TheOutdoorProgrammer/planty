@@ -18,6 +18,7 @@ struct PhotoViewer: View {
     /// link that expires, so keeping the bytes once they arrive is the only way
     /// to hand them anywhere else.
     @State private var loaded: UIImage?
+    @State private var loadedData: Data?
     @State private var saveResult: PhotoSaveFeedback?
     @State private var isSaving = false
 
@@ -62,6 +63,7 @@ struct PhotoViewer: View {
     private func gather() async {
         if let localJPEG {
             loaded = UIImage(data: localJPEG)
+            loadedData = localJPEG
             if let photo {
                 await session.images.seed(
                     localJPEG,
@@ -77,15 +79,16 @@ struct PhotoViewer: View {
               !Task.isCancelled
         else { return }
         loaded = UIImage(data: data)
+        loadedData = data
     }
 
     /// Saving and sharing sit together: one keeps it, the other sends it on.
     @ViewBuilder
     private var keepButton: some View {
-        if let loaded {
+        if let loaded, let loadedData {
             HStack(spacing: 10) {
                 Button {
-                    Task { await saveToPhotos(loaded) }
+                    Task { await saveToPhotos(loadedData) }
                 } label: {
                     Group {
                         if isSaving {
@@ -129,14 +132,20 @@ struct PhotoViewer: View {
         }
     }
 
-    private func saveToPhotos(_ image: UIImage) async {
+    private func saveToPhotos(_ data: Data) async {
         guard !isSaving else { return }
         isSaving = true
         defer { isSaving = false }
 
         do {
+            let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
+            guard status == .authorized || status == .limited else {
+                saveResult = .permissionDenied
+                return
+            }
             try await PHPhotoLibrary.shared().performChanges {
-                PHAssetChangeRequest.creationRequestForAsset(from: image)
+                PHAssetCreationRequest.forAsset()
+                    .addResource(with: .photo, data: data, options: nil)
             }
             saveResult = .saved
         } catch {
@@ -189,11 +198,13 @@ struct PhotoViewer: View {
 
 private enum PhotoSaveFeedback: Equatable {
     case saved
+    case permissionDenied
     case failed
 
     var message: String {
         switch self {
         case .saved: "Saved to Photos"
+        case .permissionDenied: "Photos access is off"
         case .failed: "Could not save to Photos"
         }
     }
