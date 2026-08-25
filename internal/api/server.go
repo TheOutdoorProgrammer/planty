@@ -1,5 +1,4 @@
-// Package api is the HTTP surface. The iOS app and the Dusk plugin are both
-// clients of it and have identical powers; see docs/DATA-MODEL.md.
+// Package api is the HTTP surface shared by the iOS app and agent integrations.
 package api
 
 import (
@@ -22,8 +21,6 @@ import (
 const requestIDHeader = "X-Request-ID"
 
 // Server routes HTTP onto the store.
-//
-// There is no authentication by deliberate choice; keep it on the LAN.
 type Server struct {
 	store         *store.Store
 	log           *slog.Logger
@@ -31,6 +28,7 @@ type Server struct {
 	judge         *judge.Judge
 	pushSender    *push.Sender
 	homeAssistant homeAssistantDiscoverer
+	bearerToken   string
 }
 
 // New builds a server. Photo storage and the judge are optional: without them
@@ -61,14 +59,22 @@ func (s *Server) WithPush(sender *push.Sender) *Server {
 	return s
 }
 
+// WithBearerToken authenticates every application route. Liveness and
+// readiness stay public for Kubernetes probes.
+func (s *Server) WithBearerToken(token string) *Server {
+	s.bearerToken = token
+	return s
+}
+
 // Handler returns the routed mux. Route patterns are generated from the
 // OpenAPI contract so the server and clients cannot silently spell one
 // differently. Every response receives a request id for log correlation.
 func (s *Server) Handler() http.Handler {
-	mux := http.NewServeMux()
+	root := http.NewServeMux()
+	root.HandleFunc(routeHealth, s.health)
+	root.HandleFunc(routeReady, s.ready)
 
-	mux.HandleFunc(routeHealth, s.health)
-	mux.HandleFunc(routeReady, s.ready)
+	mux := http.NewServeMux()
 
 	mux.HandleFunc(routeListPlants, s.listPlants)
 	mux.HandleFunc(routeCreatePlant, s.createPlant)
@@ -148,7 +154,12 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeShelter, s.shelter)
 	mux.HandleFunc(routeUnshelter, s.unshelter)
 
-	return withRequestID(browserWriteGuard(mux))
+	var application http.Handler = browserWriteGuard(mux)
+	if s.bearerToken != "" {
+		application = bearerAuth(s.bearerToken, application)
+	}
+	root.Handle("/", application)
+	return withRequestID(root)
 }
 
 func withRequestID(next http.Handler) http.Handler {

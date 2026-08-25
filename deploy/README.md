@@ -12,7 +12,7 @@ Flux reconciles the completed copies in the private `flux` repository, so reposi
 | `deployment.yaml` | The API deployment and ClusterIP service. |
 | `cronjobs.yaml` | Ingest, watering verification, photo pruning, daily, chase, away, thirst, cold, and reminder jobs. |
 | `configmap.yaml` | Public non-secret defaults and provider declarations. |
-| `secret.yaml.example` | Template for database, Home Assistant, model-provider, APNs, and MinIO credentials. |
+| `secret.yaml.example` | Template for API, database, Home Assistant, model-provider, APNs, and MinIO credentials. |
 
 Every CronJob imports the same `planty-secrets` Secret as the service.
 The live deployment must override the empty Home Assistant and object-storage endpoints and must configure a weather entity that actually supports a daily forecast.
@@ -44,12 +44,10 @@ The daily `prune-photos` job removes explicitly requested deletions and unowned 
 
 ## Network boundary
 
-Planty has no authentication and must remain LAN-only.
-There is intentionally no IngressRoute in this public directory.
-Any private DNS name should resolve to a private address and be reachable only wherever the app itself is trusted to run.
-
-Making the service public requires real authentication in the same change.
-The pod holds credentials for Home Assistant, model providers, APNs, and object storage, so hiding an unauthenticated API behind an obscure hostname is not a security control.
+Planty requires `PLANTY_API_TOKEN` for every application route.
+The iOS app and Dusk plugin send that deployment-scoped bearer token; `/healthz` and `/readyz` remain public for Kubernetes probes.
+There is intentionally no IngressRoute in this public directory, because one shared token is appropriate for trusted LAN clients but is not a multi-user internet identity system.
+Private DNS should still resolve to a private address and TLS should still protect the token in transit.
 
 ## Deployment order
 

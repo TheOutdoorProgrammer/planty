@@ -98,6 +98,30 @@ func TestHealthzNeedsNothing(t *testing.T) {
 	}
 }
 
+func TestApplicationRoutesRequireConfiguredBearerToken(t *testing.T) {
+	_, db, _ := newServer(t)
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := api.New(db, quiet).WithBearerToken("secret").Handler()
+
+	health, _ := do(t, h, http.MethodGet, "/healthz", nil)
+	if health.Code != http.StatusOK {
+		t.Fatalf("health status = %d, want 200", health.Code)
+	}
+
+	unauthorized, body := do(t, h, http.MethodGet, "/v1/plants", nil)
+	if unauthorized.Code != http.StatusUnauthorized || body["code"] != "unauthorized" {
+		t.Fatalf("unauthorized response = %d %#v", unauthorized.Code, body)
+	}
+
+	req := httptest.NewRequest(http.MethodGet, "/v1/plants", nil)
+	req.Header.Set("Authorization", "Bearer secret")
+	authorized := httptest.NewRecorder()
+	h.ServeHTTP(authorized, req)
+	if authorized.Code != http.StatusOK {
+		t.Fatalf("authorized status = %d, body %s", authorized.Code, authorized.Body.String())
+	}
+}
+
 type readinessPhotos struct{ state photos.State }
 
 func (p *readinessPhotos) Status() (photos.State, error) { return p.state, nil }

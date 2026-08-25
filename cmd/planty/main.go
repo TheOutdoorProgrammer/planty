@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -164,9 +165,13 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 	if addr == "" {
 		addr = ":8080"
 	}
+	apiToken := strings.TrimSpace(os.Getenv("PLANTY_API_TOKEN"))
+	if apiToken == "" {
+		return errors.New("PLANTY_API_TOKEN is required when serving the API")
+	}
 
 	seat := judge.New().Able(acting()).Assigned(db)
-	server := api.New(db, log).WithJudge(seat).WithPush(notifications)
+	server := api.New(db, log).WithBearerToken(apiToken).WithJudge(seat).WithPush(notifications)
 	if config, enabled := photoConfig(); enabled {
 		manager := photos.Manage(ctx, config, func(state photos.State, err error) {
 			if err != nil {
