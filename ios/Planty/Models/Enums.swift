@@ -144,6 +144,18 @@ extension ObservationKind {
         case .unknown: "questionmark.circle"
         }
     }
+
+    var careActionNoun: String {
+        switch self {
+        case .watered: "watering"
+        case .misted: "misting"
+        case .repotted: "repotting"
+        case .fertilized: "feeding"
+        case .pruned: "pruning"
+        case .moved: "moving"
+        default: label.lowercased()
+        }
+    }
 }
 
 extension SensorRole {

@@ -6,6 +6,11 @@ struct CareLogSheet: View {
     let plantName: String
     let record: (ObservationKind, String?) async -> PlantyError?
 
+    /// A general care entry may choose any kind. A care follow-up supplies the
+    /// one action it is measuring, so letting that nested sheet drift to a
+    /// different kind would produce a record the parent can never accept.
+    let fixedKind: ObservationKind?
+
     @Environment(\.dismiss) private var dismiss
     @State private var kind: ObservationKind
     @State private var note = ""
@@ -18,11 +23,13 @@ struct CareLogSheet: View {
     init(
         plantName: String,
         initialKind: ObservationKind = .watered,
+        fixedKind: ObservationKind? = nil,
         record: @escaping (ObservationKind, String?) async -> PlantyError?
     ) {
         self.plantName = plantName
+        self.fixedKind = fixedKind
         self.record = record
-        _kind = State(initialValue: initialKind)
+        _kind = State(initialValue: fixedKind ?? initialKind)
     }
 
     var body: some View {
@@ -36,14 +43,25 @@ struct CareLogSheet: View {
                         )
                     }
                 }
-                Section("What happened") {
-                    Picker("What happened", selection: $kind) {
-                        ForEach(Self.kinds, id: \.self) {
-                            Label($0.label, systemImage: $0.symbol).tag($0)
+                Section {
+                    if let fixedKind {
+                        Label(fixedKind.label, systemImage: fixedKind.symbol)
+                            .font(.headline)
+                    } else {
+                        Picker("What happened", selection: $kind) {
+                            ForEach(Self.kinds, id: \.self) {
+                                Label($0.label, systemImage: $0.symbol).tag($0)
+                            }
                         }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
                     }
-                    .pickerStyle(.inline)
-                    .labelsHidden()
+                } header: {
+                    Text("What happened")
+                } footer: {
+                    if let fixedKind {
+                        Text("This follow-up is specifically tracking \(fixedKind.careActionNoun). Log other care from the plant story instead.")
+                    }
                 }
                 Section {
                     TextField(notePrompt, text: $note, axis: .vertical)
@@ -105,8 +123,15 @@ struct CareLogSheet: View {
     private func submit() async {
         let trimmed = note.cleaned
         guard await action.perform({
-            await record(kind, trimmed.isEmpty ? nil : trimmed)
+            await record(Self.submittedKind(selected: kind, fixed: fixedKind), trimmed.isEmpty ? nil : trimmed)
         }) else { return }
         dismiss()
+    }
+
+    static func submittedKind(
+        selected: ObservationKind,
+        fixed: ObservationKind?
+    ) -> ObservationKind {
+        fixed ?? selected
     }
 }

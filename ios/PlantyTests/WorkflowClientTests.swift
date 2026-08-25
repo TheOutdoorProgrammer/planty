@@ -64,6 +64,31 @@ struct WorkflowClientTests {
         #expect(evidence.first?["phase"] == nil)
     }
 
+    @Test("A changed care plan can cancel its follow-up without deleting records")
+    func cancellationUsesTheAuditedWindowRoute() async throws {
+        let stub = IsolatedStubTransport()
+        stub.respond(
+            json: windowJSON.replacingOccurrences(
+                of: "\"status\":\"proposed\"",
+                with: "\"status\":\"cancelled\""
+            )
+        )
+
+        _ = try await stub.client().cancelEvidenceWindow(
+            id: windowID,
+            request: EvidenceWindowCancellation(
+                reason: "Owner cancelled the watering follow-up.",
+                actor: "owner"
+            )
+        )
+        let request = try #require(stub.requests.first)
+        let body = try json(request)
+
+        #expect(request.url?.path == "/v1/evidence-windows/\(windowID.uuidString)/cancel")
+        #expect(body["reason"] as? String == "Owner cancelled the watering follow-up.")
+        #expect(body["actor"] as? String == "owner")
+    }
+
     @Test("Incident decoding preserves each plant action and sparse evidence")
     func incidentPreservesActions() throws {
         let incident = try PlantyCoders.decoder().decode(GardenIncident.self, from: Data(incidentJSON.utf8))

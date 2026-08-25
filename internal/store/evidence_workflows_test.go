@@ -119,6 +119,29 @@ func TestEvidenceWindowRejectsAnInterventionBeforeItsBaseline(t *testing.T) {
 	}
 }
 
+func TestEvidenceWindowExplainsAnIncompatibleIntervention(t *testing.T) {
+	s, ctx := testStore(t)
+	p := newPlant(t, s, ctx, "Evidence action mismatch")
+	baseline := testPhoto(t, s, ctx, p.ID, "baseline")
+	window, err := s.ProposeEvidenceWindow(ctx, testRecheckProposal(t, p, baseline))
+	if err != nil {
+		t.Fatal(err)
+	}
+	intervention, err := s.AddObservation(ctx, plant.Observation{
+		PlantID: p.ID, Kind: plant.ObservedMisted, Source: plant.SourceApp,
+		Actor: "joey",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = s.StartEvidenceWindow(ctx, window.ID, intervention.ID, plant.SourceApp, "joey")
+	if err == nil || !strings.Contains(err.Error(),
+		"this care follow-up is tracking moved, but the selected record says misted") {
+		t.Fatalf("incompatible intervention returned %v", err)
+	}
+}
+
 func TestEvidenceWindowRejectsEvidenceOwnedByAnotherPlant(t *testing.T) {
 	s, ctx := testStore(t)
 	first := newPlant(t, s, ctx, "Evidence owner one")

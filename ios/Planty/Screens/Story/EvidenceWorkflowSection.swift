@@ -225,19 +225,20 @@ private struct RecheckActionSheet: View {
     @State private var failure: PlantyError?
     @State private var newlyRecorded: PlantObservation?
     @State private var logsIntervention = false
+    @State private var confirmsCancellation = false
 
     var body: some View {
         NavigationStack {
             Form {
-                if let failure { Section { SheetErrorRow(headline: "The recheck was not changed.", error: failure) } }
+                if let failure { Section { SheetErrorRow(headline: "The follow-up was not changed.", error: failure) } }
                 if window.status == .proposed {
                     Section("Recorded care action") {
                         let choices = matchingObservations
                         if choices.isEmpty {
-                            Text("There is no \(window.interventionKind.label.lowercased()) entry to attach yet. Log what you did, then Planty can start the before-and-after clock.")
+                            Text("There is no \(window.interventionKind.careActionNoun) entry to attach yet. Log that care action, then Planty can start the before-and-after clock.")
                                 .font(.subheadline)
                                 .foregroundStyle(PlantyColor.secondaryText)
-                            Button("Log \(window.interventionKind.label.lowercased())") {
+                            Button("Log \(window.interventionKind.careActionNoun)") {
                                 logsIntervention = true
                             }
                         } else {
@@ -246,11 +247,7 @@ private struct RecheckActionSheet: View {
                     }
                 } else if window.status == .active {
                     Section("Review photo") {
-                        evidencePicker(photos.filter {
-                            !window.baseline.map(\.id).contains($0.id) &&
-                                $0.takenAt >= window.earliestReviewAt &&
-                                $0.takenAt <= window.latestReviewAt
-                        }.map { ($0.id, $0.takenAt) })
+                        evidencePicker(matchingReviewPhotos.map { ($0.id, $0.takenAt) })
                     }
                 } else if window.status == .ready {
                     Section("Outcome") {
@@ -263,22 +260,51 @@ private struct RecheckActionSheet: View {
                         TextField("Evidence-backed conclusion", text: $conclusion, axis: .vertical).lineLimit(2...6)
                     }
                 }
+                if window.status == .proposed || window.status == .active || window.status == .ready {
+                    Section {
+                        Button("Cancel this follow-up", role: .destructive) {
+                            confirmsCancellation = true
+                        }
+                    } footer: {
+                        Text("Use this when the planned care action changed. Existing photos and care records stay in the plant story.")
+                    }
+                }
             }
             .plantyPage().navigationTitle(window.status.label).navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Save") { Task { await submit() } }.disabled(window.status == .ready ? conclusion.cleaned.isEmpty : selectedID == nil) }
+                ToolbarItem(placement: .cancellationAction) { Button("Close") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { Task { await submit() } }
+                        .disabled(window.status == .ready ? conclusion.cleaned.isEmpty : !selectionIsValid)
+                }
             }
+        }
+        .confirmationDialog(
+            "Cancel this care follow-up?",
+            isPresented: $confirmsCancellation,
+            titleVisibility: .visible
+        ) {
+            Button("Cancel follow-up", role: .destructive) {
+                Task { await cancelFollowUp() }
+            }
+            Button("Keep follow-up", role: .cancel) {}
+        } message: {
+            Text("Planty will stop waiting for \(window.interventionKind.careActionNoun) and a comparison photo. Nothing already recorded will be deleted.")
         }
         .sheet(isPresented: $logsIntervention) {
             CareLogSheet(
                 plantName: plant.commonName,
-                initialKind: window.interventionKind
-            ) { kind, note in
-                switch await record(kind, note) {
-                case .success(let observation):
+                initialKind: window.interventionKind,
+                fixedKind: window.interventionKind
+            ) { _, note in
+                switch await record(window.interventionKind, note) {
+                case .success(let observation) where observation.kind == window.interventionKind:
                     newlyRecorded = observation
                     selectedID = observation.id
+                    return nil
+                case .success:
+                    failure = incompatibleInterventionError
+                    selectedID = nil
                     return nil
                 case .failure(let error):
                     return error
@@ -304,6 +330,32 @@ private struct RecheckActionSheet: View {
             .sorted { $0.occurredAt > $1.occurredAt }
     }
 
+    private var matchingReviewPhotos: [Photo] {
+        photos.filter {
+            !window.baseline.map(\.id).contains($0.id) &&
+                $0.takenAt >= window.earliestReviewAt &&
+                $0.takenAt <= window.latestReviewAt
+        }
+    }
+
+    private var selectionIsValid: Bool {
+        guard let selectedID else { return false }
+        if window.status == .proposed {
+            return matchingObservations.contains { $0.id == selectedID }
+        }
+        if window.status == .active {
+            return matchingReviewPhotos.contains { $0.id == selectedID }
+        }
+        return false
+    }
+
+    private var incompatibleInterventionError: PlantyError {
+        .server(
+            status: 422,
+            message: "This follow-up is tracking \(window.interventionKind.careActionNoun). Choose or log a matching care record."
+        )
+    }
+
     private func evidencePicker(_ choices: [(UUID, Date)]) -> some View {
         Picker("Evidence", selection: $selectedID) {
             Text("Choose a ledger record").tag(UUID?.none)
@@ -312,9 +364,27 @@ private struct RecheckActionSheet: View {
     }
 
     private func submit() async {
-        if window.status == .proposed, let selectedID { failure = await session.evidenceWorkflows.start(window, observationID: selectedID) }
-        else if window.status == .active, let selectedID { failure = await session.evidenceWorkflows.review(window, evidence: [.init(plantID: plant.id, kind: .photo, id: selectedID)]) }
-        else if window.status == .ready { failure = await session.evidenceWorkflows.conclude(window, outcome: outcome, conclusion: conclusion) }
+        if window.status == .proposed {
+            guard selectionIsValid, let selectedID else {
+                failure = incompatibleInterventionError
+                self.selectedID = nil
+                return
+            }
+            failure = await session.evidenceWorkflows.start(window, observationID: selectedID)
+        } else if window.status == .active {
+            guard selectionIsValid, let selectedID else { return }
+            failure = await session.evidenceWorkflows.review(window, evidence: [.init(plantID: plant.id, kind: .photo, id: selectedID)])
+        } else if window.status == .ready {
+            failure = await session.evidenceWorkflows.conclude(window, outcome: outcome, conclusion: conclusion)
+        }
+        if failure == nil { dismiss() }
+    }
+
+    private func cancelFollowUp() async {
+        failure = await session.evidenceWorkflows.cancel(
+            window,
+            reason: "Owner cancelled the \(window.interventionKind.careActionNoun) follow-up."
+        )
         if failure == nil { dismiss() }
     }
 }

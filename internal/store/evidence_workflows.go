@@ -190,7 +190,10 @@ func (s *Store) StartEvidenceWindow(ctx context.Context, id, observationID uuid.
 		return plant.EvidenceWindow{}, err
 	}
 	if interventionKind != window.InterventionKind {
-		return plant.EvidenceWindow{}, fmt.Errorf("%w: intervention observation is %q, want %q", plant.ErrInvalid, interventionKind, window.InterventionKind)
+		return plant.EvidenceWindow{}, fmt.Errorf(
+			"%w: this care follow-up is tracking %s, but the selected record says %s; choose or log a matching care record",
+			plant.ErrInvalid, window.InterventionKind, interventionKind,
+		)
 	}
 	baselineAt, err := validateWindowEvidence(ctx, tx, window.Baseline, now)
 	if err != nil {
