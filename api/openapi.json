@@ -155,7 +155,7 @@
       "EvidenceWindowOutcome": {"type": "string", "enum": ["improved", "unchanged", "worsened", "insufficient_evidence", "supported", "not_supported", "inconclusive", "stopped_for_safety", "cancelled"]},
       "IncidentStatus": {"type": "string", "enum": ["open", "acknowledged", "resolved"]},
       "IncidentFactor": {"type": "string", "enum": ["ha_area", "location", "common_care", "environment_failure", "actuator_failure"]},
-      "IncidentResolution": {"type": "string", "enum": ["confirmed_shared_cause", "unrelated", "monitoring", "false_alarm"]},
+      "IncidentResolution": {"type": "string", "enum": ["confirmed_common_cause", "unrelated", "contained", "inconclusive"]},
       "SensorRole": {"type": "string", "enum": ["soil_moisture", "ambient_temp", "ambient_humidity", "illuminance"]},
       "AIJob": {"type": "string", "enum": ["assess", "identify", "consult", "ask", "postmortem", "owner_update"]},
       "PromptInstruction": {

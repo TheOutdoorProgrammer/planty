@@ -134,7 +134,7 @@ enum ActuatorEventAction: String, FallbackDecodable, CaseIterable {
 
 enum ActuatorKind: String, FallbackDecodable, CaseIterable {
     case fan
-    case switch
+    case `switch` = "switch"
     case unknown
 
     static let fallback = ActuatorKind.unknown
@@ -211,17 +211,17 @@ enum IncidentFactor: String, FallbackDecodable, CaseIterable {
 }
 
 enum IncidentResolution: String, FallbackDecodable, CaseIterable {
-    case confirmedSharedCause = "confirmed_shared_cause"
+    case confirmedCommonCause = "confirmed_common_cause"
     case unrelated
-    case monitoring
-    case falseAlarm = "false_alarm"
+    case contained
+    case inconclusive
     case unknown
 
     static let fallback = IncidentResolution.unknown
 }
 
 enum IncidentStatus: String, FallbackDecodable, CaseIterable {
-    case open
+    case `open` = "open"
     case acknowledged
     case resolved
     case unknown

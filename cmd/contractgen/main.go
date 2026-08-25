@@ -49,6 +49,19 @@ type route struct {
 
 var parameterPattern = regexp.MustCompile(`\{([A-Za-z0-9_]+)\}`)
 
+var swiftKeywords = map[string]struct{}{
+	"associatedtype": {}, "break": {}, "case": {}, "catch": {}, "class": {},
+	"continue": {}, "default": {}, "defer": {}, "deinit": {}, "do": {},
+	"else": {}, "enum": {}, "extension": {}, "fallthrough": {}, "false": {},
+	"fileprivate": {}, "for": {}, "func": {}, "guard": {}, "if": {},
+	"import": {}, "in": {}, "init": {}, "inout": {}, "internal": {},
+	"is": {}, "let": {}, "nil": {}, "open": {}, "operator": {}, "private": {},
+	"protocol": {}, "public": {}, "repeat": {}, "rethrows": {}, "return": {},
+	"self": {}, "static": {}, "struct": {}, "subscript": {}, "super": {},
+	"switch": {}, "throw": {}, "throws": {}, "true": {}, "try": {},
+	"typealias": {}, "var": {}, "where": {}, "while": {},
+}
+
 func main() {
 	root := flag.String("root", ".", "repository root")
 	flag.Parse()
@@ -212,6 +225,9 @@ func swiftIdentifier(raw string) string {
 	}
 	if len(name) > 0 && unicode.IsDigit(rune(name[0])) {
 		name = "value" + upperFirst(name)
+	}
+	if _, reserved := swiftKeywords[name]; reserved {
+		return "`" + name + "`"
 	}
 	return name
 }
