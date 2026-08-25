@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-const routeEvidenceCoveragePending = "GET /v1/evidence-coverage"
-
 func (s *Server) evidenceCoverage(w http.ResponseWriter, r *http.Request) {
 	coverage, err := s.store.EvidenceCoverage(r.Context(), time.Now().UTC())
 	if err != nil {

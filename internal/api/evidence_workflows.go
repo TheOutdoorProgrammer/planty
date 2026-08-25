@@ -15,32 +15,18 @@ import (
 
 // Root replaces these temporary names with generated route constants after
 // the parallel OpenAPI work lands.
-const (
-	routeProposeRecheckPending         = "POST /v1/plants/{slug}/rechecks"
-	routeGetEvidenceWindowPending      = "GET /v1/evidence-windows/{id}"
-	routeStartEvidenceWindowPending    = "POST /v1/evidence-windows/{id}/start"
-	routeReviewEvidenceWindowPending   = "POST /v1/evidence-windows/{id}/review"
-	routeConcludeEvidenceWindowPending = "POST /v1/evidence-windows/{id}/conclude"
-	routeCancelEvidenceWindowPending   = "POST /v1/evidence-windows/{id}/cancel"
-	routeListGuardrailsPending         = "GET /v1/plants/{slug}/guardrails"
-	routeOverrideGuardrailPending      = "POST /v1/guardrails/{id}/override"
-	routeListExperimentsPending        = "GET /v1/experiments"
-	routeProposeExperimentPending      = "POST /v1/experiments"
-	routeGetExperimentPending          = "GET /v1/experiments/{id}"
-)
-
 func (s *Server) registerEvidenceWorkflowRoutes(mux *http.ServeMux) {
-	mux.HandleFunc(routeProposeRecheckPending, s.proposeRecheck)
-	mux.HandleFunc(routeGetEvidenceWindowPending, s.getEvidenceWindow)
-	mux.HandleFunc(routeStartEvidenceWindowPending, s.startEvidenceWindow)
-	mux.HandleFunc(routeReviewEvidenceWindowPending, s.reviewEvidenceWindow)
-	mux.HandleFunc(routeConcludeEvidenceWindowPending, s.concludeEvidenceWindow)
-	mux.HandleFunc(routeCancelEvidenceWindowPending, s.cancelEvidenceWindow)
-	mux.HandleFunc(routeListGuardrailsPending, s.listGuardrails)
-	mux.HandleFunc(routeOverrideGuardrailPending, s.overrideGuardrail)
-	mux.HandleFunc(routeListExperimentsPending, s.listExperiments)
-	mux.HandleFunc(routeProposeExperimentPending, s.proposeExperiment)
-	mux.HandleFunc(routeGetExperimentPending, s.getExperiment)
+	mux.HandleFunc(routeProposeRecheck, s.proposeRecheck)
+	mux.HandleFunc(routeGetEvidenceWindow, s.getEvidenceWindow)
+	mux.HandleFunc(routeStartEvidenceWindow, s.startEvidenceWindow)
+	mux.HandleFunc(routeReviewEvidenceWindow, s.reviewEvidenceWindow)
+	mux.HandleFunc(routeConcludeEvidenceWindow, s.concludeEvidenceWindow)
+	mux.HandleFunc(routeCancelEvidenceWindow, s.cancelEvidenceWindow)
+	mux.HandleFunc(routeListGuardrails, s.listGuardrails)
+	mux.HandleFunc(routeOverrideGuardrail, s.overrideGuardrail)
+	mux.HandleFunc(routeListExperiments, s.listExperiments)
+	mux.HandleFunc(routeProposeExperiment, s.proposeExperiment)
+	mux.HandleFunc(routeGetExperiment, s.getExperiment)
 }
 
 type evidenceRefRequest struct {

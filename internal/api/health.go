@@ -12,11 +12,6 @@ import (
 // These patterns also live in api/openapi.json. Root regenerates the shared
 // contract after parallel slices land; keeping temporary names avoids editing
 // the generated file from this slice.
-const (
-	routeGetPlantHealthPending = "GET /v1/plants/{slug}/health"
-	routeAddHealthEventPending = "POST /v1/plants/{slug}/health-events"
-)
-
 type healthChangeRequest struct {
 	Kind           string               `json:"kind"`
 	Value          float64              `json:"value"`

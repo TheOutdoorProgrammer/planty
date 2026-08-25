@@ -13,12 +13,6 @@ import (
 
 // These route constants are temporary names until contract generation is run
 // for the OpenAPI additions. Keeping them local avoids editing generated code.
-const (
-	routeListPromptInstructionsPending = "GET /v1/prompt-instructions"
-	routeSetPromptInstructionPending   = "PUT /v1/prompt-instructions/{job}"
-	routeClearPromptInstructionPending = "DELETE /v1/prompt-instructions/{job}"
-)
-
 type promptInstructionView struct {
 	Job          string     `json:"job"`
 	Instructions string     `json:"instructions"`
