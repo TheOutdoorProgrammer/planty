@@ -10,7 +10,7 @@ Flux reconciles the completed copies in the private `flux` repository, so reposi
 | `namespace.yaml` | The `planty` namespace. |
 | `postgres-cluster.yaml` | A single-instance CloudNativePG cluster. |
 | `deployment.yaml` | The API deployment and ClusterIP service. |
-| `cronjobs.yaml` | Ingest, watering verification, daily, chase, away, thirst, cold, and reminder jobs. |
+| `cronjobs.yaml` | Ingest, watering verification, photo pruning, daily, chase, away, thirst, cold, and reminder jobs. |
 | `configmap.yaml` | Public non-secret defaults and provider declarations. |
 | `secret.yaml.example` | Template for database, Home Assistant, model-provider, APNs, and MinIO credentials. |
 
@@ -38,8 +38,9 @@ Assignments are checked against verified vision, schema, and tool capabilities b
 Presigned URLs include the host in the signature, so changing a cluster-only hostname after signing invalidates the URL.
 An unset or unreachable public endpoint makes successful uploads look like missing images in the app.
 
-Planty currently initializes photograph storage once at process startup.
-If MinIO is unavailable at that moment, the service stays alive with photo routes disabled until Planty restarts; self-healing initialization is tracked in [ROADMAP.md](../ROADMAP.md).
+Planty retries photograph storage initialization with bounded backoff while keeping API liveness separate from photo readiness.
+Metadata remains readable during an outage, and signed URLs return automatically after storage recovers.
+The daily `prune-photos` job removes explicitly requested deletions and unowned scratch photographs older than 30 days.
 
 ## Network boundary
 

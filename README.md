@@ -42,6 +42,7 @@ Scheduled work is one command per Kubernetes CronJob:
 | --- | --- | --- |
 | `planty ingest` | Every 20 minutes | Import current sensor readings from Home Assistant. |
 | `planty verify-water` | Every 15 minutes | Close completed manual watering attempts after sensor evidence has settled. |
+| `planty prune-photos` | 03:30 | Finish requested deletions and expire unowned consultation photos after 30 days. |
 | `planty daily` | 08:00 | Judge active plants, persist the garden-wide run, sweep for postmortems, and send a digest. |
 | `planty away` | 08:30 | Send the pre-departure pass or return briefing. |
 | `planty thirst` | 09:00 and 18:00 | Report calibrated plants that appear dry without moving water. |
@@ -60,7 +61,8 @@ The iOS Settings screen persists those assignments, and the service rejects a mo
 Providers are declared with `PLANTY_PROVIDERS`.
 The configured fallback selected by `PLANTY_JUDGE` can use the Claude Code subscription or the direct Anthropic API, while declared OpenAI-compatible providers use the shared chat-completions harness.
 The Claude Code CLI and OpenAI-compatible harness support acting jobs; the direct Anthropic API fallback is one-shot and cannot execute Planty tools.
-Current photographs can reach any verified vision model, but only the Claude Code CLI can selectively open historical photographs that were offered rather than attached.
+Current photographs can reach any verified vision model, and acting providers must advertise offered-photo access before they can be assigned to consultations.
+The Claude Code CLI and OpenAI-compatible harness can selectively open offered history; the direct Anthropic API remains explicitly ineligible.
 
 [ADR 0001](adr/0001-buy-judgments-through-the-claude-code-cli.md) explains the subscription-backed default.
 [ADR 0007](adr/0007-choose-a-model-per-job.md) records per-job selection, and [ADR 0008](adr/0008-run-the-acting-loop-in-the-openai-compatible-harness.md) records the later shared tool loop.
@@ -118,5 +120,4 @@ The iOS test command is documented in [ios/README.md](ios/README.md).
 
 ## License
 
-No license file is currently included.
-Until one is added, copyright law grants no permission to copy, modify, or distribute this code.
+Planty is available under the [Apache License 2.0](LICENSE).

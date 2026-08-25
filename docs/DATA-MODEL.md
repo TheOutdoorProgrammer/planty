@@ -55,7 +55,7 @@ The split matters, so it is stated once.
 | `sheltered_at` | timestamptz null | Set while it is indoors for cold, so the warning stops and it becomes eligible to go back out. A client that does not read it cannot say which plants are inside |
 | `care_profile` | jsonb | Domain specific, below |
 | `acquired_at` | date null | |
-| `archived_at` | timestamptz null | Set instead of deleting. See ADR-0001 |
+| `archived_at` | timestamptz null | Set instead of deleting; restore clears it and returns the plant to `alive` |
 
 ### Why `accessibility` is a first-class column
 
@@ -117,11 +117,13 @@ That check is only possible because the claim and the sensor are in the same sys
 
 ## photos
 
-`id`, `plant_id`, `storage_key`, `taken_at`, `caption`, `vision_findings` jsonb, `analyzed_at`.
+`id`, `plant_id`, `storage_key`, `taken_at`, `caption`, `vision_findings` jsonb, `analyzed_at`, `deletion_requested_at`.
 
 Blobs go to MinIO, which already runs here. Postgres holds the key, never the bytes.
 
 `vision_findings` is the model's reading of the image, kept separately from anything a human wrote, so a wrong machine finding is never mistaken later for something you observed yourself.
+Explicit deletion first hides the metadata, then deletes object bytes, then removes the row; a failed object call leaves a retryable pending record for `prune-photos`.
+Unowned scratch consultation photos follow the same path after 30 days, while archived plants retain their owned photos until somebody explicitly deletes them.
 
 ## verdicts
 
@@ -137,9 +139,11 @@ One row per plant per day, the output of the daily judgment run.
 
 ## harvests
 
-For the edible domains. `id`, `plant_id`, `occurred_at`, `quantity`, `unit`, `notes`.
+For the edible domains. `id`, `plant_id`, `occurred_at`, `quantity`, `unit`, `notes`, `created_at`, `updated_at`.
 
 Kept apart from observations because harvests aggregate: yield per plant per season is a real question, and burying it in a free text observation body makes it unanswerable.
+Quantity must be positive and the unit must be present.
+Records can be corrected or deleted, and the service aggregates by plant, unit, meteorological season, and season year.
 
 ## Conversations, notes, reminders, and questions
 

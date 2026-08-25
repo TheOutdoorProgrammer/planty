@@ -32,8 +32,8 @@ The base URL and optional bearer token resolve in this order:
 The current LAN deployment has no API authentication, so its token is empty.
 The client retains optional bearer support so an authenticated deployment does not require a networking rewrite.
 
-Settings has **Save and test**, which calls `/healthz` and proves only API reachability.
-It does not prove APNs permission, registration, token upload, or notification delivery; explicit push diagnostics are tracked in [ROADMAP.md](../ROADMAP.md).
+Settings has **Save and test**, which calls `/healthz` and proves API reachability.
+Its notification diagnostics separately show permission, APNs registration, token upload, environment, server acceptance, and a real APNs test delivery.
 
 ## App structure
 
@@ -43,6 +43,9 @@ The app has four tabs:
 - **Capture** takes or imports a photograph, identifies or selects a plant, saves the timeline entry, and records quick care.
 - **Plants** opens the searchable library and each plant's story.
 - **More** contains away mode, cold shelter state, owner questions, harvest history, postmortem lessons, owner updates, and settings.
+
+On iPad the tab hierarchy becomes a sidebar-adaptable layout instead of stretching the phone tab bar.
+Notification taps can open Today, Capture, Settings, or a named plant, and archived plants remain reachable through the Plants library.
 
 ```mermaid
 graph TD
