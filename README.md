@@ -11,7 +11,8 @@ A missing, stale, or partial check is never an all-clear.
 Planty preserves the difference between current calm, an unfinished judgment, stale evidence, and a system that has never run.
 
 It also refuses to turn watering into a timer.
-The scheduled jobs observe and notify; `planty water` is manual-only and remains unsafe for scheduling until an independent pump cutoff and durable delivery verification exist.
+`planty water` is manual-only, persists every attempt, and receives an independent Home Assistant maximum-runtime cutoff.
+The scheduled verifier observes delivery after the probes settle, but no scheduled job starts the pump.
 
 ## Surfaces
 
@@ -40,6 +41,7 @@ Scheduled work is one command per Kubernetes CronJob:
 | Command | Cadence | Purpose |
 | --- | --- | --- |
 | `planty ingest` | Every 20 minutes | Import current sensor readings from Home Assistant. |
+| `planty verify-water` | Every 15 minutes | Close completed manual watering attempts after sensor evidence has settled. |
 | `planty daily` | 08:00 | Judge active plants, persist the garden-wide run, sweep for postmortems, and send a digest. |
 | `planty away` | 08:30 | Send the pre-departure pass or return briefing. |
 | `planty thirst` | 09:00 and 18:00 | Report calibrated plants that appear dry without moving water. |

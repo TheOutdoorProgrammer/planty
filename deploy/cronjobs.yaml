@@ -36,6 +36,44 @@ spec:
                 capabilities:
                   drop: ["ALL"]
 ---
+# A manual pump run is only credited after the probes have had time to report.
+# This job moves no water; it closes durable attempts and alerts on missing or
+# flat evidence.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: planty-verify-water
+  namespace: planty
+spec:
+  schedule: "*/15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+          containers:
+            - name: verify-water
+              image: ghcr.io/theoutdoorprogrammer/planty:latest
+              args: ["verify-water"]
+              envFrom:
+                - configMapRef:
+                    name: planty-config
+                - secretRef:
+                    name: planty-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+---
 # The daily verdict and digest. Morning, so a "water this" lands when there is a
 # whole day left to act on it.
 apiVersion: batch/v1

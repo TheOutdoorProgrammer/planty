@@ -2,7 +2,9 @@ package job
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -16,6 +18,105 @@ func TestThresholdsLeaveADeadBand(t *testing.T) {
 	}
 	if Soaked-Thirsty < 0.2 {
 		t.Errorf("dead band of %.2f is too narrow to stop oscillation", Soaked-Thirsty)
+	}
+}
+
+func calibratedMoisture(t *testing.T, s *store.Store, ctx context.Context, p plant.Plant, entity string, at time.Time, value float64) plant.SensorLink {
+	t.Helper()
+	link, err := s.LinkSensor(ctx, plant.SensorLink{PlantID: &p.ID, HAEntityID: entity, Role: plant.RoleSoilMoisture})
+	if err != nil {
+		t.Fatal(err)
+	}
+	link, err = s.Calibrate(ctx, link.ID, 10, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordReading(ctx, plant.Reading{SensorLinkID: link.ID, Value: value, TakenAt: at}); err != nil {
+		t.Fatal(err)
+	}
+	return link
+}
+
+func TestManualWateringIsCreditedOnlyAfterEvidence(t *testing.T) {
+	s, ctx := testStore(t)
+	p := onTheLine(t, s, ctx, "Verified tomato")
+	link := calibratedMoisture(t, s, ctx, p, "sensor.verified_tomato", time.Now().Add(-time.Minute), 10)
+	f := newFakeHA(t, weatherEntity)
+
+	if err := (Water{
+		Store: s, HA: f.client(), Log: quietLog(), Notifications: f,
+		PumpSwitch: "switch.letpot", RunFor: time.Millisecond,
+	}).Run(ctx); err != nil {
+		t.Fatalf("manual water: %v", err)
+	}
+	if len(f.services) != 2 || !strings.HasSuffix(f.services[0], "/turn_on") || !strings.HasSuffix(f.services[1], "/turn_off") {
+		t.Fatalf("pump calls = %v, want one start followed by one stop", f.services)
+	}
+	if _, err := s.LastWatered(ctx, p.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("unverified pump run was recorded as watered: %v", err)
+	}
+
+	attempts, err := s.WateringAttemptsReadyForEvidence(ctx, time.Now().Add(time.Hour))
+	if err != nil || len(attempts) != 1 {
+		t.Fatalf("durable attempt = %+v, %v", attempts, err)
+	}
+	started := *attempts[0].PumpStartedAt
+	if err := s.RecordReading(ctx, plant.Reading{SensorLinkID: link.ID, Value: 30, TakenAt: started.Add(10 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	if err := (VerifyWater{
+		Store: s, Log: quietLog(), Notifications: f, SettleAfter: time.Nanosecond,
+		Now: func() time.Time { return started.Add(time.Hour) },
+	}).Run(ctx); err != nil {
+		t.Fatalf("verify water: %v", err)
+	}
+	wateredAt, err := s.LastWatered(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("verified watering missing: %v", err)
+	}
+	if !wateredAt.Equal(started) {
+		t.Fatalf("watered at %v, want physical start %v", wateredAt, started)
+	}
+}
+
+func TestWateringAlertsDistinguishAClogFromUnknownSensors(t *testing.T) {
+	s, ctx := testStore(t)
+	clogged := onTheLine(t, s, ctx, "Clogged basil")
+	unknown := onTheLine(t, s, ctx, "Silent mint")
+	started := time.Now().Add(-time.Hour).UTC()
+	cloggedLink := calibratedMoisture(t, s, ctx, clogged, "sensor.clogged_basil", started.Add(-time.Minute), 20)
+	_ = calibratedMoisture(t, s, ctx, unknown, "sensor.silent_mint", started.Add(-time.Minute), 20)
+	if err := s.RecordReading(ctx, plant.Reading{SensorLinkID: cloggedLink.ID, Value: 20, TakenAt: started.Add(10 * time.Minute)}); err != nil {
+		t.Fatal(err)
+	}
+	attempt, err := s.CreateWateringAttempt(ctx, "switch.letpot", "", time.Minute, []plant.Plant{clogged, unknown})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkWateringStarted(ctx, attempt.ID, started, store.PumpActivityConfirmed); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.MarkWateringStopped(ctx, attempt.ID, started.Add(time.Minute), nil); err != nil {
+		t.Fatal(err)
+	}
+	f := newFakeHA(t, weatherEntity)
+	if err := (VerifyWater{
+		Store: s, Log: quietLog(), Notifications: f, SettleAfter: time.Nanosecond,
+		Now: func() time.Time { return started.Add(2 * time.Hour) },
+	}).Run(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.notified) != 1 {
+		t.Fatalf("notifications = %+v", f.notified)
+	}
+	message := f.notified[0].message
+	for _, want := range []string{"Clogged basil", "blocked dripper", "Silent mint", "sensor readings"} {
+		if !strings.Contains(message, want) {
+			t.Errorf("watering alert missing %q: %s", want, message)
+		}
+	}
+	if _, err := s.LastWatered(ctx, clogged.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("flat moisture was falsely recorded as watered")
 	}
 }
 
@@ -42,7 +143,7 @@ func TestPumpDoesNotStartWithoutAPositiveDuration(t *testing.T) {
 	f := newFakeHA(t, weatherEntity)
 	err := (Water{
 		HA: f.client(), Log: quietLog(), PumpSwitch: "switch.letpot",
-	}).runLine(context.Background(), []string{"Tomato"})
+	}).runLine(context.Background(), []plant.Plant{{CommonName: "Tomato"}})
 	if err == nil {
 		t.Fatal("an unset run duration was accepted")
 	}

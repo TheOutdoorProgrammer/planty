@@ -30,7 +30,7 @@ var manual = map[string]string{
 	"version": "answers and exits, for a binary installed from the tap",
 }
 
-var scheduledArgs = regexp.MustCompile(`args:\s*\["(\w+)"\]`)
+var scheduledArgs = regexp.MustCompile(`args:\s*\["([\w-]+)"\]`)
 
 // The LetPot line was implemented, wired into main, covered by tests, and
 // scheduled nowhere, so watering would never once have happened. Nothing was

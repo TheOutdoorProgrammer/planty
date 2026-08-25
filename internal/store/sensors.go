@@ -133,9 +133,14 @@ func (s *Store) ReadingsSince(ctx context.Context, linkID uuid.UUID, since time.
 	return out, rows.Err()
 }
 
-// MoistureRoseAfter reports whether soil moisture actually climbed after a
-// claimed watering. A false answer means the water never reached the roots.
-func (s *Store) MoistureRoseAfter(ctx context.Context, linkID uuid.UUID, at time.Time, window time.Duration) (bool, error) {
+type MoistureChange struct {
+	Before float64
+	After  float64
+}
+
+// MoistureChangeAfter returns the reading immediately before an attempt and
+// the wettest reading after it, preserving the evidence behind verification.
+func (s *Store) MoistureChangeAfter(ctx context.Context, linkID uuid.UUID, at time.Time, window time.Duration) (MoistureChange, error) {
 	var before, after *float64
 
 	err := s.pool.QueryRow(ctx, `
@@ -147,10 +152,17 @@ func (s *Store) MoistureRoseAfter(ctx context.Context, linkID uuid.UUID, at time
 			 WHERE sensor_link_id = $1 AND taken_at > $2 AND taken_at <= $3)`,
 		linkID, at, at.Add(window)).Scan(&before, &after)
 	if err != nil {
-		return false, err
+		return MoistureChange{}, err
 	}
 	if before == nil || after == nil {
-		return false, ErrNotFound
+		return MoistureChange{}, ErrNotFound
 	}
-	return *after > *before, nil
+	return MoistureChange{Before: *before, After: *after}, nil
+}
+
+// MoistureRoseAfter reports whether soil moisture actually climbed after a
+// claimed watering. A false answer means the water never reached the roots.
+func (s *Store) MoistureRoseAfter(ctx context.Context, linkID uuid.UUID, at time.Time, window time.Duration) (bool, error) {
+	change, err := s.MoistureChangeAfter(ctx, linkID, at, window)
+	return change.After > change.Before, err
 }

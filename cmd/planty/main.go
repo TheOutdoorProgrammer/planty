@@ -29,6 +29,7 @@ const usage = `planty <command>
 
   serve    run the HTTP API
   ingest   pull current sensor values from Home Assistant
+  verify-water  verify completed manual watering attempts after probes settle
   daily    judge every plant and send the digest
   retry    rerun only the plants that failed the latest daily judgment
   cold     check tonight's forecast, both bringing in and putting back out
@@ -104,6 +105,8 @@ func run(log *slog.Logger) error {
 		return nil
 	case "ingest":
 		return job.Ingest{Store: db, HA: homeAssistant(), Log: log}.Run(ctx)
+	case "verify-water":
+		return job.VerifyWater{Store: db, Log: log, Notifications: notifications}.Run(ctx)
 	case "daily":
 		return daily(db, log, notifications).Run(ctx)
 	case "retry":

@@ -10,7 +10,7 @@ Flux reconciles the completed copies in the private `flux` repository, so reposi
 | `namespace.yaml` | The `planty` namespace. |
 | `postgres-cluster.yaml` | A single-instance CloudNativePG cluster. |
 | `deployment.yaml` | The API deployment and ClusterIP service. |
-| `cronjobs.yaml` | Ingest, daily, chase, away, thirst, cold, and reminder jobs. |
+| `cronjobs.yaml` | Ingest, watering verification, daily, chase, away, thirst, cold, and reminder jobs. |
 | `configmap.yaml` | Public non-secret defaults and provider declarations. |
 | `secret.yaml.example` | Template for database, Home Assistant, model-provider, APNs, and MinIO credentials. |
 
@@ -68,9 +68,9 @@ No CronJob moves water.
 Before a manual pump run, install `HSTEP/letpot2.0-home-assistant`, disable every LetPot schedule, calibrate every probe on the line, configure `PLANTY_PUMP_SWITCH`, and watch the physical system.
 A wet plant vetoes the shared line.
 
-The process defers a pump-off attempt during ordinary return and cancellation.
-That does not survive SIGKILL, OOM, node loss, Home Assistant loss, or a network partition.
-The independent cutoff and durable delivery-verification work in [ROADMAP.md](../ROADMAP.md) is required before anyone considers scheduling this command.
+The command persists its attempt before energizing the switch, explicitly stops on ordinary return and cancellation, and records `watered` only after the scheduled verifier observes a moisture rise.
+The live Home Assistant installation independently caps the switch at three minutes and turns it off after a Home Assistant restart.
+That backstop limits process and node failures, but it does not make a shared water line safe for unattended scheduling.
 
 ## Release and Fledge
 

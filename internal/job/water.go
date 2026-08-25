@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,7 +51,7 @@ func (w Water) Run(ctx context.Context) error {
 
 	thirsty, soaked, blind := w.survey(ctx, onLine)
 	if len(blind) > 0 {
-		w.Log.Info("not watering: uncalibrated plants on the line", "plants", blind)
+		w.Log.Info("not watering: uncalibrated plants on the line", "plants", plantNames(blind))
 		return nil
 	}
 	if len(thirsty) == 0 {
@@ -58,9 +59,9 @@ func (w Water) Run(ctx context.Context) error {
 		return nil
 	}
 	if len(soaked) > 0 {
-		return w.reportConflict(ctx, thirsty, soaked)
+		return w.reportConflict(ctx, plantNames(thirsty), plantNames(soaked))
 	}
-	return w.runLine(ctx, thirsty)
+	return w.runLine(ctx, onLine)
 }
 
 func moisture(ctx context.Context, s *store.Store, p plant.Plant) (float64, bool) {
@@ -98,19 +99,27 @@ func freshForWatering(reading plant.Reading, now time.Time) bool {
 	return age >= 0 && age <= MaxWateringReadingAge
 }
 
-func (w Water) survey(ctx context.Context, onLine []plant.Plant) (thirsty, soaked, blind []string) {
+func (w Water) survey(ctx context.Context, onLine []plant.Plant) (thirsty, soaked, blind []plant.Plant) {
 	for _, p := range onLine {
 		fraction, heard := moisture(ctx, w.Store, p)
 		switch {
 		case !heard:
-			blind = append(blind, p.CommonName)
+			blind = append(blind, p)
 		case fraction <= Thirsty:
-			thirsty = append(thirsty, p.CommonName)
+			thirsty = append(thirsty, p)
 		case fraction >= Soaked:
-			soaked = append(soaked, p.CommonName)
+			soaked = append(soaked, p)
 		}
 	}
 	return thirsty, soaked, blind
+}
+
+func plantNames(plants []plant.Plant) []string {
+	names := make([]string, 0, len(plants))
+	for _, p := range plants {
+		names = append(names, p.CommonName)
+	}
+	return names
 }
 
 func (w Water) reportConflict(ctx context.Context, thirsty, soaked []string) error {
@@ -125,83 +134,95 @@ func (w Water) reportConflict(ctx context.Context, thirsty, soaked []string) err
 	return notify(ctx, w.Notifications, "The LetPot line is mismatched", message, nil)
 }
 
-func (w Water) runLine(ctx context.Context, thirsty []string) error {
+func (w Water) runLine(ctx context.Context, onLine []plant.Plant) error {
 	if w.RunFor <= 0 {
 		return errors.New("pump run duration must be positive")
 	}
 
-	started := time.Now().UTC()
+	attempt, err := w.Store.CreateWateringAttempt(ctx, w.PumpSwitch, w.PumpSensor, w.RunFor, onLine)
+	if err != nil {
+		return fmt.Errorf("record watering attempt: %w", err)
+	}
+
 	if err := w.HA.CallService(ctx, "switch", "turn_on",
 		map[string]any{"entity_id": w.PumpSwitch}); err != nil {
-		return fmt.Errorf("start pump: %w", err)
-	}
-	w.Log.Info("pump on", "for", w.RunFor, "thirsty", thirsty)
-
-	defer func() {
-		stop, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
-		defer cancel()
-		if err := w.HA.CallService(stop, "switch", "turn_off",
-			map[string]any{"entity_id": w.PumpSwitch}); err != nil {
-			w.Log.Error("PUMP DID NOT STOP", "entity", w.PumpSwitch, "error", err)
+		if recordErr := w.Store.FailWateringStart(ctx, attempt.ID, err); recordErr != nil {
+			return errors.Join(fmt.Errorf("start pump: %w", err), fmt.Errorf("record pump failure: %w", recordErr))
 		}
-	}()
+		alertErr := notify(ctx, w.Notifications, "The LetPot pump did not start",
+			"Planty could not start the pump. Check Home Assistant, the smart switch, and the reservoir before trying again.", map[string]any{"screen": "today"})
+		if markErr := w.Store.MarkWateringAlert(ctx, attempt.ID, alertErr == nil, alertErr); markErr != nil {
+			alertErr = errors.Join(alertErr, markErr)
+		}
+		return errors.Join(fmt.Errorf("start pump: %w", err), alertErr)
+	}
+	started := time.Now().UTC()
+	activity := w.pumpActivity(ctx)
+	if err := w.Store.MarkWateringStarted(ctx, attempt.ID, started, activity); err != nil {
+		stopErr := w.stopPump(ctx)
+		return errors.Join(fmt.Errorf("record pump start: %w", err), stopErr)
+	}
+	w.Log.Info("pump on", "for", w.RunFor, "plants", plantNames(onLine), "activity", activity)
 
-	select {
-	case <-time.After(w.RunFor):
-	case <-ctx.Done():
-		return ctx.Err()
+	var runErr error
+	if activity == store.PumpActivityInactive {
+		runErr = errors.New("pump activity sensor stayed inactive")
+	} else {
+		select {
+		case <-time.After(w.RunFor):
+		case <-ctx.Done():
+			runErr = ctx.Err()
+		}
 	}
 
-	return w.verify(ctx, started)
+	stopErr := w.stopPump(ctx)
+	stopped := time.Now().UTC()
+	if stopErr != nil {
+		w.Log.Error("PUMP DID NOT STOP", "entity", w.PumpSwitch, "error", stopErr)
+		if err := w.Store.FailWateringStop(context.WithoutCancel(ctx), attempt.ID, stopped, stopErr); err != nil {
+			stopErr = errors.Join(stopErr, fmt.Errorf("record pump stop failure: %w", err))
+		}
+		alertErr := notify(context.WithoutCancel(ctx), w.Notifications, "The LetPot pump may still be running",
+			"Planty could not confirm the pump stopped. The independent Home Assistant cutoff should stop it, but check the reservoir and line now.", map[string]any{"screen": "today"})
+		if markErr := w.Store.MarkWateringAlert(context.WithoutCancel(ctx), attempt.ID, alertErr == nil, alertErr); markErr != nil {
+			alertErr = errors.Join(alertErr, markErr)
+		}
+		return errors.Join(runErr, stopErr, alertErr)
+	}
+	if err := w.Store.MarkWateringStopped(context.WithoutCancel(ctx), attempt.ID, stopped, nil); err != nil {
+		return errors.Join(runErr, fmt.Errorf("record pump stop: %w", err))
+	}
+	return runErr
 }
 
-func (w Water) verify(ctx context.Context, started time.Time) error {
-	onLine, err := w.Store.ListPlants(ctx, store.PlantFilter{
-		Status:         plant.StatusAlive,
-		WateringMethod: plant.WateringLetPot,
-	})
+func (w Water) stopPump(ctx context.Context) error {
+	stop, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	return w.HA.CallService(stop, "switch", "turn_off", map[string]any{"entity_id": w.PumpSwitch})
+}
+
+func (w Water) pumpActivity(ctx context.Context) store.PumpActivity {
+	if w.PumpSensor == "" {
+		return store.PumpActivityUnknown
+	}
+	state, err := w.HA.State(ctx, w.PumpSensor)
 	if err != nil {
-		return err
+		w.Log.Warn("could not inspect pump activity", "entity", w.PumpSensor, "error", err)
+		return store.PumpActivityUnknown
 	}
-
-	ingest := Ingest{Store: w.Store, HA: w.HA, Log: w.Log}
-
-	var clogged []string
-	for _, p := range onLine {
-		if _, err := w.Store.AddObservation(ctx, plant.Observation{
-			PlantID:    p.ID,
-			Kind:       plant.ObservedWatered,
-			Body:       "LetPot line ran",
-			OccurredAt: started,
-			Source:     plant.SourceAutomation,
-			Actor:      "planty",
-		}); err != nil {
-			w.Log.Error("could not record watering", "plant", p.Slug, "error", err)
-		}
-
-		rose, err := ingest.VerifyWatering(ctx, p, started)
-		if errors.Is(err, store.ErrNotFound) {
-			continue
-		}
-		if err != nil {
-			w.Log.Error("could not verify watering", "plant", p.Slug, "error", err)
-			continue
-		}
-		if !rose {
-			clogged = append(clogged, p.CommonName)
-		}
+	normalized := strings.ToLower(strings.TrimSpace(state.State))
+	switch normalized {
+	case "on", "running", "active":
+		return store.PumpActivityConfirmed
+	case "off", "idle", "inactive", "unavailable", "unknown":
+		return store.PumpActivityInactive
 	}
-
-	if len(clogged) == 0 {
-		return nil
+	value, err := strconv.ParseFloat(normalized, 64)
+	if err != nil {
+		return store.PumpActivityUnknown
 	}
-	message := fmt.Sprintf(
-		"The pump ran, but the soil never got wetter for %s.\n\n"+
-			"That usually means a blocked dripper or a line that popped off. "+
-			"It can also mean bone dry soil shedding water down the side of the "+
-			"pot without wetting the roots.",
-		strings.Join(clogged, " and "))
-
-	w.Log.Warn("pump ran but soil did not change", "plants", clogged)
-	return notify(ctx, w.Notifications, "Water is not reaching the soil", message, nil)
+	if value > 0 {
+		return store.PumpActivityConfirmed
+	}
+	return store.PumpActivityInactive
 }
