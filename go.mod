@@ -1,6 +1,6 @@
 module github.com/TheOutdoorProgrammer/planty
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.63.1
