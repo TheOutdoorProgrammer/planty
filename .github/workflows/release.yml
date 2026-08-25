@@ -79,12 +79,12 @@ jobs:
             -scheme Planty \
             -archivePath "$RUNNER_TEMP/Planty.xcarchive" \
             -destination 'generic/platform=iOS' \
-            DEVELOPMENT_TEAM="$TEAM" \
+            "DEVELOPMENT_TEAM[sdk=iphoneos*]=$TEAM" \
             CODE_SIGN_ENTITLEMENTS="Planty/Planty.entitlements" \
-            CODE_SIGN_STYLE=Manual \
-            CODE_SIGN_IDENTITY="Apple Distribution" \
-            PROVISIONING_PROFILE_SPECIFIER="$PROFILE_NAME" \
-            OTHER_CODE_SIGN_FLAGS="--keychain $SIGNING_KEYCHAIN" \
+            "CODE_SIGN_STYLE[sdk=iphoneos*]=Manual" \
+            "CODE_SIGN_IDENTITY[sdk=iphoneos*]=Apple Distribution" \
+            "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]=$PROFILE_NAME" \
+            "OTHER_CODE_SIGN_FLAGS[sdk=iphoneos*]=--keychain $SIGNING_KEYCHAIN" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             PLANTY_BASE_URL="$PLANTY_BASE_URL" \
             PLANTY_API_TOKEN="$PLANTY_API_TOKEN" \
