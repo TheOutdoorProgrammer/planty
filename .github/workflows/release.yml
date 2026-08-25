@@ -83,9 +83,19 @@ jobs:
             -destination 'generic/platform=iOS' \
             "${auth[@]}" \
             DEVELOPMENT_TEAM="$TEAM" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             PLANTY_BASE_URL="$PLANTY_BASE_URL" \
             FLEDGE_BASE_URL="$FLEDGE_BASE_URL"
+
+          # GitHub's ephemeral runner has no persistent signing key and asking
+          # Xcode to create one per run eventually exhausts Apple's certificate
+          # quota. Give the unsigned archive an ad-hoc signature carrying the
+          # app's entitlements; export replaces it with Apple's managed signing.
+          codesign --force --sign - \
+            --entitlements Planty/Planty.entitlements \
+            "$RUNNER_TEMP/Planty.xcarchive/Products/Applications/Planty.app"
 
           cat > "$RUNNER_TEMP/export.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>

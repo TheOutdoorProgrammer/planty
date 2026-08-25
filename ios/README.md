@@ -147,5 +147,5 @@ The lesson is the same one each time: nothing tested which URL was called, only 
 - **The camera is only prepared while Snap is selected.** `TabView` builds neighbouring tabs eagerly, and asking for the camera before the user has opened Snap is how a permission prompt gets denied.
 - **Simulators have no camera.** `CameraAvailability.unavailable` is a first-class state with a Photos picker, so the whole flow is exercisable without a device.
 - **`PLANTY_START_TAB`** is a DEBUG-only environment variable that opens the app straight onto a tab, for screenshot runs: `SIMCTL_CHILD_PLANTY_START_TAB=plants xcrun simctl launch <device> zone.stout.Planty`.
-- **Simulator builds need no team**, while device archives must supply `DEVELOPMENT_TEAM`. The target owns `Planty.entitlements`; do not disable signing project-wide or the exported app silently loses its push entitlement.
+- **Simulator builds need no team**, while device archives must supply `DEVELOPMENT_TEAM`. The target owns `Planty.entitlements`; the release workflow creates an unsigned archive, ad-hoc signs it with those entitlements, then lets export replace that signature with Apple's managed distribution signing.
 - **The mascot is a lavender seal**, from `design/logo/animals/planty-manatee.png`. Several design docs still describe a pink starfish; `CHECKLIST.md` section 9 is the one that is current.
