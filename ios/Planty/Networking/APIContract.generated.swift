@@ -23,10 +23,13 @@ enum APIPath {
     static func createPostmortem(slug: String) -> String { "/v1/plants/\(slug)/postmortem" }
     static let createQuestion = "/v1/questions"
     static func deleteAway(id: String) -> String { "/v1/away/\(id)" }
+    static func deleteHarvest(id: String) -> String { "/v1/harvests/\(id)" }
     static func deleteNote(id: String) -> String { "/v1/notes/\(id)" }
+    static func deletePhoto(id: String) -> String { "/v1/photos/\(id)" }
     static func deleteReminder(slug: String, kind: String) -> String { "/v1/plants/\(slug)/reminders/\(kind)" }
     static func getPlant(slug: String) -> String { "/v1/plants/\(slug)" }
     static func getTimeline(slug: String) -> String { "/v1/plants/\(slug)/timeline" }
+    static let harvestSummary = "/v1/harvests/summary"
     static let health = "/healthz"
     static let identify = "/v1/identify"
     static let linkSensor = "/v1/sensors"
@@ -48,6 +51,7 @@ enum APIPath {
     static let pushHealth = "/v1/push/health"
     static let ready = "/readyz"
     static let registerPushDevice = "/v1/push-devices"
+    static func restorePlant(slug: String) -> String { "/v1/plants/\(slug)/restore" }
     static func setModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
     static func setReminder(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
     static let shelter = "/v1/shelter"
@@ -55,6 +59,7 @@ enum APIPath {
     static let today = "/v1/today"
     static let unshelter = "/v1/unshelter"
     static func updateAway(id: String) -> String { "/v1/away/\(id)" }
+    static func updateHarvest(id: String) -> String { "/v1/harvests/\(id)" }
     static func updateNote(id: String) -> String { "/v1/notes/\(id)" }
     static func updatePlant(slug: String) -> String { "/v1/plants/\(slug)" }
     static func uploadPhoto(slug: String) -> String { "/v1/plants/\(slug)/photos" }

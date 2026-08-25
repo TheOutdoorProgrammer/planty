@@ -38,6 +38,10 @@ func humanize(pg *pgconn.PgError) string {
 		return "an away period has to end after it starts"
 	case "plants_slug_key":
 		return "a plant with that slug already exists"
+	case "harvest_quantity_positive":
+		return "harvest quantity must be greater than zero"
+	case "harvest_unit_present":
+		return "harvest unit is required"
 	}
 	if pg.Code == "23503" {
 		return "that references something which does not exist"

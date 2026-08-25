@@ -75,6 +75,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeGetPlant, s.getPlant)
 	mux.HandleFunc(routeUpdatePlant, s.updatePlant)
 	mux.HandleFunc(routeArchivePlant, s.archivePlant)
+	mux.HandleFunc(routeRestorePlant, s.restorePlant)
 
 	mux.HandleFunc(routeListObservations, s.listObservations)
 	mux.HandleFunc(routeAddObservation, s.addObservation)
@@ -89,7 +90,11 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeListHarvests, s.listHarvests)
 	mux.HandleFunc(routeListPlantHarvests, s.listHarvests)
 	mux.HandleFunc(routeAddHarvest, s.addHarvest)
+	mux.HandleFunc(routeUpdateHarvest, s.updateHarvest)
+	mux.HandleFunc(routeDeleteHarvest, s.deleteHarvest)
+	mux.HandleFunc(routeHarvestSummary, s.harvestSummary)
 	mux.HandleFunc(routeUploadPhoto, s.uploadPhoto)
+	mux.HandleFunc(routeDeletePhoto, s.deletePhoto)
 	mux.HandleFunc(routeGetTimeline, s.timeline)
 	mux.HandleFunc(routeAskPlant, s.consult)
 

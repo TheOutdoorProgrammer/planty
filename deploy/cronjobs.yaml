@@ -74,6 +74,44 @@ spec:
                 capabilities:
                   drop: ["ALL"]
 ---
+# Scratch consultation photos expire after 30 days. Explicit photo deletions
+# that lost object-storage connectivity are retried here too.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: planty-prune-photos
+  namespace: planty
+spec:
+  schedule: "30 3 * * *"
+  timeZone: America/New_York
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            runAsGroup: 65532
+          containers:
+            - name: prune-photos
+              image: ghcr.io/theoutdoorprogrammer/planty:latest
+              args: ["prune-photos"]
+              envFrom:
+                - configMapRef:
+                    name: planty-config
+                - secretRef:
+                    name: planty-secrets
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+---
 # The daily verdict and digest. Morning, so a "water this" lands when there is a
 # whole day left to act on it.
 apiVersion: batch/v1

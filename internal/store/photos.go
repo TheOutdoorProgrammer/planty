@@ -36,10 +36,12 @@ func (s *Store) SavePhotoOnce(ctx context.Context, p plant.Photo) (plant.Photo, 
 	if p.ContentHash != "" {
 		if p.PlantID == uuid.Nil {
 			conflict = ` ON CONFLICT (content_hash)
-				WHERE content_hash IS NOT NULL AND plant_id IS NULL DO NOTHING`
+				WHERE content_hash IS NOT NULL AND plant_id IS NULL
+				  AND deletion_requested_at IS NULL DO NOTHING`
 		} else {
 			conflict = ` ON CONFLICT (plant_id, content_hash)
-				WHERE content_hash IS NOT NULL AND plant_id IS NOT NULL DO NOTHING`
+				WHERE content_hash IS NOT NULL AND plant_id IS NOT NULL
+				  AND deletion_requested_at IS NULL DO NOTHING`
 		}
 	}
 
@@ -90,7 +92,8 @@ func (s *Store) PhotoByHash(ctx context.Context, plantID uuid.UUID, hash string)
 		SELECT id, plant_id, storage_key, taken_at, coalesce(caption,''),
 		       coalesce(vision_findings,''), analyzed_at, created_at
 		FROM photos
-		WHERE content_hash = $1 AND plant_id IS NOT DISTINCT FROM $2`,
+		WHERE content_hash = $1 AND plant_id IS NOT DISTINCT FROM $2
+		  AND deletion_requested_at IS NULL`,
 		hash, owner)
 
 	var out plant.Photo
@@ -131,7 +134,7 @@ func (s *Store) Photo(ctx context.Context, id uuid.UUID) (plant.Photo, error) {
 	row := s.pool.QueryRow(ctx, `
 		SELECT id, plant_id, storage_key, taken_at, coalesce(caption,''),
 		       coalesce(vision_findings,''), analyzed_at, created_at
-		FROM photos WHERE id = $1`, id)
+		FROM photos WHERE id = $1 AND deletion_requested_at IS NULL`, id)
 
 	var out plant.Photo
 	var owner *uuid.UUID
@@ -156,7 +159,7 @@ func (s *Store) Photos(ctx context.Context, plantID uuid.UUID, limit int) ([]pla
 		SELECT id, plant_id, storage_key, taken_at, coalesce(caption,''),
 		       coalesce(vision_findings,''), analyzed_at, created_at
 		FROM (
-			SELECT * FROM photos WHERE plant_id = $1
+			SELECT * FROM photos WHERE plant_id = $1 AND deletion_requested_at IS NULL
 			ORDER BY taken_at DESC LIMIT $2
 		) recent
 		ORDER BY taken_at`, plantID, limit)
@@ -191,7 +194,7 @@ func (s *Store) NewestPhotos(ctx context.Context, plantIDs []uuid.UUID) (map[uui
 		       id, plant_id, storage_key, taken_at, coalesce(caption,''),
 		       coalesce(vision_findings,''), analyzed_at, created_at
 		FROM photos
-		WHERE plant_id = ANY($1)
+		WHERE plant_id = ANY($1) AND deletion_requested_at IS NULL
 		ORDER BY plant_id, taken_at DESC`, plantIDs)
 	if err != nil {
 		return nil, fmt.Errorf("newest photos: %w", err)
@@ -207,6 +210,79 @@ func (s *Store) NewestPhotos(ctx context.Context, plantIDs []uuid.UUID) (map[uui
 		newest[p.PlantID] = p
 	}
 	return newest, rows.Err()
+}
+
+// RequestPhotoDeletion hides a photograph and makes object cleanup durable.
+// The row remains until its bytes are gone, so a failed object call can retry.
+func (s *Store) RequestPhotoDeletion(ctx context.Context, id uuid.UUID) (plant.Photo, error) {
+	row := s.pool.QueryRow(ctx, `
+		UPDATE photos SET deletion_requested_at = coalesce(deletion_requested_at, now())
+		WHERE id = $1
+		RETURNING id, plant_id, storage_key, taken_at, coalesce(caption,''),
+		          coalesce(vision_findings,''), analyzed_at, created_at`, id)
+	var out plant.Photo
+	var owner *uuid.UUID
+	if err := row.Scan(&out.ID, &owner, &out.StorageKey, &out.TakenAt,
+		&out.Caption, &out.VisionFindings, &out.AnalyzedAt, &out.CreatedAt); errors.Is(err, pgx.ErrNoRows) {
+		return plant.Photo{}, ErrNotFound
+	} else if err != nil {
+		return plant.Photo{}, err
+	}
+	if owner != nil {
+		out.PlantID = *owner
+	}
+	return out, nil
+}
+
+// ClaimExpiredScratchPhotos marks old unowned conversation images before
+// returning them, keeping them hidden while an object deletion is retried.
+func (s *Store) ClaimExpiredScratchPhotos(ctx context.Context, before time.Time, limit int) ([]plant.Photo, error) {
+	if limit <= 0 || limit > 500 {
+		limit = 100
+	}
+	rows, err := s.pool.Query(ctx, `
+		WITH claimed AS (
+			SELECT id FROM photos
+			WHERE (deletion_requested_at IS NOT NULL OR (plant_id IS NULL AND created_at < $1))
+			ORDER BY coalesce(deletion_requested_at, created_at), id
+			LIMIT $2
+			FOR UPDATE SKIP LOCKED
+		)
+		UPDATE photos p
+		SET deletion_requested_at = coalesce(p.deletion_requested_at, now())
+		FROM claimed
+		WHERE p.id = claimed.id
+		RETURNING p.id, p.plant_id, p.storage_key, p.taken_at, coalesce(p.caption,''),
+		          coalesce(p.vision_findings,''), p.analyzed_at, p.created_at`, before, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []plant.Photo
+	for rows.Next() {
+		var photo plant.Photo
+		var owner *uuid.UUID
+		if err := rows.Scan(&photo.ID, &owner, &photo.StorageKey, &photo.TakenAt,
+			&photo.Caption, &photo.VisionFindings, &photo.AnalyzedAt, &photo.CreatedAt); err != nil {
+			return nil, err
+		}
+		if owner != nil {
+			photo.PlantID = *owner
+		}
+		out = append(out, photo)
+	}
+	return out, rows.Err()
+}
+
+func (s *Store) FinalizePhotoDeletion(ctx context.Context, id uuid.UUID) error {
+	tag, err := s.pool.Exec(ctx, `DELETE FROM photos WHERE id = $1 AND deletion_requested_at IS NOT NULL`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // RecordVision stores what the model saw, kept apart from human captions so a

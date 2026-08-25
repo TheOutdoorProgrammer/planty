@@ -81,6 +81,7 @@ func (s *Store) PhotosPage(ctx context.Context, plantID uuid.UUID, before *Histo
 		       coalesce(vision_findings,''), analyzed_at, created_at
 		FROM photos
 		WHERE plant_id = $1
+		  AND deletion_requested_at IS NULL
 		  AND ($2::timestamptz IS NULL OR (taken_at, id) < ($2, $3::uuid))
 		ORDER BY taken_at DESC, id DESC
 		LIMIT $4`, plantID, at, id, limit+1)

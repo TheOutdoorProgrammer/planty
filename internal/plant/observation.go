@@ -1,6 +1,8 @@
 package plant
 
 import (
+	"math"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -83,4 +85,21 @@ type Harvest struct {
 	Unit       string    `json:"unit"`
 	Notes      string    `json:"notes,omitempty"`
 	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
+}
+
+func (h Harvest) Valid() error {
+	if h.PlantID == uuid.Nil {
+		return invalid("plant_id is required")
+	}
+	if h.OccurredAt.IsZero() {
+		return invalid("occurred_at is required")
+	}
+	if h.Quantity <= 0 || math.IsNaN(h.Quantity) || math.IsInf(h.Quantity, 0) {
+		return invalid("harvest quantity must be greater than zero")
+	}
+	if strings.TrimSpace(h.Unit) == "" {
+		return invalid("harvest unit is required")
+	}
+	return nil
 }

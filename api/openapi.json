@@ -18,6 +18,7 @@
       "patch": {"operationId": "updatePlant"},
       "delete": {"operationId": "archivePlant"}
     },
+    "/v1/plants/{slug}/restore": {"post": {"operationId": "restorePlant"}},
     "/v1/plants/{slug}/observations": {
       "get": {"operationId": "listObservations"},
       "post": {"operationId": "addObservation"}
@@ -35,11 +36,17 @@
       "delete": {"operationId": "deleteNote"}
     },
     "/v1/harvests": {"get": {"operationId": "listHarvests"}},
+    "/v1/harvests/summary": {"get": {"operationId": "harvestSummary"}},
+    "/v1/harvests/{id}": {
+      "patch": {"operationId": "updateHarvest"},
+      "delete": {"operationId": "deleteHarvest"}
+    },
     "/v1/plants/{slug}/harvests": {
       "get": {"operationId": "listPlantHarvests"},
       "post": {"operationId": "addHarvest"}
     },
     "/v1/plants/{slug}/photos": {"post": {"operationId": "uploadPhoto"}},
+    "/v1/photos/{id}": {"delete": {"operationId": "deletePhoto"}},
     "/v1/plants/{slug}/timeline": {"get": {"operationId": "getTimeline"}},
     "/v1/plants/{slug}/ask": {"post": {"operationId": "askPlant"}},
     "/v1/plants/{slug}/reminders": {

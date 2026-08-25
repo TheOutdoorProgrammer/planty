@@ -70,7 +70,7 @@ func (s *Server) withThumbnails(r *http.Request, plants []plant.Plant) []listedP
 			continue
 		}
 		link, err := s.photos.URL(r.Context(), shot.StorageKey, PhotoLinkTTL)
-		if err != nil {
+		if err != nil || !validPhotoURL(link) {
 			continue
 		}
 		listed[i].PhotoURL = link
@@ -214,6 +214,19 @@ func (s *Server) archivePlant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]string{"archived": r.PathValue("slug")})
+}
+
+func (s *Server) restorePlant(w http.ResponseWriter, r *http.Request) {
+	restored, err := s.store.RestorePlant(r.Context(), r.PathValue("slug"))
+	if errors.Is(err, store.ErrNotFound) {
+		s.fail(w, http.StatusNotFound, err)
+		return
+	}
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, restored)
 }
 
 func (s *Server) listObservations(w http.ResponseWriter, r *http.Request) {

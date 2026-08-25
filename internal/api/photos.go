@@ -8,9 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
@@ -255,7 +258,7 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 	for _, shot := range shots {
 		e := entry{Photo: shot}
 		if s.photos != nil {
-			if link, err := s.photos.URL(r.Context(), shot.StorageKey, PhotoLinkTTL); err == nil {
+			if link, err := s.photos.URL(r.Context(), shot.StorageKey, PhotoLinkTTL); err == nil && validPhotoURL(link) {
 				e.URL = link
 			}
 		}
@@ -266,6 +269,37 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 		"count":       len(out),
 		"next_cursor": encodeHistoryCursor(next),
 	})
+}
+
+func (s *Server) deletePhoto(w http.ResponseWriter, r *http.Request) {
+	if s.photos == nil {
+		s.fail(w, http.StatusServiceUnavailable, errors.New("photo storage is not configured"))
+		return
+	}
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	shot, err := s.store.RequestPhotoDeletion(r.Context(), id)
+	if err != nil {
+		s.fail(w, http.StatusNotFound, err)
+		return
+	}
+	if err := s.photos.Delete(r.Context(), shot.StorageKey); err != nil {
+		s.fail(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	if err := s.store.FinalizePhotoDeletion(r.Context(), id); err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func validPhotoURL(raw string) bool {
+	parsed, err := url.Parse(raw)
+	return err == nil && parsed.Host != "" && (parsed.Scheme == "https" || parsed.Scheme == "http")
 }
 
 // diagnosisRequest is what the app sends: an opening question, or a follow-up

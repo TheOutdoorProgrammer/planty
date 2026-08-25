@@ -16,5 +16,12 @@ func notify(ctx context.Context, n Notifier, title, body string, extra map[strin
 	if n == nil {
 		return errors.New("push notifications are not configured")
 	}
-	return n.Send(ctx, title, body, extra)
+	payload := make(map[string]any, len(extra)+1)
+	for key, value := range extra {
+		payload[key] = value
+	}
+	if _, ok := payload["screen"]; !ok {
+		payload["screen"] = "today"
+	}
+	return n.Send(ctx, title, body, payload)
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/TheOutdoorProgrammer/planty/internal/job"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
 // today answers "what should I do right now" for both clients.
@@ -246,10 +247,80 @@ func (s *Server) addHarvest(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.store.AddHarvest(r.Context(), h)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		status := http.StatusInternalServerError
+		if errors.Is(err, plant.ErrInvalid) {
+			status = http.StatusBadRequest
+		}
+		s.fail(w, status, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, created)
+}
+
+func (s *Server) updateHarvest(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	current, err := s.store.Harvest(r.Context(), id)
+	if errors.Is(err, store.ErrNotFound) {
+		s.fail(w, http.StatusNotFound, err)
+		return
+	}
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	var patch struct {
+		OccurredAt time.Time `json:"occurred_at"`
+		Quantity   float64   `json:"quantity"`
+		Unit       string    `json:"unit"`
+		Notes      string    `json:"notes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	current.OccurredAt = patch.OccurredAt
+	current.Quantity = patch.Quantity
+	current.Unit = patch.Unit
+	current.Notes = patch.Notes
+	updated, err := s.store.UpdateHarvest(r.Context(), current)
+	if err != nil {
+		status := http.StatusInternalServerError
+		if errors.Is(err, plant.ErrInvalid) {
+			status = http.StatusBadRequest
+		}
+		s.fail(w, status, err)
+		return
+	}
+	s.ok(w, http.StatusOK, updated)
+}
+
+func (s *Server) deleteHarvest(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.store.DeleteHarvest(r.Context(), id); errors.Is(err, store.ErrNotFound) {
+		s.fail(w, http.StatusNotFound, err)
+		return
+	} else if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) harvestSummary(w http.ResponseWriter, r *http.Request) {
+	summary, err := s.store.HarvestSummary(r.Context())
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{"summary": summary, "count": len(summary)})
 }
 
 func (s *Server) listHarvests(w http.ResponseWriter, r *http.Request) {

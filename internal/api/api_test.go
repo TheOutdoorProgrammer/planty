@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -268,6 +269,21 @@ func TestArchivingHidesThePlantButKeepsIt(t *testing.T) {
 	}
 }
 
+func TestArchivedPlantCanBeRestored(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{"common_name": "Recoverable", "slug": unique("recoverable")})
+	if rec, _ := do(t, h, http.MethodDelete, "/v1/plants/"+slug, nil); rec.Code != http.StatusOK {
+		t.Fatalf("archive: %d", rec.Code)
+	}
+	rec, restored := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/restore", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("restore: %d %s", rec.Code, rec.Body.String())
+	}
+	if restored["status"] != "alive" || restored["archived_at"] != nil {
+		t.Fatalf("restored record = %v", restored)
+	}
+}
+
 func TestArchivingRejectsANonTerminalStatus(t *testing.T) {
 	h, _, _ := newServer(t)
 	slug := createPlant(t, h, map[string]any{
@@ -354,6 +370,85 @@ func TestAHarvestIsFiledUnderThePlantInThePath(t *testing.T) {
 	// not be able to file it against another plant.
 	if out["plant_id"] == nil || out["plant_id"] == "" {
 		t.Error("the harvest was stored against no plant")
+	}
+}
+
+func TestHarvestRejectsNonPositiveQuantity(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{"common_name": "Empty basket", "slug": unique("empty-basket")})
+	for _, quantity := range []float64{0, -1} {
+		rec, _ := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/harvests", map[string]any{
+			"quantity": quantity, "unit": "fruit",
+		})
+		if rec.Code != http.StatusBadRequest {
+			t.Errorf("quantity %v: got %d, body %s", quantity, rec.Code, rec.Body.String())
+		}
+	}
+}
+
+func TestHarvestCanBeCorrectedDeletedAndAggregated(t *testing.T) {
+	h, _, _ := newServer(t)
+	slug := createPlant(t, h, map[string]any{"common_name": "Yield tomato", "slug": unique("yield-tomato")})
+	rec, created := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/harvests", map[string]any{
+		"occurred_at": "2026-07-10T12:00:00Z", "quantity": 2, "unit": "lb", "notes": "wrong scale",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", rec.Code, rec.Body.String())
+	}
+	id := created["id"].(string)
+	rec, updated := do(t, h, http.MethodPatch, "/v1/harvests/"+id, map[string]any{
+		"occurred_at": "2026-07-10T12:00:00Z", "quantity": 3.5, "unit": "lb", "notes": "weighed again",
+	})
+	if rec.Code != http.StatusOK || updated["quantity"] != 3.5 {
+		t.Fatalf("update: %d %v", rec.Code, updated)
+	}
+	rec, summary := do(t, h, http.MethodGet, "/v1/harvests/summary", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("summary: %d %s", rec.Code, rec.Body.String())
+	}
+	rows := summary["summary"].([]any)
+	var own map[string]any
+	for _, row := range rows {
+		candidate := row.(map[string]any)
+		if candidate["slug"] == slug {
+			own = candidate
+			break
+		}
+	}
+	if own == nil || own["quantity"] != 3.5 || own["season"] != "summer" {
+		t.Fatalf("summary = %v", rows)
+	}
+	if rec, _ := do(t, h, http.MethodDelete, "/v1/harvests/"+id, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete: %d %s", rec.Code, rec.Body.String())
+	}
+	_, list := do(t, h, http.MethodGet, "/v1/plants/"+slug+"/harvests", nil)
+	if list["count"] != 0.0 {
+		t.Fatalf("deleted harvest remains: %v", list)
+	}
+}
+
+func TestPhotoDeleteRemovesMetadataAfterObject(t *testing.T) {
+	_, db, ctx := newServer(t)
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storage := &readinessPhotos{state: photos.StateReady}
+	h := api.New(db, quiet).WithPhotos(storage, nil).Handler()
+	p, err := db.CreatePlant(ctx, plant.Plant{
+		CommonName: "Photo deletion", Slug: unique("photo-deletion"), Domain: plant.DomainHouseplant,
+		Status: plant.StatusAlive, Steward: plant.StewardSelf, Accessibility: plant.AccessEasy,
+		WateringMethod: plant.WateringHand,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	shot, err := db.SavePhoto(ctx, plant.Photo{PlantID: p.ID, StorageKey: "photo/delete.jpg", TakenAt: time.Now()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if rec, _ := do(t, h, http.MethodDelete, "/v1/photos/"+shot.ID.String(), nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("delete photo: %d %s", rec.Code, rec.Body.String())
+	}
+	if _, err := db.Photo(ctx, shot.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("deleted photo metadata returned %v", err)
 	}
 }
 

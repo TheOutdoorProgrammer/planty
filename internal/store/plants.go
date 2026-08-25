@@ -262,6 +262,19 @@ func (s *Store) ArchivePlant(ctx context.Context, slug string, status plant.Stat
 	return nil
 }
 
+func (s *Store) RestorePlant(ctx context.Context, slug string) (plant.Plant, error) {
+	row := s.pool.QueryRow(ctx, `
+		UPDATE plants
+		SET archived_at = NULL, status = 'alive', updated_at = now()
+		WHERE slug = $1 AND archived_at IS NOT NULL
+		RETURNING `+plantColumns, slug)
+	p, err := scanPlant(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plant.Plant{}, ErrNotFound
+	}
+	return p, classify(err)
+}
+
 // Slugify makes a stable, readable ref fragment out of a name.
 func Slugify(name string) string {
 	var b strings.Builder

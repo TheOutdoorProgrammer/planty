@@ -30,6 +30,7 @@ const usage = `planty <command>
   serve    run the HTTP API
   ingest   pull current sensor values from Home Assistant
   verify-water  verify completed manual watering attempts after probes settle
+  prune-photos  delete expired scratch photos and finish pending deletions
   daily    judge every plant and send the digest
   retry    rerun only the plants that failed the latest daily judgment
   cold     check tonight's forecast, both bringing in and putting back out
@@ -107,6 +108,8 @@ func run(log *slog.Logger) error {
 		return job.Ingest{Store: db, HA: homeAssistant(), Log: log}.Run(ctx)
 	case "verify-water":
 		return job.VerifyWater{Store: db, Log: log, Notifications: notifications}.Run(ctx)
+	case "prune-photos":
+		return prunePhotos(ctx, db, log)
 	case "daily":
 		return daily(db, log, notifications).Run(ctx)
 	case "retry":
@@ -142,6 +145,18 @@ func run(log *slog.Logger) error {
 		fmt.Fprintln(os.Stderr, usage)
 		return fmt.Errorf("unknown command %q", os.Args[1])
 	}
+}
+
+func prunePhotos(ctx context.Context, db *store.Store, log *slog.Logger) error {
+	config, enabled := photoConfig()
+	if !enabled {
+		return errors.New("photo storage is not configured")
+	}
+	storage, err := photos.Open(ctx, config)
+	if err != nil {
+		return err
+	}
+	return job.PrunePhotos{Store: db, Photos: storage, Log: log}.Run(ctx)
 }
 
 func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications *push.Sender) error {
