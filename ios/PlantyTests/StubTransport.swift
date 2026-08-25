@@ -51,7 +51,7 @@ private final class StubResponderRegistry: @unchecked Sendable {
     }
 
     func unregister(id: String) {
-        lock.withLock { responders.removeValue(forKey: id) }
+        _ = lock.withLock { responders.removeValue(forKey: id) }
     }
 
     func responder(for request: URLRequest) -> StubResponder? {

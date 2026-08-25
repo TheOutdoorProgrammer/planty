@@ -31,13 +31,13 @@ struct PlantsLibraryScreen: View {
             .plantyPage()
             .navigationTitle("Plants")
             .searchable(text: $store.searchText, prompt: "Name, species, owner or room")
-            .refreshable { await store.load() }
+            .refreshable { await loadWithStatuses() }
             .task { await loadWithStatuses() }
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button(store.showArchived ? "Active only" : "All plants") {
                         store.showArchived.toggle()
-                        Task { await store.load() }
+                        Task { await loadWithStatuses() }
                     }
                     .accessibilityLabel(store.showArchived ? "Hide archived plants" : "Include archived plants")
                 }
@@ -131,6 +131,7 @@ struct PlantsLibraryScreen: View {
 
     private func loadWithStatuses() async {
         await store.load()
+        await session.health.load(store.plants)
         if session.today.digest == nil {
             await session.today.load()
         }
@@ -200,6 +201,8 @@ struct PlantLibraryRow: View {
     let state: CareState
     let takePhoto: () -> Void
 
+    @Environment(AppSession.self) private var session
+
     var body: some View {
         HStack(spacing: 12) {
             NavigationLink(value: plant) {
@@ -212,6 +215,7 @@ struct PlantLibraryRow: View {
                             .font(.headline)
                             .foregroundStyle(PlantyColor.foreground)
                         StatusPill(state: state)
+                        PlantHealthBar(event: session.health.current(for: plant), compact: true)
                         Text(metadata)
                             .font(.caption)
                             .foregroundStyle(PlantyColor.secondaryText)

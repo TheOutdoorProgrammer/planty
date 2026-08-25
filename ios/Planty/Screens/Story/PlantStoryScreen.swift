@@ -28,6 +28,12 @@ struct PlantStoryScreen: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 currentState
+                PlantHealthSection(plant: store.plant)
+                EvidenceWorkflowSection(
+                    plant: store.plant,
+                    photos: store.timeline.photos,
+                    observations: store.timeline.observations
+                )
 
                 if !store.plant.status.isRetired {
                     actions
@@ -74,8 +80,8 @@ struct PlantStoryScreen: View {
         .plantyPage()
         .navigationTitle(store.plant.commonName)
         .navigationBarTitleDisplayMode(.inline)
-        .refreshable { await store.load() }
-        .task { await store.load() }
+        .refreshable { await refresh() }
+        .task { await refresh() }
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -216,6 +222,12 @@ struct PlantStoryScreen: View {
     private func restorePlant() async {
         actionError = await store.restore()
         if actionError == nil { session.library.apply(store.plant) }
+    }
+
+    private func refresh() async {
+        async let story: Void = store.load()
+        async let health: Void = session.health.load(store.plant)
+        _ = await (story, health)
     }
 
     private var header: some View {

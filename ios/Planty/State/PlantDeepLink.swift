@@ -1,6 +1,8 @@
 import Foundation
 
 enum PlantDeepLink {
+    static let careRoundURL = URL(string: "planty://care-round")!
+
     static func url(for plant: Plant) -> URL {
         var components = URLComponents()
         components.scheme = "planty"
@@ -18,9 +20,19 @@ enum PlantDeepLink {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return slug?.isEmpty == false ? slug : nil
     }
+
+    static func opensCareRound(_ url: URL) -> Bool {
+        url.scheme?.lowercased() == "planty" && url.host?.lowercased() == "care-round"
+    }
 }
 extension AppSession {
     func openDeepLink(_ url: URL) {
+        if PlantDeepLink.opensCareRound(url) {
+            isShowingSettings = false
+            selectedTab = .today
+            isShowingCareRound = true
+            return
+        }
         guard let slug = PlantDeepLink.plantSlug(from: url) else { return }
         isShowingSettings = false
         selectedTab = .plants

@@ -1,4 +1,4 @@
-import MessageUI
+@preconcurrency import MessageUI
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -213,7 +213,8 @@ struct MessageComposer: UIViewControllerRepresentable {
 
     func updateUIViewController(_ uiViewController: MFMessageComposeViewController, context: Context) {}
 
-    final class Coordinator: NSObject, MFMessageComposeViewControllerDelegate {
+    @MainActor
+    final class Coordinator: NSObject, @preconcurrency MFMessageComposeViewControllerDelegate {
         func messageComposeViewController(
             _ controller: MFMessageComposeViewController,
             didFinishWith result: MessageComposeResult

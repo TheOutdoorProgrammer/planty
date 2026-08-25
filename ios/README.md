@@ -39,13 +39,14 @@ Its notification diagnostics separately show permission, APNs registration, toke
 
 The app has four tabs:
 
-- **Today** shows current care actions and distinguishes calm from stale or incomplete evidence.
+- **Today** shows current care actions and garden incidents, distinguishes calm from stale or incomplete evidence, and opens room-grouped care rounds.
 - **Capture** takes or imports a photograph, identifies or selects a plant, saves the timeline entry, and records quick care.
-- **Plants** opens the searchable library and each plant's story.
-- **More** contains away mode, cold shelter state, owner questions, harvest history, postmortem lessons, owner updates, and settings.
+- **Plants** opens the searchable library and each plant's story, including health history, evidence rechecks, photo overlays, and printable QR labels.
+- **More** contains bounded household experiments, the one highest-value missing evidence input, away mode, cold shelter state, owner questions, harvest history, postmortem lessons, owner updates, and settings.
 
 On iPad the tab hierarchy becomes a sidebar-adaptable layout instead of stretching the phone tab bar.
 Notification taps can open Today, Capture, Settings, or a named plant, and archived plants remain reachable through the Plants library.
+The App Intent named **Start Plant Care Round** can be placed in Shortcuts and on the Lock Screen without giving Shortcuts access to garden state.
 
 ```mermaid
 graph TD
@@ -77,6 +78,12 @@ Unknown is outside the safe-to-severe color ramp and ranks above safe when the a
 
 A failed write must remain retryable.
 Photo intake, care completion, reminder completion, and consultation flows keep user input when the server call fails, while idempotency keys make safe retries possible where an action records care.
+
+Health is evidence, not lifecycle state.
+Unknown remains different from zero, arbitrary signed corrections append history, and a zero score never archives a plant without a separate explicit decision.
+
+An Incident Radar card is a hypothesis, not a diagnosis.
+It preserves each affected plant's individual action and explicitly says that correlated timing does not establish causation.
 
 ## Notifications and distribution
 

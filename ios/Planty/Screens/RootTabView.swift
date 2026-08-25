@@ -28,6 +28,9 @@ struct RootTabView: View {
         .sheet(isPresented: $session.isShowingSettings) {
             SettingsScreen()
         }
+        .sheet(isPresented: $session.isShowingCareRound) {
+            CareRoundScreen()
+        }
         .onReceive(NotificationCenter.default.publisher(for: .plantyPushOpened)) { notification in
             guard let route = notification.object as? PlantyPushRoute else { return }
             session.openPushRoute(route)

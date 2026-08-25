@@ -41,6 +41,9 @@ struct GardenScreen: View {
                             harvests: store.harvests.count,
                             lessons: store.postmortems.count
                         )
+                        if let coverage = session.evidenceWorkflows.nextBestCoverage {
+                            EvidenceNextBestCard(coverage: coverage)
+                        }
                         if let error = store.error {
                             PartialGardenWarning(error: error) {
                                 Task { await store.load() }
@@ -65,11 +68,16 @@ struct GardenScreen: View {
                     .accessibilityLabel("Settings")
                 }
             }
-            .refreshable { await store.load() }
+            .refreshable {
+                async let garden: Void = store.load()
+                async let coverage: Void = session.evidenceWorkflows.loadCoverage()
+                _ = await (garden, coverage)
+            }
             .task {
                 async let gardenLoad: Void = store.load()
                 async let plantLoad: Void = session.library.load()
-                _ = await (gardenLoad, plantLoad)
+                async let coverageLoad: Void = session.evidenceWorkflows.loadCoverage()
+                _ = await (gardenLoad, plantLoad, coverageLoad)
             }
             .sheet(item: $ownerUpdateTarget) { target in
                 OwnerUpdateFlow(steward: target.name, store: store)
@@ -151,6 +159,17 @@ struct GardenScreen: View {
                     color: PlantyColor.green
                 )
             }
+
+            NavigationLink {
+                ExperimentListScreen()
+            } label: {
+                GardenRouteCard(
+                    title: "Household experiments",
+                    detail: "Change one thing, hold the rest steady, and review bounded evidence",
+                    symbol: "flask.fill",
+                    color: PlantyColor.pink
+                )
+            }
         }
         .buttonStyle(.plain)
     }
@@ -180,6 +199,27 @@ struct GardenScreen: View {
         let count = session.library.plants.filter { $0.isFriends && $0.steward == steward }.count
         let noun = count == 1 ? "plant" : "plants"
         return "Summarize the last 7 days for \(count) \(noun) and attach the latest photos"
+    }
+}
+
+private struct EvidenceNextBestCard: View {
+    let coverage: EvidenceCoverage
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("One useful next input", systemImage: "scope")
+                .font(.headline)
+                .foregroundStyle(PlantyColor.cyan)
+            Text(coverage.plant.commonName).font(.caption.weight(.semibold))
+            Text(coverage.nextBestInput ?? "")
+                .font(.title3.weight(.bold))
+            Text(coverage.why ?? "")
+                .font(.subheadline)
+                .foregroundStyle(PlantyColor.secondaryText)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .plantyCard(border: PlantyColor.cyan.opacity(0.24))
+        .accessibilityElement(children: .combine)
     }
 }
 

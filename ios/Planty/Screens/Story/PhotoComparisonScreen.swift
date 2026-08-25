@@ -8,6 +8,8 @@ struct PhotoComparisonScreen: View {
     let comparison: PhotoComparison
 
     @State private var index: Int
+    @State private var mode = PhotoComparisonMode.overlay
+    @State private var overlayOpacity = 0.5
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(plant: Plant, comparison: PhotoComparison) {
@@ -19,7 +21,16 @@ struct PhotoComparisonScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                if dynamicTypeSize.isAccessibilitySize {
+                Picker("Comparison style", selection: $mode) {
+                    ForEach(PhotoComparisonMode.allCases, id: \.self) { option in
+                        Text(option.label).tag(option)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                if mode == .overlay {
+                    overlay
+                } else if dynamicTypeSize.isAccessibilitySize {
                     VStack(alignment: .leading, spacing: 16) {
                         pane(comparison.earliest, caption: "First")
                         pane(comparison.photo(at: index), caption: "Then")
@@ -57,6 +68,32 @@ struct PhotoComparisonScreen: View {
         .plantyPage()
         .navigationTitle("Compare")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private var overlay: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("First photo")
+                Spacer()
+                Text("Review at \(overlayOpacity.formatted(.percent.precision(.fractionLength(0))))")
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(PlantyColor.secondaryText)
+
+            ZStack {
+                PlantPhotoView(plant: plant, photo: comparison.earliest, height: 360)
+                PlantPhotoView(plant: plant, photo: comparison.photo(at: index), height: 360)
+                    .opacity(overlayOpacity)
+            }
+            .allowsHitTesting(false)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(overlayAccessibilityLabel)
+
+            Slider(value: $overlayOpacity, in: 0...1)
+                .tint(PlantyColor.cyan)
+                .accessibilityLabel("Review photo opacity")
+                .accessibilityValue(overlayOpacity.formatted(.percent.precision(.fractionLength(0))))
+        }
     }
 
     /// The label sits above its photo: which one this is has to be known before
@@ -100,5 +137,25 @@ struct PhotoComparisonScreen: View {
               let chosen = comparison.photo(at: index)?.takenAt
         else { return nil }
         return PhotoComparison.span(between: first, and: chosen)
+    }
+
+    private var overlayAccessibilityLabel: String {
+        let first = comparison.earliest?.accessibilityDescription(plantName: plant.commonName)
+            ?? "First photo unavailable"
+        let review = comparison.photo(at: index)?.accessibilityDescription(plantName: plant.commonName)
+            ?? "Review photo unavailable"
+        return "Overlay comparison. \(first). \(review)."
+    }
+}
+
+private enum PhotoComparisonMode: CaseIterable {
+    case overlay
+    case sideBySide
+
+    var label: String {
+        switch self {
+        case .overlay: "Overlay"
+        case .sideBySide: "Side by side"
+        }
     }
 }

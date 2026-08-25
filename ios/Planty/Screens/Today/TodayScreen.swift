@@ -16,6 +16,8 @@ struct TodayScreen: View {
                         UpdateBanner(release: release) { session.updates.dismiss() }
                     }
 
+                    IncidentRadarSection()
+
                     content
 
                     OpenQuestionsCard(questions: store.openQuestions) { question, answer in
@@ -32,8 +34,13 @@ struct TodayScreen: View {
             .plantyPage()
             .navigationTitle("Today")
             .toolbar { settingsButton }
-            .refreshable { await store.load() }
+            .refreshable {
+                async let today: Void = store.load()
+                async let incidents: Void = session.incidents.load()
+                _ = await (today, incidents)
+            }
             .task { await store.load() }
+            .task { await session.incidents.load() }
             .task { await session.updates.check() }
             .onChange(of: session.capture.settled) { _, verdict in
                 guard let verdict else { return }
@@ -181,15 +188,24 @@ struct TodayScreen: View {
             SectionHeading("Quick access")
             ViewThatFits(in: .horizontal) {
                 HStack(spacing: 10) {
+                    careRoundShortcut
                     takePhotoShortcut
                     plantsShortcut
                 }
                 VStack(spacing: 10) {
+                    careRoundShortcut
                     takePhotoShortcut
                     plantsShortcut
                 }
             }
         }
+    }
+
+    private var careRoundShortcut: some View {
+        Button { session.isShowingCareRound = true } label: {
+            ActionFace("Care round", icon: "figure.walk")
+        }
+        .buttonStyle(SecondaryButtonStyle())
     }
 
     private var takePhotoShortcut: some View {

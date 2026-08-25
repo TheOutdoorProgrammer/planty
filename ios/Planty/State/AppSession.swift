@@ -23,6 +23,7 @@ final class AppSession {
     var selectedTab: AppTab = .today
     var snapContext: SnapContext?
     var isShowingSettings = false
+    var isShowingCareRound = false
     var pendingPlantSlug: String?
 
     private(set) var configuration: PlantyConfiguration
@@ -34,6 +35,11 @@ final class AppSession {
     let garden: GardenStore
     let choices: ManagedChoicesStore
     let models: ModelSettingsStore
+    let promptInstructions: PromptInstructionStore
+    let actuators: ActuatorStore
+    let evidenceWorkflows: EvidenceWorkflowStore
+    let incidents: IncidentStore
+    let health: PlantHealthStore
     let images: ImageRepository
     private(set) var identification: IdentificationStore
     let updates: UpdateStore
@@ -64,6 +70,11 @@ final class AppSession {
         garden = GardenStore(api: client, isConfigured: resolved.isConfigured)
         choices = ManagedChoicesStore(api: client, isConfigured: resolved.isConfigured)
         models = ModelSettingsStore(api: client, isConfigured: resolved.isConfigured)
+        promptInstructions = PromptInstructionStore(api: client, isConfigured: resolved.isConfigured)
+        actuators = ActuatorStore(api: client, isConfigured: resolved.isConfigured)
+        evidenceWorkflows = EvidenceWorkflowStore(api: client, isConfigured: resolved.isConfigured)
+        incidents = IncidentStore(api: client, isConfigured: resolved.isConfigured)
+        health = PlantHealthStore(api: client)
         identification = IdentificationStore(
             pipeline: Self.pipeline(
                 client: client,
@@ -108,6 +119,11 @@ final class AppSession {
         garden.replace(api: client, isConfigured: configuration.isConfigured)
         choices.replace(api: client, isConfigured: configuration.isConfigured)
         models.replace(api: client, isConfigured: configuration.isConfigured)
+        promptInstructions.replace(api: client, isConfigured: configuration.isConfigured)
+        actuators.replace(api: client, isConfigured: configuration.isConfigured)
+        evidenceWorkflows.replace(api: client, isConfigured: configuration.isConfigured)
+        incidents.replace(api: client, isConfigured: configuration.isConfigured)
+        health.replace(api: client)
         identification = IdentificationStore(
             pipeline: Self.pipeline(
                 client: client,
@@ -204,6 +220,7 @@ final class AppSession {
     }
 
     func openPushRoute(_ route: PlantyPushRoute) {
+        isShowingCareRound = false
         switch route {
         case .settings:
             break

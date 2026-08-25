@@ -32,6 +32,34 @@ protocol PlantyAPI: Sendable {
     func jobAssignments() async throws -> [JobAssignment]
     func assign(job: AIJob, provider: String, model: String) async throws -> JobAssignment
     func clearAssignment(job: AIJob) async throws -> JobAssignment
+    func promptInstructions() async throws -> [PromptInstructionSetting]
+    func setPromptInstruction(job: AIJob, instructions: String) async throws -> PromptInstructionSetting
+    func clearPromptInstruction(job: AIJob) async throws -> PromptInstructionSetting
+    func discoverActuators() async throws -> [HomeAssistantEntity]
+    func actuators() async throws -> [Actuator]
+    func registerActuator(_ registration: ActuatorRegistration) async throws -> Actuator
+    func renameActuator(id: UUID, name: String, plantIDs: [UUID]) async throws -> Actuator
+    func deleteActuator(id: UUID) async throws
+    func actuatorEvents(id: UUID) async throws -> [ActuatorEvent]
+    func startActuator(id: UUID, request: ActuatorStartRequest) async throws -> ActuatorLease
+    func stopActuator(id: UUID, request: ActuatorStopRequest) async throws -> ActuatorStopResponse
+    func proposeRecheck(slug: String, proposal: RecheckProposal) async throws -> EvidenceWindow
+    func rechecks(slug: String) async throws -> [EvidenceWindow]
+    func evidenceWindow(id: UUID) async throws -> EvidenceWindow
+    func startEvidenceWindow(id: UUID, request: EvidenceWindowStart) async throws -> EvidenceWindow
+    func reviewEvidenceWindow(id: UUID, request: EvidenceWindowReview) async throws -> EvidenceWindow
+    func concludeEvidenceWindow(id: UUID, request: EvidenceWindowConclusion) async throws -> EvidenceWindow
+    func cancelEvidenceWindow(id: UUID, request: EvidenceWindowCancellation) async throws -> EvidenceWindow
+    func guardrails(slug: String) async throws -> [EvidenceWindow]
+    func overrideGuardrail(id: UUID, request: GuardrailOverrideRequest) async throws -> GuardrailOverride
+    func experiments() async throws -> [EvidenceWindow]
+    func experiment(id: UUID) async throws -> EvidenceWindow
+    func proposeExperiment(_ proposal: ExperimentProposal) async throws -> EvidenceWindow
+    func incidentList(status: IncidentStatus?) async throws -> [GardenIncident]
+    func incident(id: UUID) async throws -> GardenIncident
+    func acknowledgeIncident(id: UUID, actor: String) async throws -> GardenIncident
+    func resolveIncident(id: UUID, request: IncidentResolutionRequest) async throws -> GardenIncident
+    func evidenceCoverage() async throws -> [EvidenceCoverage]
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest
     func harvests(slug: String?) async throws -> [Harvest]
     func harvestSummary() async throws -> [HarvestSummary]
@@ -46,6 +74,8 @@ protocol PlantyAPI: Sendable {
     func linkSensor(_ link: NewSensorLink) async throws -> SensorLink
     func postmortem(slug: String) async throws -> Postmortem
     func postmortems() async throws -> [Postmortem]
+    func plantHealth(slug: String) async throws -> PlantHealthResponse
+    func addHealthEvent(slug: String, change: NewHealthChange) async throws -> HealthEvent
     func questions(status: QuestionStatus) async throws -> [OpenQuestion]
     func createQuestion(_ draft: NewOpenQuestion) async throws -> OpenQuestion
     func planAway(_ draft: NewAwayPeriod) async throws -> AwayPeriod
@@ -71,12 +101,73 @@ protocol PlantyAPI: Sendable {
 }
 
 extension PlantyAPI {
+    func proposeRecheck(slug: String, proposal: RecheckProposal) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func rechecks(slug: String) async throws -> [EvidenceWindow] { [] }
+    func evidenceWindow(id: UUID) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func startEvidenceWindow(id: UUID, request: EvidenceWindowStart) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func reviewEvidenceWindow(id: UUID, request: EvidenceWindowReview) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func concludeEvidenceWindow(id: UUID, request: EvidenceWindowConclusion) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func cancelEvidenceWindow(id: UUID, request: EvidenceWindowCancellation) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func guardrails(slug: String) async throws -> [EvidenceWindow] { [] }
+    func overrideGuardrail(id: UUID, request: GuardrailOverrideRequest) async throws -> GuardrailOverride { throw PlantyError.notFound }
+    func experiments() async throws -> [EvidenceWindow] { [] }
+    func experiment(id: UUID) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func proposeExperiment(_ proposal: ExperimentProposal) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func incidentList(status: IncidentStatus?) async throws -> [GardenIncident] { [] }
+    func incident(id: UUID) async throws -> GardenIncident { throw PlantyError.notFound }
+    func acknowledgeIncident(id: UUID, actor: String) async throws -> GardenIncident { throw PlantyError.notFound }
+    func resolveIncident(id: UUID, request: IncidentResolutionRequest) async throws -> GardenIncident { throw PlantyError.notFound }
+    func evidenceCoverage() async throws -> [EvidenceCoverage] { [] }
+
+    func promptInstructions() async throws -> [PromptInstructionSetting] { [] }
+
+    func setPromptInstruction(job: AIJob, instructions: String) async throws -> PromptInstructionSetting {
+        throw PlantyError.server(status: 503, message: "Prompt overlays are unavailable from this client.")
+    }
+
+    func clearPromptInstruction(job: AIJob) async throws -> PromptInstructionSetting {
+        throw PlantyError.server(status: 503, message: "Prompt overlays are unavailable from this client.")
+    }
+
+    func discoverActuators() async throws -> [HomeAssistantEntity] { [] }
+    func actuators() async throws -> [Actuator] { [] }
+
+    func registerActuator(_ registration: ActuatorRegistration) async throws -> Actuator {
+        throw PlantyError.server(status: 503, message: "Actuator registration is unavailable from this client.")
+    }
+
+    func renameActuator(id: UUID, name: String, plantIDs: [UUID]) async throws -> Actuator {
+        throw PlantyError.server(status: 503, message: "Actuator editing is unavailable from this client.")
+    }
+
+    func deleteActuator(id: UUID) async throws {
+        throw PlantyError.server(status: 503, message: "Actuator removal is unavailable from this client.")
+    }
+
+    func actuatorEvents(id: UUID) async throws -> [ActuatorEvent] { [] }
+
+    func startActuator(id: UUID, request: ActuatorStartRequest) async throws -> ActuatorLease {
+        throw PlantyError.server(status: 503, message: "Actuator control is unavailable from this client.")
+    }
+
+    func stopActuator(id: UUID, request: ActuatorStopRequest) async throws -> ActuatorStopResponse {
+        throw PlantyError.server(status: 503, message: "Actuator control is unavailable from this client.")
+    }
+
     func restorePlant(slug: String) async throws -> Plant {
         throw PlantyError.server(status: 503, message: "Plant restoration is unavailable from this client.")
     }
 
     func deletePhoto(id: UUID) async throws {
         throw PlantyError.server(status: 503, message: "Photo deletion is unavailable from this client.")
+    }
+
+    func plantHealth(slug: String) async throws -> PlantHealthResponse {
+        throw PlantyError.server(status: 503, message: "Plant health history is unavailable from this client.")
+    }
+
+    func addHealthEvent(slug: String, change: NewHealthChange) async throws -> HealthEvent {
+        throw PlantyError.server(status: 503, message: "Plant health editing is unavailable from this client.")
     }
 
     func harvestSummary() async throws -> [HarvestSummary] { [] }

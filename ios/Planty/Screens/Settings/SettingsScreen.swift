@@ -19,7 +19,9 @@ struct SettingsScreen: View {
                 householdSection
                 freshnessSection
                 modelsSection
+                promptInstructionsSection
                 sensorsSection
+                actuatorsSection
                 aboutSection
             }
             .scrollContentBackground(.hidden)
@@ -215,6 +217,30 @@ struct SettingsScreen: View {
             }
         } footer: {
             Text("An uncalibrated probe reports, but never drives a decision.")
+        }
+    }
+
+    private var promptInstructionsSection: some View {
+        Section {
+            NavigationLink {
+                PromptInstructionSettingsScreen()
+            } label: {
+                Label("Prompt overlays", systemImage: "text.badge.plus")
+            }
+        } footer: {
+            Text("Editable additions only. Code-owned safety, schema, tools, and authority remain in the base prompt.")
+        }
+    }
+
+    private var actuatorsSection: some View {
+        Section {
+            NavigationLink {
+                ActuatorSettingsScreen()
+            } label: {
+                Label("Fans and switches", systemImage: "fan.fill")
+            }
+        } footer: {
+            Text("Register an exact Home Assistant entity before Planty can control it. Recurring schedules stay in Home Assistant.")
         }
     }
 
