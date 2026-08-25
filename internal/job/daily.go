@@ -4,16 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
+	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
+
+const maxAssessmentPhotoBytes = 12 << 20
 
 // Daily produces one verdict per plant, then a single digest notification.
 type Daily struct {
@@ -21,6 +26,7 @@ type Daily struct {
 	Judge         *judge.Judge
 	Log           *slog.Logger
 	Notifications Notifier
+	Photos        photos.Storage
 }
 
 // Run judges every live plant and notifies only if something needs doing or the
@@ -113,7 +119,7 @@ func (d Daily) judgeOne(ctx context.Context, runID uuid.UUID, p plant.Plant) (ju
 		Action:     result.Action,
 		Reasoning:  result.Reasoning,
 		Confidence: result.Confidence,
-		Evidence:   plant.Evidence{SensorSummary: result.Summary, ModelVersion: result.Model},
+		Evidence:   d.verdictEvidence(evidence, result),
 	})
 	if err != nil {
 		return result, err
@@ -122,6 +128,20 @@ func (d Daily) judgeOne(ctx context.Context, runID uuid.UUID, p plant.Plant) (ju
 		return result, fmt.Errorf("record health: %w", err)
 	}
 	return result, nil
+}
+
+func (d Daily) verdictEvidence(evidence judge.Evidence, result judge.Result) plant.Evidence {
+	recorded := plant.Evidence{SensorSummary: result.Summary, ModelVersion: result.Model}
+	for _, reading := range evidence.Sensors {
+		recorded.ReadingIDs = append(recorded.ReadingIDs, reading.ReadingID)
+	}
+	for _, observation := range evidence.Recent {
+		recorded.ObservationIDs = append(recorded.ObservationIDs, observation.ID)
+	}
+	if evidence.LatestPhoto != nil {
+		recorded.PhotoIDs = append(recorded.PhotoIDs, evidence.LatestPhoto.ID)
+	}
+	return recorded
 }
 
 func (d Daily) recordHealth(ctx context.Context, runID uuid.UUID, evidence judge.Evidence, result judge.Result) error {
@@ -136,6 +156,9 @@ func (d Daily) recordHealth(ctx context.Context, runID uuid.UUID, evidence judge
 	}
 	for _, observation := range evidence.Recent {
 		references.ObservationIDs = append(references.ObservationIDs, observation.ID)
+	}
+	if evidence.LatestPhoto != nil {
+		references.PhotoIDs = append(references.PhotoIDs, evidence.LatestPhoto.ID)
 	}
 	change := plant.HealthChange{
 		PlantID: evidence.Plant.ID, Rationale: result.HealthReasoning,
@@ -259,7 +282,48 @@ func (d Daily) gather(ctx context.Context, p plant.Plant) (judge.Evidence, error
 			evidence.HealthEvidenceNew = true
 		}
 	}
+	d.gatherPhoto(ctx, &evidence)
+	if evidence.LatestPhoto != nil &&
+		(evidence.CurrentHealth == nil || evidence.LatestPhoto.TakenAt.After(evidence.CurrentHealth.CreatedAt)) {
+		evidence.HealthEvidenceNew = true
+	}
 	return evidence, nil
+}
+
+func (d Daily) gatherPhoto(ctx context.Context, evidence *judge.Evidence) {
+	if d.Photos == nil {
+		evidence.PhotoCoverage = "photo storage is not configured for this job"
+		return
+	}
+	shots, err := d.Store.Photos(ctx, evidence.Plant.ID, 1)
+	if err != nil || len(shots) == 0 {
+		evidence.PhotoCoverage = "this plant has no readable photograph"
+		return
+	}
+	shot := shots[0]
+	body, err := d.Photos.Get(ctx, shot.StorageKey)
+	if err != nil {
+		evidence.PhotoCoverage = "object storage could not return the latest photograph"
+		return
+	}
+	defer func() { _ = body.Close() }()
+	raw, err := io.ReadAll(io.LimitReader(body, maxAssessmentPhotoBytes+1))
+	if err != nil || len(raw) == 0 || len(raw) > maxAssessmentPhotoBytes {
+		evidence.PhotoCoverage = "the latest photograph was empty, corrupt, or too large"
+		return
+	}
+	media := "image/jpeg"
+	switch strings.ToLower(filepath.Ext(shot.StorageKey)) {
+	case ".png":
+		media = "image/png"
+	case ".webp":
+		media = "image/webp"
+	}
+	evidence.LatestPhoto = &judge.PhotoEvidence{
+		ID: shot.ID, TakenAt: shot.TakenAt, Caption: shot.Caption,
+		Frame: judge.Frame{Media: media, Bytes: raw},
+	}
+	evidence.PhotoCoverage = "attached"
 }
 
 func (d Daily) notify(ctx context.Context, digest plant.Digest) error {

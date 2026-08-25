@@ -230,6 +230,18 @@ type Evidence struct {
 
 	CurrentHealth     *plant.HealthEvent
 	HealthEvidenceNew bool
+	LatestPhoto       *PhotoEvidence
+	PhotoCoverage     string
+}
+
+// PhotoEvidence is a photograph that is attached to the assessment request.
+// Keeping its record id beside the bytes makes the resulting verdict able to
+// prove exactly which image the model received.
+type PhotoEvidence struct {
+	ID      uuid.UUID
+	TakenAt time.Time
+	Caption string
+	Frame   Frame
 }
 
 // SensorState is one probe's latest reading, expressed against its own
@@ -319,10 +331,14 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 		return Result{}, err
 	}
 
+	parts := []Part{text(describe(e))}
+	if e.LatestPhoto != nil {
+		parts = append(parts, picture(e.LatestPhoto.Frame.Media, e.LatestPhoto.Frame.Bytes))
+	}
 	req := Request{
 		Job:       JobAssess,
 		System:    system,
-		Turns:     []Turn{ask(text(describe(e)))},
+		Turns:     []Turn{ask(parts...)},
 		Schema:    schema,
 		MaxTokens: 2048,
 		// One small judgment per plant per day, run many times over: medium is
@@ -429,7 +445,7 @@ func (r Result) valid(evidence Evidence) error {
 }
 
 func evidenceHasReferences(e Evidence) bool {
-	return len(e.Sensors)+len(e.Recent) > 0
+	return len(e.Sensors)+len(e.Recent) > 0 || e.LatestPhoto != nil
 }
 
 func resultSchema() (map[string]any, error) {
@@ -572,6 +588,15 @@ func describe(e Evidence) string {
 		b.WriteString("Record-backed evidence is newer than that health assessment.\n")
 	} else {
 		b.WriteString("No record-backed evidence is newer than that health assessment; health must remain unchanged.\n")
+	}
+	if e.LatestPhoto != nil {
+		fmt.Fprintf(&b, "Latest photograph: attached from %s ago", ago(e.LatestPhoto.TakenAt))
+		if e.LatestPhoto.Caption != "" {
+			fmt.Fprintf(&b, ", caption: %s", e.LatestPhoto.Caption)
+		}
+		b.WriteString(". Treat it as visual evidence and do not claim you did not see it.\n")
+	} else {
+		fmt.Fprintf(&b, "Latest photograph: not attached (%s). Do not make visual claims.\n", e.PhotoCoverage)
 	}
 	return b.String()
 }

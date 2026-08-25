@@ -116,9 +116,9 @@ func run(log *slog.Logger) error {
 	case "prune-photos":
 		return prunePhotos(ctx, db, log)
 	case "daily":
-		return daily(db, log, notifications).Run(ctx)
+		return daily(ctx, db, log, notifications).Run(ctx)
 	case "retry":
-		return daily(db, log, notifications).RetryFailed(ctx)
+		return daily(ctx, db, log, notifications).RetryFailed(ctx)
 	case "cold":
 		return coldWatch(db, log, notifications).Run(ctx)
 	case "away":
@@ -262,12 +262,22 @@ func homeAssistant() *ha.Client {
 	return ha.New(os.Getenv("PLANTY_HA_URL"), os.Getenv("PLANTY_HA_TOKEN"))
 }
 
-func daily(db *store.Store, log *slog.Logger, notifications job.Notifier) job.Daily {
+func daily(ctx context.Context, db *store.Store, log *slog.Logger, notifications job.Notifier) job.Daily {
+	var storage photos.Storage
+	if config, enabled := photoConfig(); enabled {
+		opened, err := photos.Open(ctx, config)
+		if err != nil {
+			log.Warn("daily visual evidence unavailable", "error", err)
+		} else {
+			storage = opened
+		}
+	}
 	return job.Daily{
 		Store:         db,
 		Judge:         judge.New().Assigned(db).Instructed(db),
 		Log:           log,
 		Notifications: notifications,
+		Photos:        storage,
 	}
 }
 

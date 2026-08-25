@@ -36,7 +36,7 @@ type Skills struct {
 // unmarshals a validated answer; vision and tools follow the call sites that
 // attach photographs and grant commands.
 var Needs = map[Job]Skills{
-	JobAssess:      {Schema: true},
+	JobAssess:      {Schema: true, Vision: true},
 	JobIdentify:    {Schema: true, Vision: true},
 	JobConsult:     {Schema: true, Vision: true, Tools: true, OfferedPhotos: true},
 	JobAsk:         {Schema: true, Vision: true, Tools: true, OfferedPhotos: true},

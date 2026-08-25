@@ -14,14 +14,14 @@ func TestABlindModelIsRefusedTheJobsThatShowPhotographs(t *testing.T) {
 		t.Fatal("deepseek-v4-flash is missing from the catalogue")
 	}
 
-	for _, job := range []Job{JobIdentify, JobConsult, JobAsk} {
+	for _, job := range []Job{JobAssess, JobIdentify, JobConsult, JobAsk} {
 		if err := blind.CanDo(job); err == nil {
 			t.Errorf("%s was allowed on %s despite not reading images", blind.Ref(), job)
 		} else if !strings.Contains(err.Error(), "images") {
 			t.Errorf("the refusal for %s does not say why: %v", job, err)
 		}
 	}
-	for _, job := range []Job{JobAssess, JobPostmortem, JobOwnerUpdate} {
+	for _, job := range []Job{JobPostmortem, JobOwnerUpdate} {
 		if err := blind.CanDo(job); err != nil {
 			t.Errorf("%s was refused text-only job %s: %v", blind.Ref(), job, err)
 		}
