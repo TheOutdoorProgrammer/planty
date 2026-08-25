@@ -5,13 +5,14 @@ import SwiftUI
 struct PlantsLibraryScreen: View {
     @Environment(AppSession.self) private var session
     @State private var isAdding = false
+    @State private var route: [Plant] = []
 
     private var store: PlantsStore { session.library }
 
     var body: some View {
         @Bindable var store = store
 
-        NavigationStack {
+        NavigationStack(path: $route) {
             Group {
                 if !store.isConfigured {
                     scrollWrapped {
@@ -33,6 +34,13 @@ struct PlantsLibraryScreen: View {
             .refreshable { await store.load() }
             .task { await loadWithStatuses() }
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button(store.showArchived ? "Active only" : "All plants") {
+                        store.showArchived.toggle()
+                        Task { await store.load() }
+                    }
+                    .accessibilityLabel(store.showArchived ? "Hide archived plants" : "Include archived plants")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button { isAdding = true } label: {
                         Image(systemName: "plus")
@@ -48,7 +56,22 @@ struct PlantsLibraryScreen: View {
             .navigationDestination(for: Plant.self) { plant in
                 PlantStoryScreen(store: session.storyStore(for: plant))
             }
+            .onChange(of: session.pendingPlantSlug) { _, slug in
+                guard let slug else { return }
+                Task { await openPlant(slug: slug) }
+            }
         }
+    }
+
+    private func openPlant(slug: String) async {
+        if store.plants.first(where: { $0.slug == slug }) == nil {
+            store.showArchived = true
+            await store.load()
+        }
+        if let plant = store.plants.first(where: { $0.slug == slug }) {
+            route = [plant]
+        }
+        session.pendingPlantSlug = nil
     }
 
     private var library: some View {

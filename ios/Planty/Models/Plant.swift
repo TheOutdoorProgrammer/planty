@@ -82,6 +82,10 @@ struct Plant: Codable, Sendable, Hashable, Identifiable {
 }
 
 extension Plant {
+    var renderablePhotoURL: URL? { photoURL?.validatedRemoteImageURL }
+}
+
+extension Plant {
     static let stewardSelf = "self"
 
     /// Somebody else owns this. Drives the purple badge and the sort, and

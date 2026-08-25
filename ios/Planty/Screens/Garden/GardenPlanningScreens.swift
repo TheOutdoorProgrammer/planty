@@ -269,9 +269,17 @@ struct ColdWatchScreen: View {
 struct GardenHistoryScreen: View {
     @Bindable var store: GardenStore
     @State private var selection = GardenHistoryKind.harvests
+    @State private var editingHarvest: Harvest?
+    @State private var deletingHarvest: Harvest?
+    @State private var actionError: PlantyError?
 
     var body: some View {
         List {
+            if let actionError {
+                Section {
+                    SheetErrorRow(headline: "The harvest was not changed.", error: actionError)
+                }
+            }
             Section {
                 Picker("History type", selection: $selection) {
                     ForEach(GardenHistoryKind.allCases) { kind in
@@ -292,6 +300,28 @@ struct GardenHistoryScreen: View {
         .plantyPage()
         .navigationTitle("Garden history")
         .refreshable { await store.load() }
+        .sheet(item: $editingHarvest) { harvest in
+            HarvestSheet(
+                plantName: harvest.commonName ?? harvest.slug ?? "Plant",
+                harvest: harvest
+            ) { quantity, unit, notes in
+                await store.updateHarvest(harvest, quantity: quantity, unit: unit, notes: notes)
+            }
+        }
+        .confirmationDialog(
+            "Delete this harvest?",
+            isPresented: .init(get: { deletingHarvest != nil }, set: { if !$0 { deletingHarvest = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete harvest", role: .destructive) {
+                guard let harvest = deletingHarvest else { return }
+                deletingHarvest = nil
+                Task { actionError = await store.deleteHarvest(harvest) }
+            }
+            Button("Keep it", role: .cancel) { deletingHarvest = nil }
+        } message: {
+            Text("This changes the seasonal totals and cannot be undone.")
+        }
     }
 
     @ViewBuilder
@@ -299,6 +329,20 @@ struct GardenHistoryScreen: View {
         if store.harvests.isEmpty {
             empty("No harvests yet", icon: "basket")
         } else {
+            if !store.harvestSummary.isEmpty {
+                Section("Season totals") {
+                    ForEach(store.harvestSummary) { total in
+                        LabeledContent {
+                            Text("\(total.quantity.formatted()) \(total.unit)")
+                                .font(.headline.monospacedDigit())
+                                .foregroundStyle(PlantyColor.green)
+                        } label: {
+                            Text("\(total.commonName) · \(total.season.capitalized) \(total.year.formatted(.number.grouping(.never)))")
+                        }
+                        .listRowBackground(PlantyColor.surface)
+                    }
+                }
+            }
             Section("\(store.harvests.count) harvests") {
                 ForEach(store.harvests) { harvest in
                     VStack(alignment: .leading, spacing: 5) {
@@ -309,6 +353,18 @@ struct GardenHistoryScreen: View {
                             Text("\(harvest.quantity.formatted()) \(harvest.unit)")
                                 .font(.headline.monospacedDigit())
                                 .foregroundStyle(PlantyColor.green)
+                            Menu {
+                                Button { editingHarvest = harvest } label: {
+                                    Label("Edit", systemImage: "pencil")
+                                }
+                                Button(role: .destructive) { deletingHarvest = harvest } label: {
+                                    Label("Delete", systemImage: "trash")
+                                }
+                            } label: {
+                                Image(systemName: "ellipsis.circle")
+                                    .frame(width: 44, height: 44)
+                            }
+                            .accessibilityLabel("Actions for this harvest")
                         }
                         Text(harvest.occurredAt.formatted(date: .abbreviated, time: .omitted))
                             .font(.caption)

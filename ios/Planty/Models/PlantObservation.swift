@@ -72,6 +72,7 @@ struct Harvest: Codable, Sendable, Hashable, Identifiable {
     let unit: String
     var notes: String?
     let createdAt: Date
+    var updatedAt: Date? = nil
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -83,12 +84,39 @@ struct Harvest: Codable, Sendable, Hashable, Identifiable {
         case unit
         case notes
         case createdAt = "created_at"
+        case updatedAt = "updated_at"
     }
 }
 
 struct HarvestListResponse: Decodable, Sendable {
     let harvests: [Harvest]
     var count: Int?
+}
+
+struct HarvestSummary: Decodable, Sendable, Hashable, Identifiable {
+    let plantID: UUID
+    let slug: String
+    let commonName: String
+    let season: String
+    let year: Int
+    let quantity: Double
+    let unit: String
+
+    var id: String { "\(plantID)-\(season)-\(year)-\(unit)" }
+
+    enum CodingKeys: String, CodingKey {
+        case plantID = "plant_id"
+        case slug
+        case commonName = "common_name"
+        case season
+        case year
+        case quantity
+        case unit
+    }
+}
+
+struct HarvestSummaryResponse: Decodable, Sendable {
+    let summary: [HarvestSummary]
 }
 
 /// The plant comes from the path Planty is posted to, so it is deliberately

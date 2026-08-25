@@ -10,6 +10,7 @@ protocol PlantyAPI: Sendable {
     func createPlant(_ draft: NewPlant) async throws -> Plant
     func updatePlant(slug: String, patch: PlantPatch) async throws -> Plant
     func archivePlant(slug: String, status: PlantStatus) async throws
+    func restorePlant(slug: String) async throws -> Plant
     func addObservation(slug: String, observation: NewObservation) async throws -> PlantObservation
     func completeVerdict(
         slug: String,
@@ -22,6 +23,7 @@ protocol PlantyAPI: Sendable {
     func timeline(slug: String) async throws -> PlantTimeline
     func timelinePage(slug: String, cursor: String) async throws -> PlantTimeline
     func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo
+    func deletePhoto(id: UUID) async throws
     func acknowledge(verdictID: UUID) async throws
     func sensors() async throws -> [SensorLink]
     func homeAssistantEntities() async throws -> [HomeAssistantEntity]
@@ -32,6 +34,9 @@ protocol PlantyAPI: Sendable {
     func clearAssignment(job: AIJob) async throws -> JobAssignment
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest
     func harvests(slug: String?) async throws -> [Harvest]
+    func harvestSummary() async throws -> [HarvestSummary]
+    func updateHarvest(id: UUID, draft: NewHarvest) async throws -> Harvest
+    func deleteHarvest(id: UUID) async throws
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink
     func shelter(slugs: [String], indoors: Bool) async throws -> Int
     func identify(jpeg: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate]
@@ -66,6 +71,24 @@ protocol PlantyAPI: Sendable {
 }
 
 extension PlantyAPI {
+    func restorePlant(slug: String) async throws -> Plant {
+        throw PlantyError.server(status: 503, message: "Plant restoration is unavailable from this client.")
+    }
+
+    func deletePhoto(id: UUID) async throws {
+        throw PlantyError.server(status: 503, message: "Photo deletion is unavailable from this client.")
+    }
+
+    func harvestSummary() async throws -> [HarvestSummary] { [] }
+
+    func updateHarvest(id: UUID, draft: NewHarvest) async throws -> Harvest {
+        throw PlantyError.server(status: 503, message: "Harvest editing is unavailable from this client.")
+    }
+
+    func deleteHarvest(id: UUID) async throws {
+        throw PlantyError.server(status: 503, message: "Harvest deletion is unavailable from this client.")
+    }
+
     func homeAssistantEntities() async throws -> [HomeAssistantEntity] {
         throw PlantyError.server(status: 503, message: "Home Assistant discovery is unavailable from this client.")
     }

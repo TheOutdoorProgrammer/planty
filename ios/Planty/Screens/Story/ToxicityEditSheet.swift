@@ -101,8 +101,7 @@ struct ToxicityEditSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var form: ToxicityEditForm
     @State private var validation: String?
-    @State private var failure: PlantyError?
-    @State private var saving = false
+    @State private var action = AsyncSheetAction()
 
     init(
         plant: Plant,
@@ -117,7 +116,7 @@ struct ToxicityEditSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                if let failure {
+                if let failure = action.error {
                     Section {
                         SheetErrorRow(
                             headline: "Not saved. Your toxicity notes are still here.",
@@ -202,27 +201,23 @@ struct ToxicityEditSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.disabled(saving)
+                    Button("Cancel") { dismiss() }.disabled(action.isRunning)
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { Task { await submit() } }.disabled(saving)
+                    Button("Save") { Task { await submit() } }.disabled(action.isRunning)
                 }
             }
         }
-        .interactiveDismissDisabled(saving)
+        .interactiveDismissDisabled(action.isRunning)
     }
 
     private func submit() async {
         validation = nil
-        failure = nil
         guard case .success(let toxicity) = form.toxicity() else {
             if case .failure(let issue) = form.toxicity() { validation = issue.message }
             return
         }
-        saving = true
-        failure = await save(toxicity)
-        saving = false
-        if failure == nil { dismiss() }
+        if await action.perform({ await save(toxicity) }) { dismiss() }
     }
 }
 

@@ -13,7 +13,9 @@ struct IdentificationPipeline: Sendable {
     var now: @Sendable () -> Date = { Date() }
 
     func identify(pickedData: Data, assetID: String?) async -> IdentificationOutcome {
-        if let assetID, let cached = await cache.result(for: assetID) {
+        if let assetID,
+           let cached = await cache.result(for: assetID),
+           cached.backend == identifier.backendID {
             return .identified(cached)
         }
 

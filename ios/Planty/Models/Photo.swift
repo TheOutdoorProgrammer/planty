@@ -33,6 +33,7 @@ struct Photo: Codable, Sendable, Hashable, Identifiable {
     }
 
     var isAnalyzed: Bool { analyzedAt != nil }
+    var renderableURL: URL? { url?.validatedRemoteImageURL }
 
     /// Photo labels have to carry date and finding: "Image, August 18" is not
     /// enough for anybody navigating by VoiceOver.
@@ -45,5 +46,14 @@ struct Photo: Codable, Sendable, Hashable, Identifiable {
             return "Photo of \(plantName) on \(when). \(caption)"
         }
         return "Photo of \(plantName) on \(when). No description recorded yet."
+    }
+}
+
+extension URL {
+    var validatedRemoteImageURL: URL? {
+        guard let scheme = scheme?.lowercased(), ["http", "https"].contains(scheme), host?.isEmpty == false else {
+            return nil
+        }
+        return self
     }
 }

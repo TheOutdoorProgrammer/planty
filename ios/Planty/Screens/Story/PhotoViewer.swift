@@ -56,7 +56,7 @@ struct PhotoViewer: View {
         }
     }
 
-    private var source: URL? { photo?.url ?? plant.photoURL }
+    private var source: URL? { photo?.renderableURL ?? plant.renderablePhotoURL }
 
     /// Fetched once and kept, rather than left to AsyncImage: the same bytes
     /// have to reach the share sheet and the photo library.

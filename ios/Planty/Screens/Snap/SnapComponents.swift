@@ -45,6 +45,7 @@ struct CameraStage: View {
     @Binding var photoItem: PhotosPickerItem?
     var guidance = "Fit the whole plant in the frame."
     var footnote = "One photo is enough."
+    var consistentViewpoint = false
     let shutter: () -> Void
 
     @ScaledMetric(relativeTo: .largeTitle) private var shutterSize: CGFloat = 72
@@ -100,6 +101,21 @@ struct CameraStage: View {
                     endPoint: .bottom
                 )
                 ProgressView()
+            }
+            if consistentViewpoint {
+                VStack {
+                    Spacer()
+                    Capsule()
+                        .strokeBorder(
+                            Color.white.opacity(0.75),
+                            style: StrokeStyle(lineWidth: 2, dash: [7, 6])
+                        )
+                        .frame(width: 190, height: 58)
+                        .padding(.bottom, 42)
+                }
+                Image(systemName: "plus")
+                    .font(.title2.weight(.light))
+                    .foregroundStyle(Color.white.opacity(0.8))
             }
         }
         .frame(height: 390)

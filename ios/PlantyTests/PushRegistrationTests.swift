@@ -71,4 +71,24 @@ struct PushRegistrationTests {
             return
         }
     }
+
+    @Test("Push destinations preserve plant and settings routes")
+    func routes() {
+        let plant = PlantyPushRoute(userInfo: [
+            "destination": ["kind": "plant", "plant_slug": "mona"]
+        ])
+        let settings = PlantyPushRoute(userInfo: [
+            "destination": ["kind": "settings"]
+        ])
+
+        guard case .plant(let slug) = plant else {
+            Issue.record("plant destination did not parse")
+            return
+        }
+        #expect(slug == "mona")
+        guard case .settings = settings else {
+            Issue.record("settings destination did not parse")
+            return
+        }
+    }
 }

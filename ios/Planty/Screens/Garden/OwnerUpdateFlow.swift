@@ -161,7 +161,8 @@ struct OwnerUpdateFlow: View {
         var result: [MessageAttachment] = []
         for photo in photos {
             do {
-                let (data, response) = try await URLSession.shared.data(from: photo.url)
+                guard let url = photo.url.validatedRemoteImageURL else { continue }
+                let (data, response) = try await URLSession.shared.data(from: url)
                 guard let http = response as? HTTPURLResponse,
                       (200..<300).contains(http.statusCode), !data.isEmpty else { continue }
                 result.append(MessageAttachment(

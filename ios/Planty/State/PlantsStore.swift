@@ -11,6 +11,7 @@ final class PlantsStore {
     private(set) var hasLoaded = false
 
     var searchText = ""
+    var showArchived = false
 
     var isConfigured: Bool
     private var api: any PlantyAPI
@@ -43,7 +44,9 @@ final class PlantsStore {
         }
 
         do {
-            let loaded = try await client.plants(filter: .live)
+            var filter = PlantFilter.live
+            filter.includeArchived = showArchived
+            let loaded = try await client.plants(filter: filter)
             guard generation == loadGeneration else { return }
             plants = loaded
             hasLoaded = true
@@ -72,7 +75,7 @@ final class PlantsStore {
     /// way GET /v1/plants would drop them.
     func apply(_ updated: Plant) {
         guard let index = plants.firstIndex(where: { $0.id == updated.id }) else { return }
-        if updated.status.isRetired {
+        if updated.status.isRetired && !showArchived {
             plants.remove(at: index)
         } else {
             plants[index] = updated.keepingPhoto(from: plants[index])

@@ -23,6 +23,7 @@ final class AppSession {
     var selectedTab: AppTab = .today
     var snapContext: SnapContext?
     var isShowingSettings = false
+    var pendingPlantSlug: String?
 
     private(set) var configuration: PlantyConfiguration
     private(set) var api: any PlantyAPI
@@ -60,7 +61,11 @@ final class AppSession {
         choices = ManagedChoicesStore(api: client, isConfigured: resolved.isConfigured)
         models = ModelSettingsStore(api: client, isConfigured: resolved.isConfigured)
         identification = IdentificationStore(
-            pipeline: Self.pipeline(client: client, configured: resolved.isConfigured)
+            pipeline: Self.pipeline(
+                client: client,
+                configured: resolved.isConfigured,
+                serviceID: resolved.baseURL?.absoluteString ?? "unconfigured"
+            )
         )
         // Distribution is not the service's business, so this reads its own
         // server out of the build rather than the Planty configuration.
@@ -100,18 +105,29 @@ final class AppSession {
         choices.replace(api: client, isConfigured: configuration.isConfigured)
         models.replace(api: client, isConfigured: configuration.isConfigured)
         identification = IdentificationStore(
-            pipeline: Self.pipeline(client: client, configured: configuration.isConfigured)
+            pipeline: Self.pipeline(
+                client: client,
+                configured: configuration.isConfigured,
+                serviceID: configuration.baseURL?.absoluteString ?? "unconfigured"
+            )
         )
     }
 
     /// The species half needs a service; the Vision half never does, so an
     /// unconfigured app still gates and still says what it can see.
-    private static func pipeline(client: any PlantyAPI, configured: Bool) -> IdentificationPipeline {
+    private static func pipeline(
+        client: any PlantyAPI,
+        configured: Bool,
+        serviceID: String
+    ) -> IdentificationPipeline {
         IdentificationPipeline(
             intake: PhotoLibraryIntake(),
             analyzer: VisionImageAnalyzer(),
             identifier: configured
-                ? RemotePlantIdentifier(api: client)
+                ? RemotePlantIdentifier(
+                    api: client,
+                    serviceID: serviceID
+                )
                 : UnavailableIdentifier(),
             cache: FileIdentificationCache()
         )
@@ -181,5 +197,19 @@ final class AppSession {
     func beginCapture(for plant: Plant) {
         snapContext = SnapContext(plant: plant, recommendedAction: nil, verdictID: nil)
         selectedTab = .snap
+    }
+
+    func openPushRoute(_ route: PlantyPushRoute) {
+        switch route {
+        case .settings:
+            isShowingSettings = true
+        case .plant(let slug):
+            selectedTab = .plants
+            pendingPlantSlug = slug
+        case .capture:
+            selectedTab = .snap
+        case .today:
+            selectedTab = .today
+        }
     }
 }

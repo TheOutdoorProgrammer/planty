@@ -96,10 +96,23 @@ struct NotesScreen: View {
 
     private func card(_ note: PlantNote) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let heading = note.heading {
-                Text(heading)
-                    .font(.headline)
-                    .foregroundStyle(PlantyColor.foreground)
+            HStack(alignment: .top) {
+                if let heading = note.heading {
+                    Text(heading)
+                        .font(.headline)
+                        .foregroundStyle(PlantyColor.foreground)
+                }
+                Spacer()
+                Menu {
+                    Button { editing = note } label: { Label("Edit", systemImage: "pencil") }
+                    Button(role: .destructive) { removing = note } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("Actions for this note")
             }
             Text(note.body)
                 .font(.body)
@@ -130,14 +143,13 @@ private struct NoteSheet: View {
     let save: (String, String) async -> PlantyError?
 
     @Environment(\.dismiss) private var dismiss
-    @State private var saving = false
-    @State private var failure: PlantyError?
+    @State private var action = AsyncSheetAction()
     @FocusState private var bodyFocused: Bool
 
     var body: some View {
         NavigationStack {
             Form {
-                if let failure {
+                if let failure = action.error {
                     Section {
                         SheetErrorRow(
                             headline: "Not saved. Your note is still here.",
@@ -161,23 +173,19 @@ private struct NoteSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .disabled(saving)
+                        .disabled(action.isRunning)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        saving = true
-                        failure = nil
                         Task {
-                            failure = await save(title, text)
-                            saving = false
-                            if failure == nil { dismiss() }
+                            if await action.perform({ await save(title, text) }) { dismiss() }
                         }
                     }
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || action.isRunning)
                 }
             }
             .onAppear { bodyFocused = true }
         }
-        .interactiveDismissDisabled(saving)
+        .interactiveDismissDisabled(action.isRunning)
     }
 }

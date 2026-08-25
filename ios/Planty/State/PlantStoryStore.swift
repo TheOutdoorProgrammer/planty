@@ -203,13 +203,34 @@ final class PlantStoryStore {
         }
     }
 
-    /// Irreversible from the app, which is why the screen confirms first. The
-    /// local copy moves too so the page reads dead without another fetch.
-    func markDead() async -> PlantyError? {
+    func archive(as status: PlantStatus) async -> PlantyError? {
         do {
-            try await api.archivePlant(slug: plant.slug, status: .dead)
-            plant.status = .dead
+            try await api.archivePlant(slug: plant.slug, status: status)
+            plant.status = status
             plant.archivedAt = clock()
+            return nil
+        } catch {
+            return PlantyError.from(error)
+        }
+    }
+
+    func markDead() async -> PlantyError? {
+        await archive(as: .dead)
+    }
+
+    func restore() async -> PlantyError? {
+        do {
+            plant = try await api.restorePlant(slug: plant.slug)
+            return nil
+        } catch {
+            return PlantyError.from(error)
+        }
+    }
+
+    func deletePhoto(_ photo: Photo) async -> PlantyError? {
+        do {
+            try await api.deletePhoto(id: photo.id)
+            timeline.photos.removeAll { $0.id == photo.id }
             return nil
         } catch {
             return PlantyError.from(error)

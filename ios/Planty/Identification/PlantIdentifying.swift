@@ -17,8 +17,9 @@ protocol PlantIdentifying: Sendable {
 /// species-API key in a shipped binary belongs to anyone who unzips the app.
 struct RemotePlantIdentifier: PlantIdentifying {
     let api: any PlantyAPI
+    let serviceID: String
 
-    var backendID: String { "planty/v1" }
+    var backendID: String { "planty/v1@\(serviceID)" }
 
     func identify(
         imageData: Data,

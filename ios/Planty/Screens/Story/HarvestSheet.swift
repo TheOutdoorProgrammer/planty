@@ -4,6 +4,7 @@ import SwiftUI
 /// which is why this is not just another observation with a body.
 struct HarvestSheet: View {
     let plantName: String
+    let harvest: Harvest?
     let log: (Double, String, String?) async -> PlantyError?
 
     @Environment(\.dismiss) private var dismiss
@@ -14,6 +15,19 @@ struct HarvestSheet: View {
     @State private var action = AsyncSheetAction()
 
     private static let units = ["oz", "lb", "g", "kg", "items"]
+
+    init(
+        plantName: String,
+        harvest: Harvest? = nil,
+        log: @escaping (Double, String, String?) async -> PlantyError?
+    ) {
+        self.plantName = plantName
+        self.harvest = harvest
+        self.log = log
+        _quantityText = State(initialValue: harvest?.quantity.formatted() ?? "")
+        _unit = State(initialValue: harvest?.unit ?? "oz")
+        _notes = State(initialValue: harvest?.notes ?? "")
+    }
 
     var body: some View {
         NavigationStack {
@@ -55,7 +69,7 @@ struct HarvestSheet: View {
             }
             .scrollContentBackground(.hidden)
             .plantyPage()
-            .navigationTitle("Harvest from \(plantName)")
+            .navigationTitle(harvest == nil ? "Harvest from \(plantName)" : "Edit harvest")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {

@@ -106,13 +106,12 @@ private struct NewQuestionSheet: View {
     @State private var askedOf = ""
     @State private var why = ""
     @State private var plantID: UUID?
-    @State private var saving = false
-    @State private var failure: PlantyError?
+    @State private var action = AsyncSheetAction()
 
     var body: some View {
         NavigationStack {
             Form {
-                if let failure {
+                if let failure = action.error {
                     Section { SheetErrorRow(headline: "Question not saved.", error: failure) }
                 }
                 Section("The question") {
@@ -136,29 +135,25 @@ private struct NewQuestionSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }.disabled(saving)
+                    Button("Cancel") { dismiss() }.disabled(action.isRunning)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") { Task { await submit() } }
-                        .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
+                        .disabled(question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || action.isRunning)
                 }
             }
         }
-        .interactiveDismissDisabled(saving)
+        .interactiveDismissDisabled(action.isRunning)
     }
 
     private func submit() async {
-        saving = true
-        failure = await save(
-            NewOpenQuestion(
-                plantID: plantID,
-                askedOf: askedOf.nilIfBlank,
-                question: question.trimmingCharacters(in: .whitespacesAndNewlines),
-                why: why.nilIfBlank
-            )
+        let draft = NewOpenQuestion(
+            plantID: plantID,
+            askedOf: askedOf.nilIfBlank,
+            question: question.trimmingCharacters(in: .whitespacesAndNewlines),
+            why: why.nilIfBlank
         )
-        saving = false
-        if failure == nil { dismiss() }
+        if await action.perform({ await save(draft) }) { dismiss() }
     }
 }
 

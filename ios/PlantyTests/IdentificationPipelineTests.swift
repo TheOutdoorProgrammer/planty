@@ -184,6 +184,28 @@ struct IdentificationPipelineTests {
         #expect(identifier.seen.data == nil)
     }
 
+    @Test("A cached answer from another configured service is ignored")
+    func scopesCacheToBackend() async {
+        let cache = MemoryIdentificationCache()
+        let analyzer = FakeAnalyzer(labels: [CoarseLabel(identifier: "plant", confidence: 0.9)])
+        let first = FakeIdentifier(
+            backendID: "planty/v1@https://old.test",
+            candidates: [candidate("Old answer", 0.8)]
+        )
+        _ = await pipeline(analyzer: analyzer, identifier: first, cache: cache)
+            .identify(pickedData: Data([1]), assetID: "asset-1")
+
+        let replacement = FakeIdentifier(
+            backendID: "planty/v1@https://new.test",
+            candidates: [candidate("Fresh answer", 0.9)]
+        )
+        let result = await pipeline(analyzer: analyzer, identifier: replacement, cache: cache)
+            .identify(pickedData: Data([1]), assetID: "asset-1")
+
+        #expect(result.identification?.best?.commonName == "Fresh answer")
+        #expect(replacement.seen.data != nil)
+    }
+
     /// A camera capture has no asset, so there is no stable key to cache it
     /// against and re-identifying is the correct cost.
     @Test("A photo with no asset is not cached")

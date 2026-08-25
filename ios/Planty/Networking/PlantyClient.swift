@@ -52,6 +52,10 @@ struct PlantyClient: PlantyAPI {
         _ = try await perform(request)
     }
 
+    func restorePlant(slug: String) async throws -> Plant {
+        try await send("POST", APIPath.restorePlant(slug: escaped(slug)), body: EmptyBody())
+    }
+
     func addObservation(slug: String, observation: NewObservation) async throws -> PlantObservation {
         try await send("POST", APIPath.addObservation(slug: escaped(slug)), body: observation)
     }
@@ -219,6 +223,23 @@ struct PlantyClient: PlantyAPI {
         let path = slug.map { APIPath.listPlantHarvests(slug: escaped($0)) } ?? APIPath.listHarvests
         let response: HarvestListResponse = try await get(path)
         return response.harvests
+    }
+
+    func harvestSummary() async throws -> [HarvestSummary] {
+        let response: HarvestSummaryResponse = try await get(APIPath.harvestSummary)
+        return response.summary
+    }
+
+    func updateHarvest(id: UUID, draft: NewHarvest) async throws -> Harvest {
+        try await send("PATCH", APIPath.updateHarvest(id: id.uuidString), body: draft)
+    }
+
+    func deleteHarvest(id: UUID) async throws {
+        _ = try await perform(try makeRequest("DELETE", APIPath.deleteHarvest(id: id.uuidString)))
+    }
+
+    func deletePhoto(id: UUID) async throws {
+        _ = try await perform(try makeRequest("DELETE", APIPath.deletePhoto(id: id.uuidString)))
     }
 
     func health() async throws {

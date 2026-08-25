@@ -8,6 +8,7 @@ final class GardenStore {
     private(set) var questions: [OpenQuestion] = []
     private(set) var postmortems: [Postmortem] = []
     private(set) var harvests: [Harvest] = []
+    private(set) var harvestSummary: [HarvestSummary] = []
     private(set) var awayPeriods: [AwayPeriod] = []
     private(set) var coldWatch: ColdWatch?
     private(set) var plannedAway: AwayPeriod?
@@ -33,6 +34,7 @@ final class GardenStore {
         questions = []
         postmortems = []
         harvests = []
+        harvestSummary = []
         awayPeriods = []
         coldWatch = nil
         plannedAway = nil
@@ -52,18 +54,22 @@ final class GardenStore {
         async let questionsTask = gardenResult { try await api.questions(status: status) }
         async let postmortemsTask = gardenResult { try await api.postmortems() }
         async let harvestsTask = gardenResult { try await api.harvests(slug: nil) }
+        async let harvestSummaryTask = gardenResult { try await api.harvestSummary() }
         async let awayTask = gardenResult { try await api.awayPeriods() }
-        let loaded = await (questionsTask, postmortemsTask, harvestsTask, awayTask)
+        let loaded = await (questionsTask, postmortemsTask, harvestsTask, harvestSummaryTask, awayTask)
         guard requestID == loadID else { return }
 
         if case .success(let value) = loaded.0 { questions = value }
         if case .success(let value) = loaded.1 { postmortems = value }
         if case .success(let value) = loaded.2 { harvests = value }
         if case .success(let value) = loaded.3 {
+            harvestSummary = value
+        }
+        if case .success(let value) = loaded.4 {
             awayPeriods = value
             plannedAway = value.first
         }
-        error = [loaded.0.failure, loaded.1.failure, loaded.2.failure, loaded.3.failure]
+        error = [loaded.0.failure, loaded.1.failure, loaded.2.failure, loaded.3.failure, loaded.4.failure]
             .compactMap { $0 }
             .first { !PlantyError.isCancellation($0) }
         hasLoaded = true
@@ -153,6 +159,33 @@ final class GardenStore {
 
     func ownerUpdate(steward: String) async throws -> OwnerUpdate {
         try await api.ownerUpdate(steward: steward)
+    }
+
+    func updateHarvest(_ harvest: Harvest, quantity: Double, unit: String, notes: String?) async -> PlantyError? {
+        do {
+            let saved = try await api.updateHarvest(
+                id: harvest.id,
+                draft: NewHarvest(occurredAt: harvest.occurredAt, quantity: quantity, unit: unit, notes: notes)
+            )
+            if let index = harvests.firstIndex(where: { $0.id == harvest.id }) {
+                harvests[index] = saved
+            }
+            harvestSummary = try await api.harvestSummary()
+            return nil
+        } catch {
+            return PlantyError.from(error)
+        }
+    }
+
+    func deleteHarvest(_ harvest: Harvest) async -> PlantyError? {
+        do {
+            try await api.deleteHarvest(id: harvest.id)
+            harvests.removeAll { $0.id == harvest.id }
+            harvestSummary = try await api.harvestSummary()
+            return nil
+        } catch {
+            return PlantyError.from(error)
+        }
     }
 
     func clearError() { error = nil }

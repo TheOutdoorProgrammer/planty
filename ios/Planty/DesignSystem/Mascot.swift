@@ -49,7 +49,7 @@ struct PlantPhotoView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-            } else if let url = photo?.url ?? plant.photoURL {
+            } else if let url = photo?.renderableURL ?? plant.renderablePhotoURL {
                 remote(url)
             } else {
                 placeholder
@@ -73,7 +73,7 @@ struct PlantPhotoView: View {
 
     /// A stand-in is not worth opening full screen.
     private var hasPicture: Bool {
-        localJPEG != nil || photo?.url != nil || plant.photoURL != nil
+        localJPEG != nil || photo?.renderableURL != nil || plant.renderablePhotoURL != nil
     }
 
     /// A presigned link expires, so a failure here is ordinary rather than an

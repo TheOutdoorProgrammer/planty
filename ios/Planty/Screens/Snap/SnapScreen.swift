@@ -124,6 +124,7 @@ struct SnapScreen: View {
             CameraStage(
                 camera: acquisition.camera,
                 photoItem: photoItemBinding,
+                consistentViewpoint: store.selectedPlant != nil,
                 shutter: { Task { await shoot() } }
             )
         }

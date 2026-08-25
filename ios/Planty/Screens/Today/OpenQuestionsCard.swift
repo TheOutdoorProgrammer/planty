@@ -82,13 +82,12 @@ struct AnswerSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
-    @State private var saving = false
-    @State private var failure: PlantyError?
+    @State private var action = AsyncSheetAction()
 
     var body: some View {
         NavigationStack {
             Form {
-                if let failure {
+                if let failure = action.error {
                     Section {
                         SheetErrorRow(
                             headline: "Not saved. Your answer is still here.",
@@ -118,22 +117,18 @@ struct AnswerSheet: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
-                        .disabled(saving)
+                        .disabled(action.isRunning)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        saving = true
-                        failure = nil
                         Task {
-                            failure = await save(text)
-                            saving = false
-                            if failure == nil { dismiss() }
+                            if await action.perform({ await save(text) }) { dismiss() }
                         }
                     }
-                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || saving)
+                    .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || action.isRunning)
                 }
             }
         }
-        .interactiveDismissDisabled(saving)
+        .interactiveDismissDisabled(action.isRunning)
     }
 }

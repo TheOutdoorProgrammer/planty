@@ -9,6 +9,28 @@ enum PushProgress: Equatable {
     case failed(String)
 }
 
+enum PlantyPushRoute: Sendable {
+    case today
+    case settings
+    case capture
+    case plant(String?)
+
+    init(userInfo: [AnyHashable: Any]) {
+        let destination = userInfo["destination"] as? [String: Any]
+        let data = userInfo["data"] as? [String: Any]
+        let kind = destination?["kind"] as? String ?? userInfo["screen"] as? String
+        let slug = destination?["plant_slug"] as? String
+            ?? userInfo["plant_slug"] as? String
+            ?? data?["plant_slug"] as? String
+        switch kind {
+        case "settings": self = .settings
+        case "plant": self = .plant(slug)
+        case "capture": self = .capture
+        default: self = .today
+        }
+    }
+}
+
 /// The five independent links in notification delivery.
 /// A healthy HTTP service is deliberately not one of them.
 @Observable
@@ -200,6 +222,14 @@ final class PushRegistrationCenter {
 final class PlantyAppDelegate: NSObject, UIApplicationDelegate {
     func application(
         _ application: UIApplication,
+        didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func application(
+        _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
         PushRegistrationCenter.shared.didRegister(deviceToken: deviceToken)
@@ -211,4 +241,20 @@ final class PlantyAppDelegate: NSObject, UIApplicationDelegate {
     ) {
         PushRegistrationCenter.shared.didFail(error: error)
     }
+}
+
+extension PlantyAppDelegate: UNUserNotificationCenterDelegate {
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let route = PlantyPushRoute(userInfo: response.notification.request.content.userInfo)
+        await MainActor.run {
+            NotificationCenter.default.post(name: .plantyPushOpened, object: route)
+        }
+    }
+}
+
+extension Notification.Name {
+    static let plantyPushOpened = Notification.Name("planty.push.opened")
 }

@@ -24,8 +24,13 @@ struct RootTabView: View {
             }
         }
         .tint(PlantyColor.green)
+        .tabViewStyle(.sidebarAdaptable)
         .sheet(isPresented: $session.isShowingSettings) {
             SettingsScreen()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .plantyPushOpened)) { notification in
+            guard let route = notification.object as? PlantyPushRoute else { return }
+            session.openPushRoute(route)
         }
     }
 }

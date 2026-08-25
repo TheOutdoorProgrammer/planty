@@ -11,9 +11,16 @@ struct PlantStoryScreen: View {
     @State private var isLoggingCare = false
     @State private var isHarvesting = false
     @State private var isConfirmingDeath = false
-    @State private var deathError: PlantyError?
+    @State private var isConfirmingArchive = false
+    @State private var deletingPhoto: Photo?
+    @State private var actionError: PlantyError?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
-    private let actionColumns = [GridItem(.flexible()), GridItem(.flexible())]
+    private var actionColumns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.flexible()), GridItem(.flexible())]
+    }
 
     var body: some View {
         ScrollView {
@@ -33,8 +40,8 @@ struct PlantStoryScreen: View {
                     PlantToxicitySection(plant: store.plant, toxicity: toxicity)
                 }
 
-                if let deathError {
-                    deathCard(deathError)
+                if let actionError {
+                    actionErrorCard(actionError)
                 }
                 if store.plant.status == .dead {
                     postmortemCard
@@ -48,7 +55,9 @@ struct PlantStoryScreen: View {
 
                 if store.hasStory {
                     ForEach(store.chapters) { chapter in
-                        ChapterRow(chapter: chapter, plant: store.plant)
+                        ChapterRow(chapter: chapter, plant: store.plant) { photo in
+                            deletingPhoto = photo
+                        }
                     }
                 } else if store.hasLoaded {
                     emptyStory
@@ -79,10 +88,21 @@ struct PlantStoryScreen: View {
                         Label("Edit toxicity", systemImage: "cross.case")
                     }
                     if !store.plant.status.isRetired {
+                        Button {
+                            isConfirmingArchive = true
+                        } label: {
+                            Label("Archive plant…", systemImage: "archivebox")
+                        }
                         Button(role: .destructive) {
                             isConfirmingDeath = true
                         } label: {
                             Label("It died…", systemImage: "xmark.seal")
+                        }
+                    } else {
+                        Button {
+                            Task { await restorePlant() }
+                        } label: {
+                            Label("Restore plant", systemImage: "arrow.uturn.backward.circle")
                         }
                     }
                 } label: {
@@ -131,10 +151,31 @@ struct PlantStoryScreen: View {
             }
             Button("Not yet", role: .cancel) {}
         } message: {
-            Text("""
-                The story and photos stay, and Planty can still say what went \
-                wrong. But this cannot be undone from the app.
-                """)
+            Text("The story and photos stay. You can restore the plant later if this was a mistake.")
+        }
+        .confirmationDialog(
+            "Archive \(store.plant.commonName)?",
+            isPresented: $isConfirmingArchive,
+            titleVisibility: .visible
+        ) {
+            Button("Archive") { Task { await archivePlant() } }
+            Button("Keep active", role: .cancel) {}
+        } message: {
+            Text("This removes the plant from the active garden without deleting its story or photos. You can restore it later.")
+        }
+        .confirmationDialog(
+            "Delete this photo?",
+            isPresented: .init(get: { deletingPhoto != nil }, set: { if !$0 { deletingPhoto = nil } }),
+            titleVisibility: .visible
+        ) {
+            Button("Delete photo", role: .destructive) {
+                guard let photo = deletingPhoto else { return }
+                deletingPhoto = nil
+                Task { actionError = await store.deletePhoto(photo) }
+            }
+            Button("Keep photo", role: .cancel) { deletingPhoto = nil }
+        } message: {
+            Text("The image will be removed from Planty and object storage. This cannot be undone.")
         }
         .safeAreaInset(edge: .bottom) {
             if !store.plant.status.isRetired {
@@ -153,8 +194,18 @@ struct PlantStoryScreen: View {
     }
 
     private func recordDeath() async {
-        deathError = await store.markDead()
-        if deathError == nil { session.library.apply(store.plant) }
+        actionError = await store.archive(as: .dead)
+        if actionError == nil { session.library.apply(store.plant) }
+    }
+
+    private func archivePlant() async {
+        actionError = await store.archive(as: .gone)
+        if actionError == nil { session.library.apply(store.plant) }
+    }
+
+    private func restorePlant() async {
+        actionError = await store.restore()
+        if actionError == nil { session.library.apply(store.plant) }
     }
 
     private var header: some View {
@@ -361,14 +412,14 @@ struct PlantStoryScreen: View {
         .plantyCard(border: PlantyColor.purple.opacity(0.22))
     }
 
-    private func deathCard(_ failure: PlantyError) -> some View {
+    private func actionErrorCard(_ failure: PlantyError) -> some View {
         StateMessage(
-            title: "The death was not recorded",
+            title: "That change was not saved",
             message: failure.errorDescription ?? "The service could not be reached.",
             accent: PlantyColor.orange,
             icon: "exclamationmark.triangle.fill"
         ) {
-            Button("Try again") { Task { await recordDeath() } }
+            Button("Dismiss") { actionError = nil }
                 .buttonStyle(PrimaryButtonStyle(color: PlantyColor.orange))
         }
     }
@@ -389,6 +440,7 @@ struct PlantStoryScreen: View {
 struct ChapterRow: View {
     let chapter: StoryChapter
     let plant: Plant
+    let deletePhoto: (Photo) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -398,6 +450,13 @@ struct ChapterRow: View {
 
             if let photo = chapter.photo {
                 PlantPhotoView(plant: plant, photo: photo, height: 200)
+                Button(role: .destructive) {
+                    deletePhoto(photo)
+                } label: {
+                    Label("Delete photo", systemImage: "trash")
+                        .frame(minHeight: 44)
+                }
+                .font(.subheadline.weight(.semibold))
             }
 
             Text(chapter.narrative)
