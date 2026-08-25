@@ -235,7 +235,7 @@ struct PlantStoryScreen: View {
         VStack(alignment: .leading, spacing: 10) {
             PlantPhotoView(
                 plant: store.plant,
-                photo: store.chapters.first?.photo,
+                photo: store.latestPhoto,
                 height: 250
             )
 

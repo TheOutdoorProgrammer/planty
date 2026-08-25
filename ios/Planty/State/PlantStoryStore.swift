@@ -38,6 +38,7 @@ final class PlantStoryStore {
     }
 
     var chapters: [StoryChapter] { StoryBuilder.chapters(from: timeline) }
+    var latestPhoto: Photo? { timeline.photos.max { $0.takenAt < $1.takenAt } }
     var series: [SensorSeries] { timeline.series }
 
     /// The envelope wins over the plant inside it, and either will do: reading
@@ -103,7 +104,7 @@ final class PlantStoryStore {
             let (loadedDetail, loadedTimeline) = try await (detailTask, timelineTask)
             guard generation == loadGeneration, isSessionCurrent() else { return }
             detail = loadedDetail
-            plant = loadedDetail.plant
+            plant = loadedDetail.plant.keepingPhoto(from: plant)
             timeline = loadedTimeline.merging(loadedDetail)
             observationCursor = loadedDetail.observationsNextCursor
             photoCursor = loadedTimeline.nextCursor

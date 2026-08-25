@@ -8,6 +8,7 @@ import Testing
 final class RecordingAPI: PlantyAPI, @unchecked Sendable {
     private let lock = NSLock()
     private var _plantReturned: Plant = .fixture()
+    private var _timelineReturned = PlantTimeline()
     private var _postmortemReturned: Postmortem = .fixture()
     private var _failure: PlantyError?
     private var _patches: [(String, PlantPatch)] = []
@@ -19,6 +20,11 @@ final class RecordingAPI: PlantyAPI, @unchecked Sendable {
     var plantReturned: Plant {
         get { lock.withLock { _plantReturned } }
         set { lock.withLock { _plantReturned = newValue } }
+    }
+
+    var timelineReturned: PlantTimeline {
+        get { lock.withLock { _timelineReturned } }
+        set { lock.withLock { _timelineReturned = newValue } }
     }
 
     var postmortemReturned: Postmortem {
@@ -83,7 +89,7 @@ final class RecordingAPI: PlantyAPI, @unchecked Sendable {
 
     func timeline(slug: String) async throws -> PlantTimeline {
         try check()
-        return PlantTimeline()
+        return timelineReturned
     }
 
     func logHarvest(_ harvest: NewHarvest, on slug: String) async throws -> Harvest {
@@ -257,6 +263,46 @@ struct StoryActionsTests {
         _ = await store.saveEdits(patch)
 
         #expect(store.plant.photoURL == plant.photoURL)
+    }
+
+    @Test("The plant header keeps showing the newest photo after later care")
+    @MainActor
+    func headerUsesTheNewestActualPhoto() async {
+        let plantID = UUID()
+        var listed = Plant.fixture(slug: "fern", commonName: "Large Peace Lily", id: plantID)
+        listed.photoURL = URL(string: "https://planty.test/photos/fern-cover.jpg")
+        listed.photoTakenAt = .reference.minus(days: 4)
+
+        let photo = Photo(
+            id: UUID(),
+            plantID: plantID,
+            storageKey: "fern/photo.jpg",
+            takenAt: .reference.minus(days: 4),
+            caption: nil,
+            visionFindings: nil,
+            analyzedAt: nil,
+            createdAt: .reference.minus(days: 4),
+            url: URL(string: "https://planty.test/photos/fern.jpg")
+        )
+        let laterCare = PlantObservation(
+            id: UUID(),
+            plantID: plantID,
+            kind: .watered,
+            body: nil,
+            occurredAt: .reference,
+            source: .app,
+            createdAt: .reference
+        )
+        let api = RecordingAPI()
+        api.plantReturned = .fixture(slug: "fern", commonName: "Large Peace Lily", id: plantID)
+        api.timelineReturned = PlantTimeline(observations: [laterCare], photos: [photo])
+        let store = PlantStoryStore(api: api, plant: listed)
+
+        await store.load()
+
+        #expect(store.chapters.first?.photo == nil)
+        #expect(store.latestPhoto == photo)
+        #expect(store.plant.photoURL == listed.photoURL)
     }
 
     @Test("A toxicity edit replaces a detail envelope that was already loaded")
