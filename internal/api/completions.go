@@ -46,6 +46,38 @@ type completeReminderRequest struct {
 	DueAt          time.Time `json:"due_at"`
 }
 
+type resolveReminderRequest struct {
+	IdempotencyKey uuid.UUID                 `json:"idempotency_key"`
+	DueAt          time.Time                 `json:"due_at"`
+	Disposition    store.ReminderDisposition `json:"disposition"`
+	Note           string                    `json:"note,omitempty"`
+}
+
+func (s *Server) resolveReminder(w http.ResponseWriter, r *http.Request) {
+	reminderID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	var body resolveReminderRequest
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	resolved, err := s.store.ResolveReminder(r.Context(), store.ReminderResolution{
+		IdempotencyKey: body.IdempotencyKey,
+		ReminderID:     reminderID,
+		DueAt:          body.DueAt,
+		Disposition:    body.Disposition,
+		Note:           body.Note,
+	})
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, resolved)
+}
+
 func (s *Server) completeReminder(w http.ResponseWriter, r *http.Request) {
 	reminderID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
@@ -57,7 +89,7 @@ func (s *Server) completeReminder(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
-	completed, err := s.store.CompleteReminder(r.Context(), store.ReminderCompletion{
+	completed, err := s.store.CompleteReminder(r.Context(), store.ReminderResolution{
 		IdempotencyKey: body.IdempotencyKey,
 		ReminderID:     reminderID,
 		DueAt:          body.DueAt,

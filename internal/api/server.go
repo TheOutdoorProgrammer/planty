@@ -108,6 +108,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeSetReminder, s.setReminder)
 	mux.HandleFunc(routeDeleteReminder, s.deleteReminder)
 	mux.HandleFunc(routeCompleteReminder, s.completeReminder)
+	mux.HandleFunc(routeResolveReminder, s.resolveReminder)
 
 	// Device registration is deliberately independent of APNs credentials. A
 	// phone may register before the server is configured to send; delivery then

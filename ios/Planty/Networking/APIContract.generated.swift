@@ -51,6 +51,7 @@ enum APIPath {
     static let pushHealth = "/v1/push/health"
     static let ready = "/readyz"
     static let registerPushDevice = "/v1/push-devices"
+    static func resolveReminder(id: String) -> String { "/v1/reminders/\(id)/resolve" }
     static func restorePlant(slug: String) -> String { "/v1/plants/\(slug)/restore" }
     static func setModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
     static func setReminder(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
@@ -151,6 +152,14 @@ enum PlantStatus: String, FallbackDecodable, CaseIterable {
     case unknown
 
     static let fallback = PlantStatus.unknown
+}
+
+enum ReminderDisposition: String, FallbackDecodable, CaseIterable {
+    case completed
+    case missed
+    case unknown
+
+    static let fallback = ReminderDisposition.unknown
 }
 
 enum SensorRole: String, FallbackDecodable, CaseIterable {

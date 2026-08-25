@@ -148,11 +148,11 @@ struct TodayScreen: View {
         ForEach(reminders) { occurrence in
             TodayReminderCard(
                 occurrence: occurrence,
-                isCompleting: store.completingReminderOccurrenceIDs.contains(
+                isResolving: store.resolvingReminderOccurrenceIDs.contains(
                     occurrence.occurrenceID
                 )
-            ) {
-                Task { await store.complete(occurrence) }
+            ) { disposition in
+                Task { await store.resolve(occurrence, as: disposition) }
             }
         }
     }

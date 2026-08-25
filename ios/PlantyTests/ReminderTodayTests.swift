@@ -98,6 +98,33 @@ struct ReminderTodayTests {
         #expect(visible.dueReminders == [evening])
     }
 
+    @Test("Missing an occurrence closes it without recording care")
+    func missedDoesNotInventCare() async {
+        let due = occurrence(kind: .fertilized)
+        let api = FakeAPI()
+        api.digest = Digest(
+            date: .reference.minus(hours: 1),
+            entries: [],
+            dueReminders: [due],
+            checked: 1
+        )
+        api.plantList = [due.plant]
+        let store = TodayStore(api: api, isConfigured: true, clock: { .reference })
+
+        await store.load()
+        #expect(await store.resolve(due, as: .missed, note: "I was away") == nil)
+
+        #expect(api.observations.isEmpty)
+        #expect(api.reminderResolutions.count == 1)
+        #expect(api.reminderResolutions.first?.2 == .missed)
+        #expect(api.reminderResolutions.first?.3 == "I was away")
+        #expect(store.resolvedReminderOccurrenceIDs.contains(due.occurrenceID))
+        guard case .calm = store.presentation else {
+            Issue.record("the missed occurrence remained due")
+            return
+        }
+    }
+
     @Test("The confirmation says what will be recorded")
     func confirmationLabelsMatchHistory() {
         #expect(ObservationKind.misted.completionLabel == "I misted it")

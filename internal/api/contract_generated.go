@@ -51,6 +51,7 @@ const (
 	routePushHealth                = "GET /v1/push/health"
 	routeReady                     = "GET /readyz"
 	routeRegisterPushDevice        = "POST /v1/push-devices"
+	routeResolveReminder           = "POST /v1/reminders/{id}/resolve"
 	routeRestorePlant              = "POST /v1/plants/{slug}/restore"
 	routeSetModelAssignment        = "PUT /v1/model-assignments/{job}"
 	routeSetReminder               = "PUT /v1/plants/{slug}/reminders"

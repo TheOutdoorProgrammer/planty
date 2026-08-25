@@ -30,7 +30,7 @@ final class TodayStore {
     /// Reminder identity includes its scheduled slot. Completing an 8 AM mist
     /// must not hide the same reminder when its 8 PM occurrence becomes due.
     private(set) var resolvedReminderOccurrenceIDs: Set<String> = []
-    private(set) var completingReminderOccurrenceIDs: Set<String> = []
+    private(set) var resolvingReminderOccurrenceIDs: Set<String> = []
 
     var isConfigured: Bool
     private var api: any PlantyAPI
@@ -38,7 +38,7 @@ final class TodayStore {
     private let clock: @Sendable () -> Date
     private var loadGeneration = 0
     private var completionAttempts: [UUID: CompletionAttempt] = [:]
-    private var reminderCompletionAttempts: [String: UUID] = [:]
+    private var reminderResolutionAttempts: [String: ReminderResolutionAttempt] = [:]
 
     init(
         api: any PlantyAPI,
@@ -65,10 +65,10 @@ final class TodayStore {
         isLoading = false
         resolvedIDs = []
         resolvedReminderOccurrenceIDs = []
-        completingReminderOccurrenceIDs = []
+        resolvingReminderOccurrenceIDs = []
         postponedUntil = [:]
         completionAttempts = [:]
-        reminderCompletionAttempts = [:]
+        reminderResolutionAttempts = [:]
     }
 
     var presentation: TodayPresentation {
@@ -200,29 +200,40 @@ final class TodayStore {
         }
     }
 
-    /// Completing a scheduled reminder records exactly the kind it was created
-    /// for. Production sends one idempotent occurrence to the server; the plain
-    /// observation fallback exists only for lightweight test doubles.
+    /// Resolving a scheduled reminder preserves whether the care happened.
+    /// A missed occurrence closes that slot without manufacturing an observation.
     @discardableResult
-    func complete(_ occurrence: DueReminder) async -> PlantyError? {
+    func resolve(
+        _ occurrence: DueReminder,
+        as disposition: ReminderDisposition,
+        note: String = ""
+    ) async -> PlantyError? {
         let identity = occurrence.occurrenceID
-        guard !completingReminderOccurrenceIDs.contains(identity) else { return nil }
+        guard !resolvingReminderOccurrenceIDs.contains(identity) else { return nil }
 
         actionError = nil
-        completingReminderOccurrenceIDs.insert(identity)
-        defer { completingReminderOccurrenceIDs.remove(identity) }
+        resolvingReminderOccurrenceIDs.insert(identity)
+        defer { resolvingReminderOccurrenceIDs.remove(identity) }
 
-        let idempotencyKey = reminderCompletionAttempts[identity] ?? UUID()
-        reminderCompletionAttempts[identity] = idempotencyKey
+        let intent = ReminderResolutionIntent(disposition: disposition, note: note)
+        let attempt: ReminderResolutionAttempt
+        if let pending = reminderResolutionAttempts[identity], pending.intent == intent {
+            attempt = pending
+        } else {
+            attempt = ReminderResolutionAttempt(id: UUID(), intent: intent)
+            reminderResolutionAttempts[identity] = attempt
+        }
 
         do {
-            if let completing = api as? any ReminderCompleting {
-                _ = try await completing.completeReminder(
+            if let resolving = api as? any ReminderResolving {
+                _ = try await resolving.resolveReminder(
                     reminderID: occurrence.reminder.id,
                     dueAt: occurrence.dueAt,
-                    idempotencyKey: idempotencyKey
+                    disposition: disposition,
+                    note: note,
+                    idempotencyKey: attempt.id
                 )
-            } else {
+            } else if disposition == .completed {
                 _ = try await api.addObservation(
                     slug: occurrence.plant.slug,
                     observation: NewObservation(
@@ -230,8 +241,10 @@ final class TodayStore {
                         body: occurrence.reminder.note
                     )
                 )
+            } else {
+                throw PlantyError.transport("This Planty service cannot record a missed reminder.")
             }
-            reminderCompletionAttempts.removeValue(forKey: identity)
+            reminderResolutionAttempts.removeValue(forKey: identity)
             resolvedReminderOccurrenceIDs.insert(identity)
             return nil
         } catch {
@@ -239,6 +252,11 @@ final class TodayStore {
             actionError = failure
             return failure
         }
+    }
+
+    @discardableResult
+    func complete(_ occurrence: DueReminder) async -> PlantyError? {
+        await resolve(occurrence, as: .completed)
     }
 
     /// A photograph is optional evidence. Saving one never silently marks a
@@ -301,6 +319,16 @@ private struct CompletionIdentity: Equatable {
 private struct CompletionAttempt {
     let id: UUID
     let identity: CompletionIdentity
+}
+
+private struct ReminderResolutionIntent: Equatable {
+    let disposition: ReminderDisposition
+    let note: String
+}
+
+private struct ReminderResolutionAttempt {
+    let id: UUID
+    let intent: ReminderResolutionIntent
 }
 
 enum PostponeInterval: String, CaseIterable, Sendable, Identifiable {

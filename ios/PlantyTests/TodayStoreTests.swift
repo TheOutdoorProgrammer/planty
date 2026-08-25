@@ -4,7 +4,7 @@ import Testing
 @testable import Planty
 
 /// Records what was asked of it and answers whatever the test set.
-final class FakeAPI: PlantyAPI, @unchecked Sendable {
+final class FakeAPI: PlantyAPI, ReminderResolving, @unchecked Sendable {
     private let lock = NSLock()
     private var _digest: Digest = .fixture()
     private var _plants: [Plant] = [.fixture()]
@@ -54,6 +54,7 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     private var _createdQuestions: [NewOpenQuestion] = []
     private var _pushRegistrations: [PushDeviceRegistration] = []
     private var _pushTests: [PushInstallationRequest] = []
+    private var _reminderResolutions: [(UUID, Date, ReminderDisposition, String, UUID)] = []
 
     var answer: PlantAnswer {
         get { lock.withLock { _answer } }
@@ -86,6 +87,9 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     var createdQuestions: [NewOpenQuestion] { lock.withLock { _createdQuestions } }
     var pushRegistrations: [PushDeviceRegistration] { lock.withLock { _pushRegistrations } }
     var pushTests: [PushInstallationRequest] { lock.withLock { _pushTests } }
+    var reminderResolutions: [(UUID, Date, ReminderDisposition, String, UUID)] {
+        lock.withLock { _reminderResolutions }
+    }
 
     var reminderList: [Reminder] {
         get { lock.withLock { _reminders } }
@@ -322,6 +326,51 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     func deleteReminder(slug: String, kind: ObservationKind) async throws {
         try check()
         lock.withLock { _reminders.removeAll { $0.kind == kind } }
+    }
+
+    func resolveReminder(
+        reminderID: UUID,
+        dueAt: Date,
+        disposition: ReminderDisposition,
+        note: String,
+        idempotencyKey: UUID
+    ) async throws -> ReminderResolutionResult {
+        try check()
+        lock.withLock {
+            _reminderResolutions.append((reminderID, dueAt, disposition, note, idempotencyKey))
+        }
+        let observation: PlantObservation?
+        if disposition == .completed {
+            let due = digest.dueReminders.first {
+                $0.reminder.id == reminderID && $0.dueAt == dueAt
+            }
+            if let due {
+                let draft = NewObservation(kind: due.reminder.kind, body: due.reminder.note)
+                lock.withLock { _observations.append((due.plant.slug, draft)) }
+                observation = PlantObservation(
+                    id: UUID(),
+                    plantID: due.plant.id,
+                    kind: draft.kind,
+                    body: draft.body,
+                    occurredAt: draft.occurredAt,
+                    source: draft.source,
+                    createdAt: draft.occurredAt
+                )
+            } else {
+                observation = nil
+            }
+        } else {
+            observation = nil
+        }
+        return ReminderResolutionResult(
+            idempotencyKey: idempotencyKey,
+            reminderID: reminderID,
+            dueAt: dueAt,
+            disposition: disposition,
+            note: note,
+            observation: observation,
+            respondedAt: .reference
+        )
     }
 
     func createPlantFromPhoto(_ ask: PlantFromPhoto) async throws -> PlantFromPhotoResult {

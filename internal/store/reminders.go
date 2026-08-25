@@ -144,6 +144,13 @@ func (s *Store) DueReminders(ctx context.Context, now time.Time) ([]DueReminder,
 			continue
 		}
 		due.DueAt = slot
+		resolved, err := s.ReminderOccurrenceResolved(ctx, due.Reminder.ID, slot)
+		if err != nil {
+			return nil, fmt.Errorf("check reminder occurrence: %w", err)
+		}
+		if resolved {
+			continue
+		}
 		out = append(out, due)
 	}
 	return out, nil

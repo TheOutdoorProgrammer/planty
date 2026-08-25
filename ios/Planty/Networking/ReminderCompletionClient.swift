@@ -1,38 +1,65 @@
 import Foundation
 
-/// Capability kept separate from the broad app API so older/lightweight test
-/// doubles can continue to model Planty. Production uses the idempotent server
-/// endpoint; Today falls back to a plain observation only for such test doubles.
-protocol ReminderCompleting: Sendable {
-    func completeReminder(
+protocol ReminderResolving: Sendable {
+    func resolveReminder(
         reminderID: UUID,
         dueAt: Date,
+        disposition: ReminderDisposition,
+        note: String,
         idempotencyKey: UUID
-    ) async throws -> PlantObservation
+    ) async throws -> ReminderResolutionResult
 }
 
-private struct ReminderCompletionRequest: Encodable, Sendable {
+struct ReminderResolutionResult: Decodable, Sendable {
+    let idempotencyKey: UUID
+    let reminderID: UUID
+    let dueAt: Date
+    let disposition: ReminderDisposition
+    let note: String?
+    let observation: PlantObservation?
+    let respondedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case idempotencyKey = "idempotency_key"
+        case reminderID = "reminder_id"
+        case dueAt = "due_at"
+        case disposition
+        case note
+        case observation
+        case respondedAt = "responded_at"
+    }
+}
+
+private struct ReminderResolutionRequest: Encodable, Sendable {
     let idempotencyKey: UUID
     let dueAt: Date
+    let disposition: ReminderDisposition
+    let note: String
 
     enum CodingKeys: String, CodingKey {
         case idempotencyKey = "idempotency_key"
         case dueAt = "due_at"
+        case disposition
+        case note
     }
 }
 
-extension PlantyClient: ReminderCompleting {
-    func completeReminder(
+extension PlantyClient: ReminderResolving {
+    func resolveReminder(
         reminderID: UUID,
         dueAt: Date,
+        disposition: ReminderDisposition,
+        note: String,
         idempotencyKey: UUID
-    ) async throws -> PlantObservation {
+    ) async throws -> ReminderResolutionResult {
         try await send(
             "POST",
-            APIPath.completeReminder(id: reminderID.uuidString),
-            body: ReminderCompletionRequest(
+            APIPath.resolveReminder(id: reminderID.uuidString),
+            body: ReminderResolutionRequest(
                 idempotencyKey: idempotencyKey,
-                dueAt: dueAt
+                dueAt: dueAt,
+                disposition: disposition,
+                note: note
             )
         )
     }

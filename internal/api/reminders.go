@@ -41,6 +41,17 @@ func (s *Server) listReminders(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		e.Due = reminder.Due(e.LastDone, now)
+		if e.Due {
+			slot, ok := reminder.LastSlot(e.LastDone, now)
+			if ok {
+				resolved, err := s.store.ReminderOccurrenceResolved(r.Context(), reminder.ID, slot)
+				if err != nil {
+					s.fail(w, http.StatusInternalServerError, err)
+					return
+				}
+				e.Due = !resolved
+			}
+		}
 		out = append(out, e)
 	}
 	s.ok(w, http.StatusOK, map[string]any{"reminders": out, "count": len(out)})

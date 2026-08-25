@@ -339,6 +339,41 @@ struct PlantyClientTests {
         #expect(request.httpMethod == "POST")
     }
 
+    @Test("A missed reminder sends the occurrence and outcome without care")
+    func missesReminder() async throws {
+        let reminderID = UUID()
+        let key = UUID()
+        let dueAt = Date.reference
+        StubTransport.respond(json: """
+            {
+              "idempotency_key":"\(key.uuidString)",
+              "reminder_id":"\(reminderID.uuidString)",
+              "due_at":"2025-06-15T12:00:00Z",
+              "disposition":"missed",
+              "note":"I was away",
+              "responded_at":"2025-06-15T12:01:00Z"
+            }
+            """)
+
+        let result = try await StubTransport.client().resolveReminder(
+            reminderID: reminderID,
+            dueAt: dueAt,
+            disposition: .missed,
+            note: "I was away",
+            idempotencyKey: key
+        )
+
+        let request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "POST")
+        #expect(request.url?.path == "/v1/reminders/\(reminderID.uuidString)/resolve")
+        let body = try fields(of: request)
+        #expect(body["disposition"] as? String == "missed")
+        #expect(body["note"] as? String == "I was away")
+        #expect(body["idempotency_key"] as? String == key.uuidString)
+        #expect(result.disposition == .missed)
+        #expect(result.observation == nil)
+    }
+
     @Test("Archiving is a DELETE that carries the resulting status")
     func archives() async throws {
         StubTransport.respond(json: #"{"archived":"mona"}"#)

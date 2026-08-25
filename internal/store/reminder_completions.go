@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -12,33 +13,81 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
-// ReminderCompletion is one scheduled occurrence the user says they performed.
-// DueAt distinguishes two occurrences of the same reminder, such as morning and
-// evening misting. The kind is deliberately read from the reminder on the
-// server so a client cannot clear "mist it" while recording something else.
-type ReminderCompletion struct {
+type ReminderDisposition string
+
+const (
+	ReminderCompleted ReminderDisposition = "completed"
+	ReminderMissed    ReminderDisposition = "missed"
+)
+
+func (d ReminderDisposition) valid() bool {
+	return d == ReminderCompleted || d == ReminderMissed
+}
+
+// ReminderResolution settles exactly one scheduled occurrence. A completed
+// occurrence writes the configured care observation; a missed one records only
+// that the slot passed without pretending care happened.
+type ReminderResolution struct {
 	IdempotencyKey uuid.UUID
 	ReminderID     uuid.UUID
 	DueAt          time.Time
+	Disposition    ReminderDisposition
+	Note           string
 }
 
-// CompleteReminder records the reminder's configured care kind exactly once.
-// Replaying either the same idempotency key or the same reminder occurrence
-// returns the original observation instead of duplicating the plant history.
-func (s *Store) CompleteReminder(ctx context.Context, c ReminderCompletion) (plant.Observation, error) {
-	if c.IdempotencyKey == uuid.Nil || c.ReminderID == uuid.Nil || c.DueAt.IsZero() {
-		return plant.Observation{}, fmt.Errorf(
-			"%w: reminder completion needs an idempotency key, reminder and due_at",
+// ReminderCompletion keeps source compatibility for callers that can only
+// report successful care.
+type ReminderCompletion = ReminderResolution
+
+type ResolvedReminder struct {
+	IdempotencyKey uuid.UUID           `json:"idempotency_key"`
+	ReminderID     uuid.UUID           `json:"reminder_id"`
+	DueAt          time.Time           `json:"due_at"`
+	Disposition    ReminderDisposition `json:"disposition"`
+	Note           string              `json:"note,omitempty"`
+	Observation    *plant.Observation  `json:"observation,omitempty"`
+	RespondedAt    time.Time           `json:"responded_at"`
+}
+
+// CompleteReminder remains the compatibility surface for existing clients.
+// New callers should use ResolveReminder so a missed occurrence is explicit.
+func (s *Store) CompleteReminder(ctx context.Context, resolution ReminderResolution) (plant.Observation, error) {
+	resolution.Disposition = ReminderCompleted
+	resolved, err := s.ResolveReminder(ctx, resolution)
+	if err != nil {
+		return plant.Observation{}, err
+	}
+	if resolved.Observation == nil {
+		return plant.Observation{}, errors.New("completed reminder has no observation")
+	}
+	return *resolved.Observation, nil
+}
+
+// ResolveReminder records a completed or missed reminder occurrence exactly
+// once. The reminder row lock serializes two phones choosing different outcomes;
+// the first committed disposition is the historical truth returned to both.
+func (s *Store) ResolveReminder(ctx context.Context, resolution ReminderResolution) (ResolvedReminder, error) {
+	resolution.Note = strings.TrimSpace(resolution.Note)
+	if resolution.IdempotencyKey == uuid.Nil || resolution.ReminderID == uuid.Nil || resolution.DueAt.IsZero() {
+		return ResolvedReminder{}, fmt.Errorf(
+			"%w: reminder resolution needs an idempotency key, reminder and due_at",
 			plant.ErrInvalid,
 		)
 	}
-	if c.DueAt.After(time.Now().Add(time.Minute)) {
-		return plant.Observation{}, fmt.Errorf("%w: a future reminder cannot be completed", plant.ErrInvalid)
+	if !resolution.Disposition.valid() {
+		return ResolvedReminder{}, fmt.Errorf(
+			"%w: reminder disposition %q is not supported", plant.ErrInvalid, resolution.Disposition)
+	}
+	if len(resolution.Note) > 500 {
+		return ResolvedReminder{}, fmt.Errorf("%w: reminder note is longer than 500 characters", plant.ErrInvalid)
+	}
+	if resolution.DueAt.After(time.Now().Add(time.Minute)) {
+		return ResolvedReminder{}, fmt.Errorf("%w: a future reminder cannot be resolved", plant.ErrInvalid)
 	}
 
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
-		return plant.Observation{}, err
+		return ResolvedReminder{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
@@ -47,29 +96,27 @@ func (s *Store) CompleteReminder(ctx context.Context, c ReminderCompletion) (pla
 		SELECT `+reminderColumns+`
 		FROM reminders
 		WHERE id = $1
-		FOR UPDATE`, c.ReminderID).Scan(reminderFields(&reminder)...); err != nil {
+		FOR UPDATE`, resolution.ReminderID).Scan(reminderFields(&reminder)...); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return plant.Observation{}, ErrNotFound
+			return ResolvedReminder{}, ErrNotFound
 		}
-		return plant.Observation{}, err
+		return ResolvedReminder{}, err
 	}
 
-	if replayed, found, err := reminderCompletionByKey(ctx, tx, c); err != nil {
-		return plant.Observation{}, err
+	if replayed, found, err := reminderResolutionByKey(ctx, tx, resolution); err != nil {
+		return ResolvedReminder{}, err
 	} else if found {
 		return replayed, tx.Commit(ctx)
 	}
 
-	// A second phone may have completed the occurrence with its own key. The
-	// occurrence identity is authoritative, so both callers receive one record.
-	if replayed, found, err := reminderCompletionByOccurrence(ctx, tx, c); err != nil {
-		return plant.Observation{}, err
+	if replayed, found, err := reminderResolutionByOccurrence(ctx, tx, resolution); err != nil {
+		return ResolvedReminder{}, err
 	} else if found {
 		return replayed, tx.Commit(ctx)
 	}
 
 	if !reminder.Active {
-		return plant.Observation{}, fmt.Errorf("%w: that reminder is inactive", plant.ErrInvalid)
+		return ResolvedReminder{}, fmt.Errorf("%w: that reminder is inactive", plant.ErrInvalid)
 	}
 
 	var lastDone *time.Time
@@ -77,96 +124,130 @@ func (s *Store) CompleteReminder(ctx context.Context, c ReminderCompletion) (pla
 		SELECT max(occurred_at)
 		FROM observations
 		WHERE plant_id = $1 AND kind = $2`, reminder.PlantID, reminder.Kind).Scan(&lastDone); err != nil {
-		return plant.Observation{}, err
+		return ResolvedReminder{}, err
 	}
 
-	slot, ok := reminder.LastSlot(lastDone, c.DueAt)
-	if !ok || !slot.Equal(c.DueAt) || !reminder.Due(lastDone, c.DueAt) {
-		return plant.Observation{}, fmt.Errorf(
+	slot, ok := reminder.LastSlot(lastDone, resolution.DueAt)
+	if !ok || !slot.Equal(resolution.DueAt) || !reminder.Due(lastDone, resolution.DueAt) {
+		return ResolvedReminder{}, fmt.Errorf(
 			"%w: that reminder occurrence is no longer due",
 			plant.ErrInvalid,
 		)
 	}
 
-	if _, err := tx.Exec(ctx, `
-		INSERT INTO reminder_completions (idempotency_key, reminder_id, due_at)
-		VALUES ($1, $2, $3)`, c.IdempotencyKey, c.ReminderID, c.DueAt); err != nil {
-		return plant.Observation{}, classify(err)
+	resolved := ResolvedReminder{
+		IdempotencyKey: resolution.IdempotencyKey,
+		ReminderID:     resolution.ReminderID,
+		DueAt:          resolution.DueAt,
+		Disposition:    resolution.Disposition,
+		Note:           resolution.Note,
+		RespondedAt:    time.Now().UTC(),
+	}
+	if resolution.Disposition == ReminderCompleted {
+		completed, err := addObservationTx(ctx, tx, plant.Observation{
+			PlantID:    reminder.PlantID,
+			Kind:       reminder.Kind,
+			Body:       reminder.Note,
+			OccurredAt: resolved.RespondedAt,
+			Source:     plant.SourceApp,
+		})
+		if err != nil {
+			return ResolvedReminder{}, err
+		}
+		resolved.Observation = &completed
 	}
 
-	completed, err := addObservationTx(ctx, tx, plant.Observation{
-		PlantID:    reminder.PlantID,
-		Kind:       reminder.Kind,
-		Body:       reminder.Note,
-		OccurredAt: time.Now().UTC(),
-		Source:     plant.SourceApp,
-	})
-	if err != nil {
-		return plant.Observation{}, err
+	var observationID *uuid.UUID
+	if resolved.Observation != nil {
+		observationID = &resolved.Observation.ID
 	}
 	if _, err := tx.Exec(ctx, `
-		UPDATE reminder_completions SET observation_id = $2
-		WHERE idempotency_key = $1`, c.IdempotencyKey, completed.ID); err != nil {
-		return plant.Observation{}, err
+		INSERT INTO reminder_completions (
+			idempotency_key, reminder_id, due_at, observation_id,
+			disposition, note, responded_at
+		) VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+		resolved.IdempotencyKey, resolved.ReminderID, resolved.DueAt, observationID,
+		resolved.Disposition, resolved.Note, resolved.RespondedAt); err != nil {
+		return ResolvedReminder{}, classify(err)
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return plant.Observation{}, err
+		return ResolvedReminder{}, err
 	}
-	return completed, nil
+	return resolved, nil
 }
 
-func reminderCompletionByKey(
+func reminderResolutionByKey(
 	ctx context.Context,
 	tx pgx.Tx,
-	c ReminderCompletion,
-) (plant.Observation, bool, error) {
-	var reminderID uuid.UUID
-	var dueAt time.Time
-	var observationID *uuid.UUID
-	err := tx.QueryRow(ctx, `
-		SELECT reminder_id, due_at, observation_id
-		FROM reminder_completions
-		WHERE idempotency_key = $1`, c.IdempotencyKey).
-		Scan(&reminderID, &dueAt, &observationID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return plant.Observation{}, false, nil
+	resolution ReminderResolution,
+) (ResolvedReminder, bool, error) {
+	resolved, found, err := scanReminderResolution(ctx, tx, `
+		WHERE rc.idempotency_key = $1`, resolution.IdempotencyKey)
+	if err != nil || !found {
+		return ResolvedReminder{}, found, err
 	}
-	if err != nil {
-		return plant.Observation{}, false, err
-	}
-	if reminderID != c.ReminderID || !dueAt.Equal(c.DueAt) {
-		return plant.Observation{}, false, fmt.Errorf(
-			"%w: idempotency key was already used for a different reminder occurrence",
+	if resolved.ReminderID != resolution.ReminderID ||
+		!resolved.DueAt.Equal(resolution.DueAt) ||
+		resolved.Disposition != resolution.Disposition ||
+		resolved.Note != resolution.Note {
+		return ResolvedReminder{}, false, fmt.Errorf(
+			"%w: idempotency key was already used for a different reminder resolution",
 			plant.ErrInvalid,
 		)
 	}
-	if observationID == nil {
-		return plant.Observation{}, false, errors.New("reminder completion exists without its observation")
-	}
-	out, err := observationTx(ctx, tx, *observationID)
-	return out, true, err
+	return resolved, true, nil
 }
 
-func reminderCompletionByOccurrence(
+func reminderResolutionByOccurrence(
 	ctx context.Context,
 	tx pgx.Tx,
-	c ReminderCompletion,
-) (plant.Observation, bool, error) {
+	resolution ReminderResolution,
+) (ResolvedReminder, bool, error) {
+	return scanReminderResolution(ctx, tx, `
+		WHERE rc.reminder_id = $1 AND rc.due_at = $2`, resolution.ReminderID, resolution.DueAt)
+}
+
+func scanReminderResolution(
+	ctx context.Context,
+	tx pgx.Tx,
+	where string,
+	args ...any,
+) (ResolvedReminder, bool, error) {
+	var resolved ResolvedReminder
 	var observationID *uuid.UUID
 	err := tx.QueryRow(ctx, `
-		SELECT observation_id
-		FROM reminder_completions
-		WHERE reminder_id = $1 AND due_at = $2`, c.ReminderID, c.DueAt).
-		Scan(&observationID)
+		SELECT rc.idempotency_key, rc.reminder_id, rc.due_at, rc.disposition,
+			rc.note, rc.responded_at, rc.observation_id
+		FROM reminder_completions rc `+where, args...).Scan(
+		&resolved.IdempotencyKey, &resolved.ReminderID, &resolved.DueAt,
+		&resolved.Disposition, &resolved.Note, &resolved.RespondedAt, &observationID,
+	)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return plant.Observation{}, false, nil
+		return ResolvedReminder{}, false, nil
 	}
 	if err != nil {
-		return plant.Observation{}, false, err
+		return ResolvedReminder{}, false, err
 	}
-	if observationID == nil {
-		return plant.Observation{}, false, errors.New("reminder completion exists without its observation")
+	if observationID != nil {
+		observation, err := observationTx(ctx, tx, *observationID)
+		if err != nil {
+			return ResolvedReminder{}, false, err
+		}
+		resolved.Observation = &observation
 	}
-	out, err := observationTx(ctx, tx, *observationID)
-	return out, true, err
+	return resolved, true, nil
+}
+
+func (s *Store) ReminderOccurrenceResolved(
+	ctx context.Context,
+	reminderID uuid.UUID,
+	dueAt time.Time,
+) (bool, error) {
+	var resolved bool
+	err := s.pool.QueryRow(ctx, `
+		SELECT EXISTS (
+			SELECT 1 FROM reminder_completions
+			WHERE reminder_id = $1 AND due_at = $2
+		)`, reminderID, dueAt).Scan(&resolved)
+	return resolved, err
 }

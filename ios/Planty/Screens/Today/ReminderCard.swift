@@ -5,8 +5,10 @@ import SwiftUI
 /// misting reminder can never quietly become a generic acknowledgement.
 struct TodayReminderCard: View {
     let occurrence: DueReminder
-    let isCompleting: Bool
-    let complete: () -> Void
+    let isResolving: Bool
+    let resolve: (ReminderDisposition) -> Void
+
+    @State private var confirmingMiss = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -38,26 +40,60 @@ struct TodayReminderCard: View {
                     .foregroundStyle(PlantyColor.secondaryText)
             }
 
-            Button(action: complete) {
-                if isCompleting {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("Saving…")
-                    }
-                    .frame(maxWidth: .infinity)
-                } else {
-                    Label(
-                        occurrence.completionLabel,
-                        systemImage: occurrence.reminder.kind.symbol
-                    )
-                    .frame(maxWidth: .infinity)
+            ViewThatFits {
+                HStack(spacing: 10) {
+                    completionButton
+                    missedButton
+                }
+                VStack(spacing: 10) {
+                    completionButton
+                    missedButton
                 }
             }
-            .buttonStyle(PrimaryButtonStyle(color: PlantyColor.green))
-            .disabled(isCompleting)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .plantyCard(border: PlantyColor.cyan.opacity(0.3))
         .accessibilityElement(children: .contain)
+        .confirmationDialog(
+            "Mark this reminder missed?",
+            isPresented: $confirmingMiss,
+            titleVisibility: .visible
+        ) {
+            Button("Mark missed") { resolve(.missed) }
+            Button("Keep it due", role: .cancel) {}
+        } message: {
+            Text("Planty will close only this scheduled occurrence and record no care.")
+        }
+    }
+
+    private var completionButton: some View {
+        Button { resolve(.completed) } label: {
+            if isResolving {
+                HStack(spacing: 8) {
+                    ProgressView()
+                    Text("Saving…")
+                }
+                .frame(maxWidth: .infinity)
+            } else {
+                Label(
+                    occurrence.completionLabel,
+                    systemImage: occurrence.reminder.kind.symbol
+                )
+                .frame(maxWidth: .infinity)
+            }
+        }
+        .buttonStyle(PrimaryButtonStyle(color: PlantyColor.green))
+        .disabled(isResolving)
+    }
+
+    private var missedButton: some View {
+        Button {
+            confirmingMiss = true
+        } label: {
+            Label("I missed this one", systemImage: "calendar.badge.exclamationmark")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(SecondaryButtonStyle())
+        .disabled(isResolving)
     }
 }

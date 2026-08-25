@@ -29,8 +29,8 @@ The base URL and optional bearer token resolve in this order:
 1. Values entered in Settings, with the URL in `UserDefaults` and the token in the Keychain.
 2. `PLANTY_BASE_URL` and `PLANTY_API_TOKEN` embedded through `Planty-Info.plist` at build time.
 
-The current LAN deployment has no API authentication, so its token is empty.
-The client retains optional bearer support so an authenticated deployment does not require a networking rewrite.
+The service requires a deployment-scoped bearer token for every application route.
+The token is optional only while editing Settings so the app can explain an incomplete configuration before making a request.
 
 Settings has **Save and test**, which calls `/healthz` and proves API reachability.
 Its notification diagnostics separately show permission, APNs registration, token upload, environment, server acceptance, and a real APNs test delivery.

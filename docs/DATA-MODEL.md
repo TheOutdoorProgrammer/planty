@@ -153,7 +153,8 @@ A turn may refer to a plant and a photograph, but both can be absent for a quest
 `notes` stores editable human prose either against one plant or against the household.
 Household notes are included in every consultation because facts such as “there is a cat here” affect advice without belonging to one pot.
 
-`reminders` stores standing intent, while `reminder_completions` and observations prove which scheduled occurrence was actually completed.
+`reminders` stores standing intent, while `reminder_completions` stores the completed or missed disposition of each scheduled occurrence.
+A completed disposition links to the care observation it created; a missed disposition deliberately has no observation.
 A notification does not advance the care schedule by itself.
 
 Owner questions are durable records rather than conversation-only prompts, so uncertainty can be answered later and remain attached to the plant.
@@ -163,7 +164,8 @@ Owner questions are durable records rather than conversation-only prompts, so un
 `judgment_runs` records the expected, succeeded, failed, and completed counts for a whole daily attempt.
 That aggregate is what prevents one fresh verdict from making a partial run look like a current garden-wide all-clear.
 
-`care_completions` and `reminder_completions` bind idempotency keys to the observations they create.
+`care_completions` binds idempotency keys to the observations it creates.
+`reminder_completions` binds a key and exact due slot to one immutable outcome, and only the completed outcome links to an observation.
 A phone can retry after losing a response without duplicating care history or closing the wrong occurrence.
 
 `push_devices` stores APNs tokens by production or sandbox environment.

@@ -55,6 +55,7 @@
     },
     "/v1/plants/{slug}/reminders/{kind}": {"delete": {"operationId": "deleteReminder"}},
     "/v1/reminders/{id}/complete": {"post": {"operationId": "completeReminder"}},
+    "/v1/reminders/{id}/resolve": {"post": {"operationId": "resolveReminder"}},
     "/v1/ask": {"post": {"operationId": "ask"}},
     "/v1/identify": {"post": {"operationId": "identify"}},
     "/v1/postmortems": {"get": {"operationId": "listPostmortems"}},
@@ -106,6 +107,7 @@
       "VerdictAction": {"type": "string", "enum": ["none", "water", "check", "urgent", "harvest"]},
       "ObservationKind": {"type": "string", "enum": ["watered", "misted", "repotted", "fertilized", "pruned", "harvested", "moved", "symptom", "note", "died"]},
       "ObservationSource": {"type": "string", "enum": ["app", "agent", "automation"]},
+      "ReminderDisposition": {"type": "string", "enum": ["completed", "missed"]},
       "SensorRole": {"type": "string", "enum": ["soil_moisture", "ambient_temp", "ambient_humidity", "illuminance"]},
       "AIJob": {"type": "string", "enum": ["assess", "identify", "consult", "ask", "postmortem", "owner_update"]},
       "APIError": {
