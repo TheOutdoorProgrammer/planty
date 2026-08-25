@@ -16,6 +16,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/push"
+	"github.com/TheOutdoorProgrammer/planty/internal/scheduledjob"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
@@ -30,6 +31,7 @@ type Server struct {
 	pushSender    *push.Sender
 	homeAssistant homeAssistantDiscoverer
 	actuatorHA    job.ActuatorHomeAssistant
+	scheduledJobs scheduledjob.Launcher
 	bearerToken   string
 }
 
@@ -59,6 +61,14 @@ func (s *Server) WithJudge(j *judge.Judge) *Server {
 
 func (s *Server) WithPush(sender *push.Sender) *Server {
 	s.pushSender = sender
+	return s
+}
+
+// WithScheduledJobs enables phone-triggered copies of the code-owned
+// Kubernetes CronJobs. The launcher itself owns the allowlist and concurrency
+// checks; the HTTP route never accepts a resource name or command.
+func (s *Server) WithScheduledJobs(launcher scheduledjob.Launcher) *Server {
+	s.scheduledJobs = launcher
 	return s
 }
 
@@ -130,6 +140,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeListPromptInstructions, s.listPromptInstructions)
 	mux.HandleFunc(routeSetPromptInstruction, s.setPromptInstruction)
 	mux.HandleFunc(routeClearPromptInstruction, s.clearPromptInstruction)
+	mux.HandleFunc(routeListScheduledJobs, s.listScheduledJobs)
+	mux.HandleFunc(routeRunScheduledJob, s.runScheduledJob)
 
 	// No slug: a question about something in a shop is not a plant you own.
 	mux.HandleFunc(routeAsk, s.ask)

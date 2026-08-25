@@ -26,7 +26,7 @@ struct RootTabView: View {
         .tint(PlantyColor.green)
         .tabViewStyle(.sidebarAdaptable)
         .sheet(isPresented: $session.isShowingSettings) {
-            SettingsScreen()
+            settingsDestination
         }
         .sheet(isPresented: $session.isShowingCareRound) {
             CareRoundScreen()
@@ -36,5 +36,18 @@ struct RootTabView: View {
             session.openPushRoute(route)
         }
         .onOpenURL { session.openDeepLink($0) }
+    }
+
+    @ViewBuilder
+    private var settingsDestination: some View {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["PLANTY_START_SETTINGS_ROUTE"] == "scheduled-jobs" {
+            NavigationStack { ScheduledJobsScreen() }
+        } else {
+            SettingsScreen()
+        }
+        #else
+        SettingsScreen()
+        #endif
     }
 }

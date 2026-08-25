@@ -125,6 +125,8 @@
       "put": {"operationId": "setPromptInstruction"},
       "delete": {"operationId": "clearPromptInstruction"}
     },
+    "/v1/scheduled-jobs": {"get": {"operationId": "listScheduledJobs"}},
+    "/v1/scheduled-jobs/{job}/runs": {"post": {"operationId": "runScheduledJob"}},
     "/v1/away": {
       "get": {"operationId": "listAway"},
       "post": {"operationId": "createAway"}

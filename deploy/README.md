@@ -9,13 +9,17 @@ Flux reconciles the completed copies in the private `flux` repository, so reposi
 | --- | --- |
 | `namespace.yaml` | The `planty` namespace. |
 | `postgres-cluster.yaml` | A single-instance CloudNativePG cluster. |
-| `deployment.yaml` | The API deployment and ClusterIP service. |
+| `deployment.yaml` | The API deployment, ClusterIP service, and namespace-scoped scheduled-job RBAC. |
 | `cronjobs.yaml` | Ingest, watering verification, photo pruning, daily, chase, away, thirst, cold, and reminder jobs. |
 | `configmap.yaml` | Public non-secret defaults and provider declarations. |
 | `secret.yaml.example` | Template for API, database, Home Assistant, model-provider, APNs, and MinIO credentials. |
 
 Every CronJob imports the same `planty-secrets` Secret as the service.
 The live deployment must override the empty Home Assistant and object-storage endpoints and must configure a weather entity that actually supports a daily forecast.
+
+The API service account may read Planty's CronJobs and read or create Jobs in the `planty` namespace.
+The manual-run API maps stable code-owned identifiers to exact CronJob names, copies their current job templates, and never accepts an arbitrary Kubernetes resource name or command.
+Manual copies expire seven days after completion, while repeated requests reuse an active scheduled or manual run.
 
 ## Judge configuration
 

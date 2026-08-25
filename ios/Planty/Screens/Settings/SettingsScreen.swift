@@ -18,6 +18,7 @@ struct SettingsScreen: View {
                 notificationSection
                 householdSection
                 freshnessSection
+                scheduledJobsSection
                 modelsSection
                 promptInstructionsSection
                 sensorsSection
@@ -176,6 +177,18 @@ struct SettingsScreen: View {
                 Text("No digest has loaded yet.")
                     .foregroundStyle(PlantyColor.secondaryText)
             }
+        }
+    }
+
+    private var scheduledJobsSection: some View {
+        Section {
+            NavigationLink {
+                ScheduledJobsScreen()
+            } label: {
+                Label("Run scheduled jobs", systemImage: "play.circle.fill")
+            }
+        } footer: {
+            Text("Start the same bounded Kubernetes jobs Planty normally runs on its schedule.")
         }
     }
 

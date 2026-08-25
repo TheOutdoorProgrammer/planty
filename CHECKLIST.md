@@ -47,6 +47,7 @@ Future work belongs in [ROADMAP.md](ROADMAP.md), durable trade-offs belong in [a
 - [x] Consultations can use current and historical photographs and can write through the constrained `planty agent` interface.
 - [x] More contains away mode, cold shelter state, owner questions, harvest history, postmortem lessons, owner updates, and settings.
 - [x] Settings tests API reachability and allows a compatible model to be selected independently for each model job.
+- [x] A stale Today state can launch a fresh daily check, and Settings can rerun any allowlisted CronJob from the phone without exposing arbitrary Kubernetes execution.
 - [x] Native APNs registration and device-token upload are implemented.
 - [x] Settings separates notification permission, APNs registration, token upload, environment, server acceptance, and real delivery testing.
 - [x] Notification taps route to Today, Capture, Settings, or a specific plant when the payload names one.

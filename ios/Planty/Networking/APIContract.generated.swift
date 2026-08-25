@@ -66,6 +66,7 @@ enum APIPath {
     static let listQuestions = "/v1/questions"
     static func listRechecks(slug: String) -> String { "/v1/plants/\(slug)/rechecks" }
     static func listReminders(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
+    static let listScheduledJobs = "/v1/scheduled-jobs"
     static let listSensors = "/v1/sensors"
     static func overrideGuardrail(id: String) -> String { "/v1/guardrails/\(id)/override" }
     static let proposeExperiment = "/v1/experiments"
@@ -78,6 +79,7 @@ enum APIPath {
     static func resolveReminder(id: String) -> String { "/v1/reminders/\(id)/resolve" }
     static func restorePlant(slug: String) -> String { "/v1/plants/\(slug)/restore" }
     static func reviewEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)/review" }
+    static func runScheduledJob(job: String) -> String { "/v1/scheduled-jobs/\(job)/runs" }
     static func setModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
     static func setPromptInstruction(job: String) -> String { "/v1/prompt-instructions/\(job)" }
     static func setReminder(slug: String) -> String { "/v1/plants/\(slug)/reminders" }

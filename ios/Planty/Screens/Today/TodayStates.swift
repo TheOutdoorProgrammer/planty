@@ -49,6 +49,8 @@ struct CalmHero: View {
 
 struct StaleBanner: View {
     let summary: StaleSummary
+    let isRunningFreshCheck: Bool
+    let runFreshCheck: () -> Void
     let checkConnections: () -> Void
     let takePhoto: () -> Void
 
@@ -69,8 +71,17 @@ struct StaleBanner: View {
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(PlantyColor.yellow)
             }
+            Button(action: runFreshCheck) {
+                HStack(spacing: 8) {
+                    if isRunningFreshCheck { ProgressView().tint(.white) }
+                    Text(isRunningFreshCheck ? "Running fresh check…" : "Run fresh check")
+                }
+            }
+            .buttonStyle(PrimaryButtonStyle(color: PlantyColor.orange))
+            .disabled(isRunningFreshCheck)
+            .accessibilityHint("Starts Planty's daily Kubernetes job and refreshes this screen when it finishes.")
             Button("Check connections", action: checkConnections)
-                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.orange))
+                .buttonStyle(SecondaryButtonStyle())
             Button("Take a photo", action: takePhoto)
                 .buttonStyle(SecondaryButtonStyle())
         }

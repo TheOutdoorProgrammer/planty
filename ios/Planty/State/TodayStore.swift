@@ -302,6 +302,7 @@ final class TodayStore {
     }
 
     func clearActionError() { actionError = nil }
+    func reportActionError(_ error: PlantyError) { actionError = error }
     func clearNoted() { noted = nil }
 
     func postpone(_ entry: DigestEntry, by interval: PostponeInterval) {

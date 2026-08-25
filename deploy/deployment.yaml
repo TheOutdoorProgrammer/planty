@@ -1,3 +1,37 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: planty-api
+  namespace: planty
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: planty-scheduled-jobs
+  namespace: planty
+rules:
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: planty-scheduled-jobs
+  namespace: planty
+subjects:
+  - kind: ServiceAccount
+    name: planty-api
+    namespace: planty
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: planty-scheduled-jobs
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -15,6 +49,7 @@ spec:
         app.kubernetes.io/name: planty
         app.kubernetes.io/instance: planty
     spec:
+      serviceAccountName: planty-api
       securityContext:
         runAsNonRoot: true
         runAsUser: 65532

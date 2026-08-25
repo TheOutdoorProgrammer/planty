@@ -41,6 +41,7 @@ struct TodayScreen: View {
             }
             .task { await store.load() }
             .task { await session.incidents.load() }
+            .task { await session.scheduledJobs.loadIfNeeded() }
             .task { await session.updates.check() }
             .onChange(of: session.capture.settled) { _, verdict in
                 guard let verdict else { return }
@@ -89,7 +90,12 @@ struct TodayScreen: View {
         case .actions(let summary):
             actionState(summary)
         case .stale(let summary):
-            StaleBanner(summary: summary) {
+            StaleBanner(
+                summary: summary,
+                isRunningFreshCheck: session.scheduledJobs.isRunning(.daily)
+            ) {
+                Task { await runFreshCheck() }
+            } checkConnections: {
                 session.isShowingSettings = true
             } takePhoto: {
                 session.selectedTab = .snap
@@ -107,6 +113,16 @@ struct TodayScreen: View {
                 cards(for: cached.sortedEntries)
             }
         }
+    }
+
+    private func runFreshCheck() async {
+        if let failure = await session.scheduledJobs.run(.daily) {
+            store.reportActionError(failure)
+            return
+        }
+        async let today: Void = store.load()
+        async let incidents: Void = session.incidents.load()
+        _ = await (today, incidents)
     }
 
     @ViewBuilder

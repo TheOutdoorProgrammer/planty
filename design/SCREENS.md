@@ -9,7 +9,7 @@ Planty launches into Today with four native tabs: Today, Capture, Plants, and Mo
 The selected tab uses the green product tint and a filled SF Symbol.
 Tab labels remain visible at accessibility text sizes.
 
-Settings opens as a sheet and contains API configuration, connection testing, data freshness, household notes, sensor links, build information, and per-job model assignments.
+Settings opens as a sheet and contains API configuration, connection testing, data freshness, household notes, sensor links, build information, per-job model assignments, and controls for launching scheduled work.
 The current connection test proves API reachability only; APNs diagnostics remain roadmap work.
 
 ## Shared states
@@ -28,7 +28,10 @@ The current connection test proves API reachability only; APNs diagnostics remai
 Today answers whether anything needs doing now.
 
 The calm state says that nothing needs attention, how many plants were checked, and when the last complete run finished.
-If the latest run is partial or unfinished, the screen says Planty needs a fresh look and keeps any still-open care actions from the last good run visible.
+If the latest run is partial or unfinished, the screen says Planty needs a fresh look, offers a Run fresh check action, and keeps any still-open care actions from the last good run visible.
+Run fresh check launches the existing daily Kubernetes CronJob template, follows that durable run to completion, and then reloads Today and incident state.
+Settings lists every Planty CronJob with its purpose, cadence, latest result, and a Run now action.
+Repeated taps reuse an active scheduled or manual run instead of launching duplicate work.
 An API failure names the connection problem and retains the previous useful result when available.
 
 Care cards show the plant, owner, location, action, short reasoning, and available completion or postponement controls.

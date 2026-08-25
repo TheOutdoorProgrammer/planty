@@ -51,6 +51,10 @@ Scheduled work is one command per Kubernetes CronJob:
 | `planty cold` | 15:00 | Warn about tonight's low or tell the user when sheltered plants can go back out. |
 | `planty remind` | Hourly | Send due chores that sensors cannot observe. |
 
+The iOS app can launch these same CronJob templates from Settings.
+When Today reports that Planty needs a fresh look, Run fresh check launches `planty daily`, follows the Kubernetes Job to completion, and reloads the result.
+An active scheduled or manual run is reused so repeated taps do not duplicate model calls or notifications.
+
 `planty autopsy <slug>` is an on-demand model job.
 `planty water` is an on-demand actuator command and has no schedule by design.
 

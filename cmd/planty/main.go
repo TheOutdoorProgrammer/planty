@@ -22,6 +22,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/push"
+	"github.com/TheOutdoorProgrammer/planty/internal/scheduledjob"
 	"github.com/TheOutdoorProgrammer/planty/internal/seed"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -177,6 +178,11 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 
 	seat := judge.New().Able(acting()).Assigned(db).Instructed(db)
 	server := api.New(db, log).WithBearerToken(apiToken).WithJudge(seat).WithPush(notifications)
+	if launcher, err := scheduledjob.NewInCluster(); err != nil {
+		log.Warn("scheduled job control unavailable", "error", err)
+	} else {
+		server = server.WithScheduledJobs(launcher)
+	}
 	go reconcileActuators(ctx, actuatorControl(db, log), log)
 	if config, enabled := photoConfig(); enabled {
 		manager := photos.Manage(ctx, config, func(state photos.State, err error) {

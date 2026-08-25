@@ -36,6 +36,7 @@ final class AppSession {
     let choices: ManagedChoicesStore
     let models: ModelSettingsStore
     let promptInstructions: PromptInstructionStore
+    let scheduledJobs: ScheduledJobStore
     let actuators: ActuatorStore
     let evidenceWorkflows: EvidenceWorkflowStore
     let incidents: IncidentStore
@@ -71,6 +72,7 @@ final class AppSession {
         choices = ManagedChoicesStore(api: client, isConfigured: resolved.isConfigured)
         models = ModelSettingsStore(api: client, isConfigured: resolved.isConfigured)
         promptInstructions = PromptInstructionStore(api: client, isConfigured: resolved.isConfigured)
+        scheduledJobs = ScheduledJobStore(api: client, isConfigured: resolved.isConfigured)
         actuators = ActuatorStore(api: client, isConfigured: resolved.isConfigured)
         evidenceWorkflows = EvidenceWorkflowStore(api: client, isConfigured: resolved.isConfigured)
         incidents = IncidentStore(api: client, isConfigured: resolved.isConfigured)
@@ -87,10 +89,13 @@ final class AppSession {
         updates = UpdateStore(service: FledgeUpdateService.fromBundle())
 
         #if DEBUG
-        // Lets a screenshot run open straight onto a tab. Debug only.
+        // Screenshot runs can open a tab or nested settings route directly.
         if let name = ProcessInfo.processInfo.environment["PLANTY_START_TAB"],
            let tab = AppTab(rawValue: name) {
             selectedTab = tab
+        }
+        if ProcessInfo.processInfo.environment["PLANTY_START_SETTINGS_ROUTE"] != nil {
+            isShowingSettings = true
         }
         #endif
     }
@@ -120,6 +125,7 @@ final class AppSession {
         choices.replace(api: client, isConfigured: configuration.isConfigured)
         models.replace(api: client, isConfigured: configuration.isConfigured)
         promptInstructions.replace(api: client, isConfigured: configuration.isConfigured)
+        scheduledJobs.replace(api: client, isConfigured: configuration.isConfigured)
         actuators.replace(api: client, isConfigured: configuration.isConfigured)
         evidenceWorkflows.replace(api: client, isConfigured: configuration.isConfigured)
         incidents.replace(api: client, isConfigured: configuration.isConfigured)

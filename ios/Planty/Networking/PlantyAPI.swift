@@ -35,6 +35,8 @@ protocol PlantyAPI: Sendable {
     func promptInstructions() async throws -> [PromptInstructionSetting]
     func setPromptInstruction(job: AIJob, instructions: String) async throws -> PromptInstructionSetting
     func clearPromptInstruction(job: AIJob) async throws -> PromptInstructionSetting
+    func scheduledJobs() async throws -> [ScheduledJob]
+    func runScheduledJob(_ job: ScheduledJobID) async throws -> ScheduledJobRun
     func discoverActuators() async throws -> [HomeAssistantEntity]
     func actuators() async throws -> [Actuator]
     func registerActuator(_ registration: ActuatorRegistration) async throws -> Actuator
@@ -101,6 +103,12 @@ protocol PlantyAPI: Sendable {
 }
 
 extension PlantyAPI {
+    func scheduledJobs() async throws -> [ScheduledJob] { [] }
+
+    func runScheduledJob(_ job: ScheduledJobID) async throws -> ScheduledJobRun {
+        throw PlantyError.server(status: 503, message: "Scheduled job control is unavailable from this client.")
+    }
+
     func proposeRecheck(slug: String, proposal: RecheckProposal) async throws -> EvidenceWindow { throw PlantyError.notFound }
     func rechecks(slug: String) async throws -> [EvidenceWindow] { [] }
     func evidenceWindow(id: UUID) async throws -> EvidenceWindow { throw PlantyError.notFound }
