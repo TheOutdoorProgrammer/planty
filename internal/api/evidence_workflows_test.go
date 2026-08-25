@@ -103,6 +103,16 @@ func TestEvidenceWorkflowAPIProposesAndGetsAVisualRecheck(t *testing.T) {
 	if proposed.Kind != plant.WindowRecheck || proposed.Status != plant.WindowProposed || proposed.Guardrail == nil {
 		t.Fatalf("unexpected proposal: %+v", proposed)
 	}
+	var collections struct {
+		Review    json.RawMessage `json:"review"`
+		Overrides json.RawMessage `json:"overrides"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &collections); err != nil {
+		t.Fatalf("decode proposal collections: %v", err)
+	}
+	if !bytes.Equal(collections.Review, []byte("[]")) || !bytes.Equal(collections.Overrides, []byte("[]")) {
+		t.Fatalf("empty proposal collections must be arrays: %s", rec.Body.String())
+	}
 	if len(proposed.Guardrail.RedFlags) == 0 || len(proposed.Guardrail.ConflictingKinds) == 0 {
 		t.Fatalf("API omitted code-owned guardrail: %+v", proposed.Guardrail)
 	}

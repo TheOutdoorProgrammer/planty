@@ -364,7 +364,13 @@ func (s *Store) OverrideGuardrail(ctx context.Context, override plant.GuardrailO
 }
 
 func loadEvidenceWindow(ctx context.Context, q evidenceQuerier, id uuid.UUID) (plant.EvidenceWindow, error) {
-	var window plant.EvidenceWindow
+	window := plant.EvidenceWindow{
+		PlantIDs:  []uuid.UUID{},
+		Baseline:  []plant.EvidenceRef{},
+		Expected:  []plant.EvidenceExpectation{},
+		Review:    []plant.EvidenceRef{},
+		Overrides: []plant.GuardrailOverride{},
+	}
 	var outcome *string
 	err := q.QueryRow(ctx, `SELECT `+evidenceWindowColumns+` FROM evidence_windows WHERE id = $1`, id).
 		Scan(&window.ID, &window.Kind, &window.Status, &window.InterventionKind,
