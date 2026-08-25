@@ -5,10 +5,9 @@ The delivered inventory is maintained in [CHECKLIST.md](CHECKLIST.md), architect
 
 ## Remaining product choices
 
-These two items were deliberately excluded from the August 2026 completion scope.
+This item remains deliberately excluded from the August 2026 completion scope.
 
 - Add a first-run setup flow for service URL, connectivity, notifications, and optional embedded configuration.
-- Replace the forced dark appearance with tested light, dark, and system modes.
 
 ## Product boundaries
 

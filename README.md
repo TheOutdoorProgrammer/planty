@@ -43,6 +43,7 @@ Scheduled work is one command per Kubernetes CronJob:
 | `planty ingest` | Every 20 minutes | Import current sensor readings from Home Assistant. |
 | `planty verify-water` | Every 15 minutes | Close completed manual watering attempts after sensor evidence has settled. |
 | `planty prune-photos` | 03:30 | Finish requested deletions and expire unowned consultation photos after 30 days. |
+| `planty reconcile-actuators` | Every minute | Turn off bounded fan and smart-plug leases whose deadlines elapsed. |
 | `planty daily` | 08:00 | Judge active plants, persist the garden-wide run, sweep for postmortems, and send a digest. |
 | `planty away` | 08:30 | Send the pre-departure pass or return briefing. |
 | `planty thirst` | 09:00 and 18:00 | Report calibrated plants that appear dry without moving water. |
@@ -71,15 +72,15 @@ The Claude Code CLI and OpenAI-compatible harness can selectively open offered h
 
 ## Integrations and boundaries
 
-Home Assistant supplies sensor readings, a forecast, and an optional LetPot actuator.
+Home Assistant supplies sensor readings, a forecast, the optional LetPot watering line, and explicitly registered plant fans or smart plugs.
 It is not a notification transport.
 Planty sends scheduled alerts directly to registered iOS devices through APNs and fails the job when native delivery is unavailable.
 
 MinIO stores photograph bytes and PostgreSQL stores their metadata and object keys.
 `PLANTY_S3_PUBLIC_ENDPOINT` must name the same bucket through a hostname the phone can reach because a presigned URL cannot be rewritten after signing.
 
-The service has no authentication and must remain LAN-only.
-The plant data is not especially sensitive, but the pod holds credentials for Home Assistant, model providers, APNs, and object storage.
+Every application route requires a deployment-scoped bearer token, while Kubernetes liveness and readiness probes remain public.
+The service still belongs on the LAN because the pod holds credentials for Home Assistant, model providers, APNs, and object storage.
 
 ## Repository map
 

@@ -176,6 +176,25 @@ Current-location grouping is deliberately limited to the current `plants.locatio
 Planty does not infer historical pest exposure until movement history records both sides of a move.
 Registered-actuator correlation follows `plant_actuator_plants`, so a failed unrelated smart plug is never evidence about a plant.
 
+## Evidence windows, guardrails, and experiments
+
+`evidence_windows` is the shared lifecycle for a single-plant visual recheck and a multi-plant household experiment.
+Each window normalizes its participating plants, baseline and review references, required evidence, one intervention observation, bounded review dates, conclusion, and actor provenance.
+The lifecycle is `proposed`, `active`, `ready`, then `completed` or `cancelled`; scheduled automation may propose a window but cannot start one.
+
+Every evidence reference resolves to an owned photo, observation, or reading in Planty's ledger.
+Review evidence must be newer than the recorded intervention, fall inside the review window, and satisfy every expected plant-and-kind pair.
+The iOS app can therefore show a real baseline/review overlay and must say when a referenced image is unavailable instead of silently substituting another photo.
+
+Code-owned Do-Not-Disturb guardrails name intervention conflicts and safety red flags.
+An override never erases the guardrail: it appends who overrode which conflict and why, then marks the result confounded so the conclusion options narrow honestly.
+
+A household experiment names exactly one changed variable, explicit hold-constant rules, success criteria, and review bounds.
+It records evidence and interpretation but does not schedule or actuate care.
+
+`GET /v1/evidence-coverage` ranks the single next input that would most improve the garden's evidence.
+The app deliberately displays one recommendation with its reason rather than turning missing data into a generic completion checklist.
+
 ## plant_health_events
 
 Plant health is an append-only, evidence-backed ledger rather than a mutable number on `plants`.

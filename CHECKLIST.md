@@ -14,6 +14,10 @@ Future work belongs in [ROADMAP.md](ROADMAP.md), durable trade-offs belong in [a
 - [x] Care and reminder completion writes are idempotent.
 - [x] Push device registrations and per-job model assignments are persisted.
 - [x] Per-job prompt instruction overlays are persisted without making safety, schema, evidence, or tool-authority rules editable.
+- [x] Plant health is an append-only 0-to-100 evidence ledger with signed, clamped, attributable corrections.
+- [x] Rechecks and household experiments share a durable evidence-window lifecycle with bounded review dates and audited Do-Not-Disturb overrides.
+- [x] Garden incidents correlate inspectable shared factors without replacing any plant's individual action or claiming causation.
+- [x] Plant fans and smart plugs require explicit plant assignments and bounded durable shutdown leases.
 - [x] Photograph storage retries after startup, reports readiness separately, and recovers without a pod restart.
 - [x] Photograph uploads are atomic under duplicate races and compensate object storage when metadata cannot be committed.
 - [x] Archived plants can be restored without losing their story, and explicit photo deletion removes metadata and bytes through a retryable pending state.
@@ -33,6 +37,7 @@ Future work belongs in [ROADMAP.md](ROADMAP.md), durable trade-offs belong in [a
 - [x] `water` exists only as an explicit manual command and has no CronJob.
 - [x] `verify-water` closes persisted manual watering attempts every 15 minutes after sensor evidence settles.
 - [x] `prune-photos` removes requested deletions and expired scratch photographs daily.
+- [x] `reconcile-actuators` independently turns off expired fan and smart-plug leases every minute.
 
 ## iOS app
 
@@ -48,6 +53,12 @@ Future work belongs in [ROADMAP.md](ROADMAP.md), durable trade-offs belong in [a
 - [x] Archived plants are visible and restorable, and photo, note, and harvest correction controls are visible without hidden gestures.
 - [x] The app validates photograph URLs, scopes identification cache hits to the configured service, and guides repeatable camera framing.
 - [x] Accessibility Dynamic Type collapses dense action grids, and iPad uses a sidebar-adaptable tab layout.
+- [x] Room-grouped care rounds are available in the app and through a Lock Screen-capable App Intent.
+- [x] Plant stories expose health history, persisted visual rechecks, honest prior-photo overlays, and printable QR labels.
+- [x] More exposes bounded household experiments and exactly one backend-ranked next-best evidence input.
+- [x] Incident Radar preserves individual urgent actions and labels shared timing as correlation rather than causation.
+- [x] Settings edits per-job prompt overlays and explicitly registers plant assignments for discovered Home Assistant fans and switches.
+- [x] Thumbnail bytes are cached on disk across launches with bounded eviction and authenticated cache identity.
 - [x] Release automation tests, signs, verifies the production APNs entitlement, publishes the IPA through Fledge, and releases matching server artifacts.
 
 ## Safety and truthfulness
@@ -59,11 +70,11 @@ Future work belongs in [ROADMAP.md](ROADMAP.md), durable trade-offs belong in [a
 - [x] Manual watering persists start, activity, stop, and sensor verification independently, and Home Assistant caps the physical switch at three minutes.
 - [x] Scheduled notifications use APNs only and fail loudly instead of silently falling back to Home Assistant.
 - [x] Browser writes are same-origin unless a LAN host is explicitly allowed.
-- [x] The service is intentionally unauthenticated and must remain LAN-only.
+- [x] Every private API route requires a deployment-scoped bearer token, while liveness and readiness remain public.
 
 ## Integrations
 
-- [x] Home Assistant supplies sensors, a daily forecast, and the optional LetPot actuator only.
+- [x] Home Assistant supplies sensors, a daily forecast, the optional LetPot watering line, and explicitly registered plant fans or smart plugs.
 - [x] MinIO stores photograph bytes while PostgreSQL stores their metadata and object keys.
 - [x] The Dusk plugin exposes Planty records and actions without keeping a second copy of garden state.
 
