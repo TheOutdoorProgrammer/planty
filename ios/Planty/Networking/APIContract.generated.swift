@@ -64,6 +64,7 @@ enum APIPath {
     static let listPostmortems = "/v1/postmortems"
     static let listPromptInstructions = "/v1/prompt-instructions"
     static let listQuestions = "/v1/questions"
+    static func listRechecks(slug: String) -> String { "/v1/plants/\(slug)/rechecks" }
     static func listReminders(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
     static let listSensors = "/v1/sensors"
     static func overrideGuardrail(id: String) -> String { "/v1/guardrails/\(id)/override" }

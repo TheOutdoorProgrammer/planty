@@ -64,6 +64,7 @@ const (
 	routeListPostmortems           = "GET /v1/postmortems"
 	routeListPromptInstructions    = "GET /v1/prompt-instructions"
 	routeListQuestions             = "GET /v1/questions"
+	routeListRechecks              = "GET /v1/plants/{slug}/rechecks"
 	routeListReminders             = "GET /v1/plants/{slug}/reminders"
 	routeListSensors               = "GET /v1/sensors"
 	routeOverrideGuardrail         = "POST /v1/guardrails/{id}/override"

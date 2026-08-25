@@ -106,6 +106,14 @@ func TestEvidenceWorkflowAPIProposesAndGetsAVisualRecheck(t *testing.T) {
 	if len(proposed.Guardrail.RedFlags) == 0 || len(proposed.Guardrail.ConflictingKinds) == 0 {
 		t.Fatalf("API omitted code-owned guardrail: %+v", proposed.Guardrail)
 	}
+	var listed struct {
+		Rechecks []plant.EvidenceWindow `json:"rechecks"`
+		Count    int                    `json:"count"`
+	}
+	rec = evidenceRequest(t, h, http.MethodGet, "/v1/plants/"+p.Slug+"/rechecks", nil, &listed)
+	if rec.Code != http.StatusOK || listed.Count != 1 || listed.Rechecks[0].ID != proposed.ID {
+		t.Fatalf("list returned %d %+v", rec.Code, listed)
+	}
 
 	var fetched plant.EvidenceWindow
 	rec = evidenceRequest(t, h, http.MethodGet, "/v1/evidence-windows/"+proposed.ID.String(), nil, &fetched)

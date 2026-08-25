@@ -16,6 +16,7 @@ import (
 // Root replaces these temporary names with generated route constants after
 // the parallel OpenAPI work lands.
 func (s *Server) registerEvidenceWorkflowRoutes(mux *http.ServeMux) {
+	mux.HandleFunc(routeListRechecks, s.listRechecks)
 	mux.HandleFunc(routeProposeRecheck, s.proposeRecheck)
 	mux.HandleFunc(routeGetEvidenceWindow, s.getEvidenceWindow)
 	mux.HandleFunc(routeStartEvidenceWindow, s.startEvidenceWindow)
@@ -27,6 +28,21 @@ func (s *Server) registerEvidenceWorkflowRoutes(mux *http.ServeMux) {
 	mux.HandleFunc(routeListExperiments, s.listExperiments)
 	mux.HandleFunc(routeProposeExperiment, s.proposeExperiment)
 	mux.HandleFunc(routeGetExperiment, s.getExperiment)
+}
+
+func (s *Server) listRechecks(w http.ResponseWriter, r *http.Request) {
+	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		workflowFail(s, w, err)
+		return
+	}
+	kind := plant.WindowRecheck
+	windows, err := s.store.EvidenceWindows(r.Context(), &p.ID, &kind)
+	if err != nil {
+		workflowFail(s, w, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{"rechecks": windows, "count": len(windows)})
 }
 
 type evidenceRefRequest struct {

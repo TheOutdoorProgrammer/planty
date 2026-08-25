@@ -26,7 +26,10 @@
     "/v1/plants/{slug}/health": {"get": {"operationId": "getPlantHealth"}},
     "/v1/plants/{slug}/health-events": {"post": {"operationId": "addHealthEvent"}},
     "/v1/evidence-coverage": {"get": {"operationId": "getEvidenceCoverage"}},
-    "/v1/plants/{slug}/rechecks": {"post": {"operationId": "proposeRecheck"}},
+    "/v1/plants/{slug}/rechecks": {
+      "get": {"operationId": "listRechecks"},
+      "post": {"operationId": "proposeRecheck"}
+    },
     "/v1/plants/{slug}/guardrails": {"get": {"operationId": "listGuardrails"}},
     "/v1/evidence-windows/{id}": {"get": {"operationId": "getEvidenceWindow"}},
     "/v1/evidence-windows/{id}/start": {"post": {"operationId": "startEvidenceWindow"}},
