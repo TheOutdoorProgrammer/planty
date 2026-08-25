@@ -155,6 +155,25 @@ One row per plant per day, the output of the daily judgment run.
 
 **A missing verdict is not a calm verdict.** If the daily run fails, that must be visibly distinct from "nothing needs doing". Silence that looks like reassurance is exactly how this class of system kills things.
 
+## Garden incidents
+
+`garden_incidents` is a lifecycle record for a suspected shared factor across otherwise independent plant verdicts.
+The deterministic detector runs only after a judgment run completed successfully for every expected plant.
+It may open or refresh an incident only for at least two affected plants, or for one affected plant plus an independent environmental or actuator failure record.
+
+Typed factor membership names a shared Home Assistant area, current location, registered actuator, tightly timed common-care batch, or environmental failure.
+`garden_incident_plants` keeps plant membership normalized while each row retains its verdict and action evidence.
+`garden_incident_detections` append-only records every complete judgment run that refreshed the candidate, so a later update cannot erase the evidence that originally opened it.
+
+An incident says “shared factor worth checking,” never that the factor caused the symptoms.
+It does not acknowledge or hide the plants' individual verdicts, and it cannot actuate equipment, quarantine plants, spray anything, or change care.
+Acknowledgement only records that a person saw the candidate.
+Resolution preserves the actor, conclusion, and one of `confirmed_common_cause`, `unrelated`, `contained`, or `inconclusive`.
+
+Current-location grouping is deliberately limited to the current `plants.location` value.
+Planty does not infer historical pest exposure until movement history records both sides of a move.
+Registered-actuator grouping likewise remains dormant until an actuator has inspectable plant or area membership; a failed unrelated smart plug is not evidence about a plant.
+
 ## plant_health_events
 
 Plant health is an append-only, evidence-backed ledger rather than a mutable number on `plants`.

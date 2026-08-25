@@ -37,6 +37,12 @@ func (s *Server) today(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("open questions unavailable", "error", err)
 	}
 
+	incidents, err := s.store.Incidents(r.Context(), plant.IncidentOpen)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+
 	failures := digest.Failures
 	if failures == nil {
 		failures = []plant.JudgmentFailure{}
@@ -52,8 +58,9 @@ func (s *Server) today(w http.ResponseWriter, r *http.Request) {
 		"run_complete":   digest.RunComplete,
 		"stale_since":    digest.StaleSince,
 		"never_run":      digest.NeverRun,
-		"all_clear":      digest.AllClear() && len(dueReminders) == 0,
+		"all_clear":      digest.AllClear() && len(dueReminders) == 0 && len(incidents) == 0,
 		"open_questions": waiting,
+		"incidents":      incidents,
 	})
 }
 

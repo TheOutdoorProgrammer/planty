@@ -3,7 +3,9 @@ import Foundation
 
 enum APIPath {
     static func ackVerdict(id: String) -> String { "/v1/verdicts/\(id)/ack" }
+    static func acknowledgeIncident(id: String) -> String { "/v1/incidents/\(id)/acknowledge" }
     static func addHarvest(slug: String) -> String { "/v1/plants/\(slug)/harvests" }
+    static func addHealthEvent(slug: String) -> String { "/v1/plants/\(slug)/health-events" }
     static let addHouseholdNote = "/v1/notes"
     static func addObservation(slug: String) -> String { "/v1/plants/\(slug)/observations" }
     static func addPlantNote(slug: String) -> String { "/v1/plants/\(slug)/notes" }
@@ -12,32 +14,47 @@ enum APIPath {
     static let ask = "/v1/ask"
     static func askPlant(slug: String) -> String { "/v1/plants/\(slug)/ask" }
     static func calibrateSensor(id: String) -> String { "/v1/sensors/\(id)" }
+    static func cancelEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)/cancel" }
     static func clearModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
+    static func clearPromptInstruction(job: String) -> String { "/v1/prompt-instructions/\(job)" }
     static let coldWatch = "/v1/cold-watch"
     static func completeReminder(id: String) -> String { "/v1/reminders/\(id)/complete" }
     static func completeVerdict(id: String) -> String { "/v1/verdicts/\(id)/complete" }
+    static func concludeEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)/conclude" }
     static let createAway = "/v1/away"
     static let createOwnerUpdate = "/v1/owner-update"
     static let createPlant = "/v1/plants"
     static let createPlantFromPhoto = "/v1/plants/from-photo"
     static func createPostmortem(slug: String) -> String { "/v1/plants/\(slug)/postmortem" }
     static let createQuestion = "/v1/questions"
+    static func deleteActuator(id: String) -> String { "/v1/actuators/\(id)" }
     static func deleteAway(id: String) -> String { "/v1/away/\(id)" }
     static func deleteHarvest(id: String) -> String { "/v1/harvests/\(id)" }
     static func deleteNote(id: String) -> String { "/v1/notes/\(id)" }
     static func deletePhoto(id: String) -> String { "/v1/photos/\(id)" }
     static func deleteReminder(slug: String, kind: String) -> String { "/v1/plants/\(slug)/reminders/\(kind)" }
+    static let discoverActuators = "/v1/home-assistant/actuators"
+    static let getEvidenceCoverage = "/v1/evidence-coverage"
+    static func getEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)" }
+    static func getExperiment(id: String) -> String { "/v1/experiments/\(id)" }
+    static func getIncident(id: String) -> String { "/v1/incidents/\(id)" }
     static func getPlant(slug: String) -> String { "/v1/plants/\(slug)" }
+    static func getPlantHealth(slug: String) -> String { "/v1/plants/\(slug)/health" }
     static func getTimeline(slug: String) -> String { "/v1/plants/\(slug)/timeline" }
     static let harvestSummary = "/v1/harvests/summary"
     static let health = "/healthz"
     static let identify = "/v1/identify"
     static let linkSensor = "/v1/sensors"
+    static func listActuatorEvents(id: String) -> String { "/v1/actuators/\(id)/events" }
+    static let listActuators = "/v1/actuators"
     static let listAway = "/v1/away"
     static let listChoices = "/v1/choices"
+    static let listExperiments = "/v1/experiments"
+    static func listGuardrails(slug: String) -> String { "/v1/plants/\(slug)/guardrails" }
     static let listHarvests = "/v1/harvests"
     static let listHomeAssistantEntities = "/v1/home-assistant/entities"
     static let listHouseholdNotes = "/v1/notes"
+    static let listIncidents = "/v1/incidents"
     static let listModelAssignments = "/v1/model-assignments"
     static let listModels = "/v1/models"
     static func listObservations(slug: String) -> String { "/v1/plants/\(slug)/observations" }
@@ -45,20 +62,32 @@ enum APIPath {
     static func listPlantNotes(slug: String) -> String { "/v1/plants/\(slug)/notes" }
     static let listPlants = "/v1/plants"
     static let listPostmortems = "/v1/postmortems"
+    static let listPromptInstructions = "/v1/prompt-instructions"
     static let listQuestions = "/v1/questions"
     static func listReminders(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
     static let listSensors = "/v1/sensors"
+    static func overrideGuardrail(id: String) -> String { "/v1/guardrails/\(id)/override" }
+    static let proposeExperiment = "/v1/experiments"
+    static func proposeRecheck(slug: String) -> String { "/v1/plants/\(slug)/rechecks" }
     static let pushHealth = "/v1/push/health"
     static let ready = "/readyz"
+    static let registerActuator = "/v1/actuators"
     static let registerPushDevice = "/v1/push-devices"
+    static func resolveIncident(id: String) -> String { "/v1/incidents/\(id)/resolve" }
     static func resolveReminder(id: String) -> String { "/v1/reminders/\(id)/resolve" }
     static func restorePlant(slug: String) -> String { "/v1/plants/\(slug)/restore" }
+    static func reviewEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)/review" }
     static func setModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
+    static func setPromptInstruction(job: String) -> String { "/v1/prompt-instructions/\(job)" }
     static func setReminder(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
     static let shelter = "/v1/shelter"
+    static func startActuator(id: String) -> String { "/v1/actuators/\(id)/start" }
+    static func startEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)/start" }
+    static func stopActuator(id: String) -> String { "/v1/actuators/\(id)/stop" }
     static let testPush = "/v1/push/test"
     static let today = "/v1/today"
     static let unshelter = "/v1/unshelter"
+    static func updateActuator(id: String) -> String { "/v1/actuators/\(id)" }
     static func updateAway(id: String) -> String { "/v1/away/\(id)" }
     static func updateHarvest(id: String) -> String { "/v1/harvests/\(id)" }
     static func updateNote(id: String) -> String { "/v1/notes/\(id)" }
@@ -88,6 +117,116 @@ struct APIErrorBody: Codable, Sendable {
         case error
         case requestId = "request_id"
     }
+}
+
+enum ActuatorEventAction: String, FallbackDecodable, CaseIterable {
+    case startRequested = "start_requested"
+    case started
+    case startFailed = "start_failed"
+    case stopRequested = "stop_requested"
+    case stopped
+    case stopFailed = "stop_failed"
+    case stopNoop = "stop_noop"
+    case unknown
+
+    static let fallback = ActuatorEventAction.unknown
+}
+
+enum ActuatorKind: String, FallbackDecodable, CaseIterable {
+    case fan
+    case switch
+    case unknown
+
+    static let fallback = ActuatorKind.unknown
+}
+
+enum EvidenceKind: String, FallbackDecodable, CaseIterable {
+    case observation
+    case photo
+    case reading
+    case unknown
+
+    static let fallback = EvidenceKind.unknown
+}
+
+enum EvidencePhase: String, FallbackDecodable, CaseIterable {
+    case baseline
+    case review
+    case unknown
+
+    static let fallback = EvidencePhase.unknown
+}
+
+enum EvidenceWindowKind: String, FallbackDecodable, CaseIterable {
+    case recheck
+    case experiment
+    case unknown
+
+    static let fallback = EvidenceWindowKind.unknown
+}
+
+enum EvidenceWindowOutcome: String, FallbackDecodable, CaseIterable {
+    case improved
+    case unchanged
+    case worsened
+    case insufficientEvidence = "insufficient_evidence"
+    case supported
+    case notSupported = "not_supported"
+    case inconclusive
+    case stoppedForSafety = "stopped_for_safety"
+    case cancelled
+    case unknown
+
+    static let fallback = EvidenceWindowOutcome.unknown
+}
+
+enum EvidenceWindowStatus: String, FallbackDecodable, CaseIterable {
+    case proposed
+    case active
+    case ready
+    case completed
+    case cancelled
+    case unknown
+
+    static let fallback = EvidenceWindowStatus.unknown
+}
+
+enum HealthChangeKind: String, FallbackDecodable, CaseIterable {
+    case baseline
+    case delta
+    case unknown
+
+    static let fallback = HealthChangeKind.unknown
+}
+
+enum IncidentFactor: String, FallbackDecodable, CaseIterable {
+    case haArea = "ha_area"
+    case location
+    case commonCare = "common_care"
+    case environmentFailure = "environment_failure"
+    case actuatorFailure = "actuator_failure"
+    case unknown
+
+    static let fallback = IncidentFactor.unknown
+}
+
+enum IncidentResolution: String, FallbackDecodable, CaseIterable {
+    case confirmedSharedCause = "confirmed_shared_cause"
+    case unrelated
+    case monitoring
+    case falseAlarm = "false_alarm"
+    case unknown
+
+    static let fallback = IncidentResolution.unknown
+}
+
+enum IncidentStatus: String, FallbackDecodable, CaseIterable {
+    case open
+    case acknowledged
+    case resolved
+    case unknown
+
+    static let fallback = IncidentStatus.unknown
 }
 
 enum LightExposure: String, FallbackDecodable, CaseIterable {
@@ -152,6 +291,22 @@ enum PlantStatus: String, FallbackDecodable, CaseIterable {
     case unknown
 
     static let fallback = PlantStatus.unknown
+}
+
+struct PromptInstruction: Codable, Sendable {
+    let instructions: String
+    let job: String
+    let updatedAt: String?
+
+    enum CodingKeys: String, CodingKey {
+        case instructions
+        case job
+        case updatedAt = "updated_at"
+    }
+}
+
+struct PromptInstructionUpdate: Codable, Sendable {
+    let instructions: String
 }
 
 enum ReminderDisposition: String, FallbackDecodable, CaseIterable {

@@ -78,6 +78,7 @@ func (d Daily) Run(ctx context.Context) error {
 	if err := d.Store.CompleteJudgmentRun(ctx, run.ID); err != nil {
 		return fmt.Errorf("complete judgment run: %w", err)
 	}
+	d.detectIncidents(ctx, run.ID)
 
 	// A death is worth understanding, and nobody remembers to ask for it.
 	if written, err := (Postmortem{Store: d.Store, Judge: d.Judge, Log: d.Log}).
@@ -224,10 +225,22 @@ func (d Daily) RetryFailed(ctx context.Context) error {
 	if err := d.Store.CompleteJudgmentRun(ctx, run.ID); err != nil {
 		return fmt.Errorf("complete judgment retry: %w", err)
 	}
+	d.detectIncidents(ctx, run.ID)
 	if remaining > 0 {
 		return fmt.Errorf("%d plants still failed judgment", remaining)
 	}
 	return nil
+}
+
+func (d Daily) detectIncidents(ctx context.Context, runID uuid.UUID) {
+	incidents, err := (IncidentRadar{Store: d.Store}).Run(ctx, runID)
+	if err != nil {
+		d.Log.Error("garden incident detection failed", "run_id", runID, "error", err)
+		return
+	}
+	if len(incidents) > 0 {
+		d.Log.Info("garden incidents detected", "run_id", runID, "count", len(incidents))
+	}
 }
 
 func (d Daily) gather(ctx context.Context, p plant.Plant) (judge.Evidence, error) {
