@@ -127,15 +127,16 @@ func (s *Server) startActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		DurationSeconds int       `json:"duration_seconds"`
-		Actor           string    `json:"actor"`
-		IdempotencyKey  uuid.UUID `json:"idempotency_key"`
+		DurationSeconds int          `json:"duration_seconds"`
+		Actor           string       `json:"actor"`
+		Source          plant.Source `json:"source,omitempty"`
+		IdempotencyKey  uuid.UUID    `json:"idempotency_key"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
-	lease, created, err := s.actuatorControl().Start(r.Context(), id, request.DurationSeconds, request.Actor, plant.SourceApp, request.IdempotencyKey)
+	lease, created, err := s.actuatorControl().Start(r.Context(), id, request.DurationSeconds, request.Actor, sourceOrApp(request.Source), request.IdempotencyKey)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
@@ -157,14 +158,15 @@ func (s *Server) stopActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		Actor          string    `json:"actor"`
-		IdempotencyKey uuid.UUID `json:"idempotency_key"`
+		Actor          string       `json:"actor"`
+		Source         plant.Source `json:"source,omitempty"`
+		IdempotencyKey uuid.UUID    `json:"idempotency_key"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
-	stopped, err := s.actuatorControl().Stop(r.Context(), id, request.Actor, plant.SourceApp, request.IdempotencyKey)
+	stopped, err := s.actuatorControl().Stop(r.Context(), id, request.Actor, sourceOrApp(request.Source), request.IdempotencyKey)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return

@@ -18,6 +18,7 @@ type healthChangeRequest struct {
 	Rationale      string               `json:"rationale"`
 	Evidence       plant.HealthEvidence `json:"evidence"`
 	Actor          string               `json:"actor,omitempty"`
+	Source         plant.Source         `json:"source,omitempty"`
 	IdempotencyKey *uuid.UUID           `json:"idempotency_key,omitempty"`
 }
 
@@ -61,7 +62,7 @@ func (s *Server) addHealthEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	change := plant.HealthChange{
 		PlantID: p.ID, Rationale: request.Rationale, Evidence: request.Evidence,
-		Source: plant.SourceApp, Actor: request.Actor, IdempotencyKey: request.IdempotencyKey,
+		Source: sourceOrApp(request.Source), Actor: request.Actor, IdempotencyKey: request.IdempotencyKey,
 	}
 	switch request.Kind {
 	case "baseline":

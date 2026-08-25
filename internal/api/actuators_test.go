@@ -63,14 +63,14 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 	if tooLong.Code != http.StatusBadRequest {
 		t.Fatalf("unbounded start status = %d", tooLong.Code)
 	}
-	started, _ := do(t, server, http.MethodPost, "/v1/actuators/"+id+"/start", map[string]any{
-		"duration_seconds": 60, "actor": "Joey", "idempotency_key": uuid.NewString(),
+	started, lease := do(t, server, http.MethodPost, "/v1/actuators/"+id+"/start", map[string]any{
+		"duration_seconds": 60, "actor": "Dusk Planty plugin", "source": "agent", "idempotency_key": uuid.NewString(),
 	})
-	if started.Code != http.StatusCreated || len(fake.calls) != 1 || fake.calls[0] != "switch/turn_on:switch.plant_fan" {
-		t.Fatalf("start = %d calls=%#v", started.Code, fake.calls)
+	if started.Code != http.StatusCreated || lease["source"] != "agent" || len(fake.calls) != 1 || fake.calls[0] != "switch/turn_on:switch.plant_fan" {
+		t.Fatalf("start = %d lease=%#v calls=%#v", started.Code, lease, fake.calls)
 	}
 	stopped, _ := do(t, server, http.MethodPost, "/v1/actuators/"+id+"/stop", map[string]any{
-		"actor": "Joey", "idempotency_key": uuid.NewString(),
+		"actor": "Dusk Planty plugin", "source": "agent", "idempotency_key": uuid.NewString(),
 	})
 	if stopped.Code != http.StatusOK || len(fake.calls) != 2 || fake.calls[1] != "switch/turn_off:switch.plant_fan" {
 		t.Fatalf("stop = %d calls=%#v", stopped.Code, fake.calls)

@@ -33,8 +33,21 @@ func TestHealthAPIKeepsUnknownSeparateAndReplaysWrites(t *testing.T) {
 		t.Fatalf("replayed health = %d %#v", replayed.Code, again)
 	}
 
+	_, observation := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/observations", map[string]any{
+		"kind": "symptom", "body": "new droop", "source": "app",
+	})
+	agentKey := uuid.NewString()
+	agentCreated, agentEvent := do(t, h, http.MethodPost, "/v1/plants/"+slug+"/health-events", map[string]any{
+		"kind": "delta", "value": -8, "rationale": "visible droop",
+		"evidence": map[string]any{"observation_ids": []any{observation["id"]}},
+		"actor":    "daily judge", "source": "agent", "idempotency_key": agentKey,
+	})
+	if agentCreated.Code != http.StatusCreated || agentEvent["score"] != float64(68) || agentEvent["source"] != "agent" {
+		t.Fatalf("agent health = %d %#v", agentCreated.Code, agentEvent)
+	}
+
 	listed, history := do(t, h, http.MethodGet, "/v1/plants/"+slug+"/health", nil)
-	if listed.Code != http.StatusOK || history["count"] != float64(1) {
+	if listed.Code != http.StatusOK || history["count"] != float64(2) {
 		t.Fatalf("health history = %d %#v", listed.Code, history)
 	}
 }
