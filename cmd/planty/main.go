@@ -98,7 +98,7 @@ func run(log *slog.Logger) error {
 
 	switch os.Args[1] {
 	case "serve":
-		return serve(ctx, db, log)
+		return serve(ctx, db, log, notifications)
 	case "migrate":
 		log.Info("migrations applied")
 		return nil
@@ -141,14 +141,14 @@ func run(log *slog.Logger) error {
 	}
 }
 
-func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
+func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications *push.Sender) error {
 	addr := os.Getenv("PLANTY_ADDR")
 	if addr == "" {
 		addr = ":8080"
 	}
 
 	seat := judge.New().Able(acting()).Assigned(db)
-	server := api.New(db, log).WithJudge(seat)
+	server := api.New(db, log).WithJudge(seat).WithPush(notifications)
 	if config, enabled := photoConfig(); enabled {
 		manager := photos.Manage(ctx, config, func(state photos.State, err error) {
 			if err != nil {

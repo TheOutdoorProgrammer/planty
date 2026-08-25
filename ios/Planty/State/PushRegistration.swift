@@ -1,54 +1,198 @@
+import Observation
 import UIKit
 import UserNotifications
 
-/// Bridges UIApplication's device-token callbacks back into the same Planty API
-/// configuration the rest of the app is using. The token is kept only long
-/// enough to re-register it when Settings points the app at a different server.
+enum PushProgress: Equatable {
+    case idle
+    case pending
+    case accepted(Date)
+    case failed(String)
+}
+
+/// The five independent links in notification delivery.
+/// A healthy HTTP service is deliberately not one of them.
+@Observable
 @MainActor
 final class PushRegistrationCenter {
     static let shared = PushRegistrationCenter()
 
+    private(set) var permission: UNAuthorizationStatus = .notDetermined
+    private(set) var apnsRegistration: PushProgress = .idle
+    private(set) var tokenUpload: PushProgress = .idle
+    private(set) var testDelivery: PushProgress = .idle
+    private(set) var serverStatus: PushServerStatus?
+    private(set) var lastRegistrationError: String?
+
+    let installationID: UUID
+    let environment: String
+
     private var api: (any PlantyAPI)?
     private var token: String?
+    private var serviceID = ""
+    private let defaults: UserDefaults
 
-    private init() {}
-
-    func configure(api: any PlantyAPI) {
-        self.api = api
-        if token != nil {
-            Task { await syncToken() }
+    init(
+        defaults: UserDefaults = .standard,
+        environment: String = PushRegistrationCenter.buildEnvironment
+    ) {
+        self.defaults = defaults
+        self.environment = environment
+        if let raw = defaults.string(forKey: "planty.push.installation_id"),
+           let saved = UUID(uuidString: raw) {
+            installationID = saved
+        } else {
+            let created = UUID()
+            installationID = created
+            defaults.set(created.uuidString, forKey: "planty.push.installation_id")
         }
+        lastRegistrationError = defaults.string(forKey: "planty.push.apns_error")
+    }
+
+    func configure(api: any PlantyAPI, serviceID: String) {
+        self.api = api
+        let changed = self.serviceID != serviceID
+        self.serviceID = serviceID
+        if changed {
+            tokenUpload = .idle
+            serverStatus = nil
+            testDelivery = .idle
+        }
+        Task { await synchronize() }
     }
 
     func requestAuthorization() async {
+        await refreshPermission()
         do {
-            let granted = try await UNUserNotificationCenter.current().requestAuthorization(
-                options: [.alert, .badge, .sound]
-            )
-            guard granted else { return }
+            if permission == .notDetermined {
+                _ = try await UNUserNotificationCenter.current().requestAuthorization(
+                    options: [.alert, .badge, .sound]
+                )
+                await refreshPermission()
+            }
+            guard permission == .authorized || permission == .provisional || permission == .ephemeral else {
+                return
+            }
+            apnsRegistration = .pending
             UIApplication.shared.registerForRemoteNotifications()
         } catch {
-            // Permission state remains visible in iOS Settings. A notification
-            // failure must never keep the rest of Planty from launching.
+            rememberRegistrationError(error.localizedDescription)
         }
+    }
+
+    func refreshPermission() async {
+        permission = await UNUserNotificationCenter.current().notificationSettings().authorizationStatus
     }
 
     func didRegister(deviceToken: Data) {
         token = deviceToken.map { String(format: "%02x", $0) }.joined()
-        Task { await syncToken() }
+        apnsRegistration = .accepted(Date())
+        rememberRegistrationError(nil)
+        Task { await synchronize() }
+    }
+
+    func didFail(error: Error) {
+        apnsRegistration = .failed(error.localizedDescription)
+        rememberRegistrationError(error.localizedDescription)
+    }
+
+    func synchronize() async {
+        await syncToken()
+        await refreshServerHealth()
+    }
+
+    func testNotification() async {
+        guard let api else {
+            testDelivery = .failed("The Planty service is not configured.")
+            return
+        }
+        testDelivery = .pending
+        do {
+            try await api.testPush(
+                PushInstallationRequest(
+                    installationID: installationID,
+                    environment: environment
+                )
+            )
+            testDelivery = .accepted(Date())
+        } catch {
+            testDelivery = .failed(
+                PlantyError.from(error).errorDescription ?? error.localizedDescription
+            )
+        }
+    }
+
+    func recover() async {
+        await refreshPermission()
+        if permission == .denied {
+            guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+            await UIApplication.shared.open(url)
+            return
+        }
+        if token != nil {
+            await synchronize()
+        } else {
+            apnsRegistration = .pending
+            UIApplication.shared.registerForRemoteNotifications()
+        }
     }
 
     private func syncToken() async {
         guard let token, let api else { return }
-        let environment: String
+        tokenUpload = .pending
+        do {
+            let receipt = try await api.registerPushDevice(
+                PushDeviceRegistration(
+                    token: token,
+                    environment: environment,
+                    installationID: installationID
+                )
+            )
+            tokenUpload = .accepted(receipt.acceptedAt)
+            defaults.set(receipt.acceptedAt, forKey: acceptanceKey)
+        } catch {
+            tokenUpload = .failed(
+                PlantyError.from(error).errorDescription ?? error.localizedDescription
+            )
+        }
+    }
+
+    private func refreshServerHealth() async {
+        guard let api else { return }
+        do {
+            let health = try await api.pushHealth(
+                installationID: installationID,
+                environment: environment
+            )
+            serverStatus = health.server
+            if let receipt = health.registration {
+                tokenUpload = .accepted(receipt.acceptedAt)
+                defaults.set(receipt.acceptedAt, forKey: acceptanceKey)
+            } else if token == nil, let accepted = defaults.object(forKey: acceptanceKey) as? Date {
+                tokenUpload = .accepted(accepted)
+            }
+        } catch {
+            if case .accepted = tokenUpload { return }
+            tokenUpload = .failed(
+                PlantyError.from(error).errorDescription ?? error.localizedDescription
+            )
+        }
+    }
+
+    private func rememberRegistrationError(_ message: String?) {
+        lastRegistrationError = message
+        defaults.set(message, forKey: "planty.push.apns_error")
+    }
+
+    private var acceptanceKey: String {
+        "planty.push.accepted.\(serviceID).\(environment)"
+    }
+
+    private static var buildEnvironment: String {
         #if DEBUG
-        environment = "sandbox"
+        "sandbox"
         #else
-        environment = "production"
+        "production"
         #endif
-        try? await api.registerPushDevice(
-            PushDeviceRegistration(token: token, environment: environment)
-        )
     }
 }
 
@@ -65,7 +209,6 @@ final class PlantyAppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFailToRegisterForRemoteNotificationsWithError error: Error
     ) {
-        // Simulators and unsigned local builds can land here. There is nothing
-        // to recover in-app; the registration is attempted again next launch.
+        PushRegistrationCenter.shared.didFail(error: error)
     }
 }

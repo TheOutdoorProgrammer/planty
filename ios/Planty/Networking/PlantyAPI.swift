@@ -58,7 +58,9 @@ protocol PlantyAPI: Sendable {
     func reminders(slug: String) async throws -> [Reminder]
     func setReminder(slug: String, reminder: NewReminder) async throws -> Reminder
     func deleteReminder(slug: String, kind: ObservationKind) async throws
-    func registerPushDevice(_ device: PushDeviceRegistration) async throws
+    func registerPushDevice(_ device: PushDeviceRegistration) async throws -> PushRegistrationReceipt
+    func pushHealth(installationID: UUID, environment: String) async throws -> PushHealth
+    func testPush(_ request: PushInstallationRequest) async throws
     func ownerUpdate(steward: String) async throws -> OwnerUpdate
     func health() async throws
 }
@@ -121,8 +123,16 @@ extension PlantyAPI {
         throw PlantyError.server(status: 503, message: "Away-period cancellation is unavailable from this client.")
     }
 
-    func registerPushDevice(_ device: PushDeviceRegistration) async throws {
+    func registerPushDevice(_ device: PushDeviceRegistration) async throws -> PushRegistrationReceipt {
         throw PlantyError.server(status: 503, message: "Push registration is unavailable from this client.")
+    }
+
+    func pushHealth(installationID: UUID, environment: String) async throws -> PushHealth {
+        throw PlantyError.server(status: 503, message: "Push diagnostics are unavailable from this client.")
+    }
+
+    func testPush(_ request: PushInstallationRequest) async throws {
+        throw PlantyError.server(status: 503, message: "Push testing is unavailable from this client.")
     }
 
     func ownerUpdate(steward: String) async throws -> OwnerUpdate {

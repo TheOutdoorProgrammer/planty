@@ -56,6 +56,47 @@ struct PlantyClientTests {
         #expect(digest.entries.count == 1)
     }
 
+    @Test("Push registration, health, and the real test action use distinct routes")
+    func pushRoutes() async throws {
+        let stub = IsolatedStubTransport()
+        let installation = UUID()
+        let receipt = """
+            {"environment":"production","installation_id":"\(installation.uuidString)",
+             "accepted_at":"2026-08-25T01:00:00Z"}
+            """
+        stub.respond(routes: [
+            "/v1/push-devices": receipt,
+            "/v1/push/health": "{\"server\":{\"configured\":true,\"environment\":\"production\",\"bundle_id\":\"zone.stout.Planty\"},\"registration\":\(receipt)}",
+            "/v1/push/test": #"{"status":"accepted_by_apns"}"#,
+        ])
+        let client = stub.client()
+
+        let accepted = try await client.registerPushDevice(
+            PushDeviceRegistration(
+                token: "aabb",
+                environment: "production",
+                installationID: installation
+            )
+        )
+        let health = try await client.pushHealth(
+            installationID: installation,
+            environment: "production"
+        )
+        try await client.testPush(
+            PushInstallationRequest(
+                installationID: installation,
+                environment: "production"
+            )
+        )
+
+        #expect(accepted.installationID == installation)
+        #expect(health.registration?.acceptedAt != nil)
+        #expect(stub.requests.map { $0.url?.path } == [
+            "/v1/push-devices", "/v1/push/health", "/v1/push/test",
+        ])
+        #expect(stub.requests[1].url?.query?.contains("installation_id=") == true)
+    }
+
     @Test("401 becomes unauthorized, not a generic server error")
     func unauthorized() async {
         StubTransport.respond(status: 401, json: #"{"error":"unauthorized"}"#)

@@ -7,7 +7,10 @@ extension AppSession {
         guard ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] == nil else {
             return
         }
-        PushRegistrationCenter.shared.configure(api: api)
+        PushRegistrationCenter.shared.configure(
+            api: api,
+            serviceID: configuration.baseURL?.absoluteString ?? "unconfigured"
+        )
         await PushRegistrationCenter.shared.requestAuthorization()
     }
 }

@@ -15,6 +15,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/TheOutdoorProgrammer/planty/internal/push"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
@@ -28,6 +29,7 @@ type Server struct {
 	log           *slog.Logger
 	photos        photos.Storage
 	judge         *judge.Judge
+	pushSender    *push.Sender
 	homeAssistant homeAssistantDiscoverer
 }
 
@@ -51,6 +53,11 @@ func (s *Server) WithPhotos(p photos.Storage, j *judge.Judge) *Server {
 // configured. The two dependencies fail independently.
 func (s *Server) WithJudge(j *judge.Judge) *Server {
 	s.judge = j
+	return s
+}
+
+func (s *Server) WithPush(sender *push.Sender) *Server {
+	s.pushSender = sender
 	return s
 }
 
@@ -95,6 +102,8 @@ func (s *Server) Handler() http.Handler {
 	// phone may register before the server is configured to send; delivery then
 	// starts automatically as soon as credentials land.
 	mux.HandleFunc(routeRegisterPushDevice, s.registerPushDevice)
+	mux.HandleFunc(routePushHealth, s.pushHealth)
+	mux.HandleFunc(routeTestPush, s.testPush)
 	mux.HandleFunc(routeListModels, s.listModels)
 	mux.HandleFunc(routeListModelAssignments, s.listModelAssignments)
 	mux.HandleFunc(routeSetModelAssignment, s.setModelAssignment)

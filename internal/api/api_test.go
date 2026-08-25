@@ -565,10 +565,10 @@ func TestUnsupportedImageTypeIsRejected(t *testing.T) {
 	req.Header.Set("Content-Type", "image/svg+xml")
 	h.ServeHTTP(rec, req)
 
-	// Storage is off in this test, so unavailable is checked first and that is
-	// the honest answer: the service cannot store anything at all right now.
-	if rec.Code != http.StatusServiceUnavailable {
-		t.Errorf("got %d, want 503", rec.Code)
+	// The browser write guard rejects an unsafe active-image media type before
+	// the storage route can inspect it.
+	if rec.Code != http.StatusUnsupportedMediaType {
+		t.Errorf("got %d, want 415", rec.Code)
 	}
 }
 
@@ -727,6 +727,7 @@ func TestMalformedShelterRequestCannotMoveEverything(t *testing.T) {
 		"common_name": "Still outside", "slug": unique("still-outside"), "min_temp_f": minTemp,
 	})
 	req := httptest.NewRequest(http.MethodPost, "/v1/shelter", strings.NewReader(`{"all":true`))
+	req.Header.Set("Content-Type", "application/json")
 	rec := httptest.NewRecorder()
 
 	h.ServeHTTP(rec, req)

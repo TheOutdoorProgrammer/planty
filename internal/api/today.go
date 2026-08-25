@@ -36,6 +36,10 @@ func (s *Server) today(w http.ResponseWriter, r *http.Request) {
 		s.log.Warn("open questions unavailable", "error", err)
 	}
 
+	failures := digest.Failures
+	if failures == nil {
+		failures = []plant.JudgmentFailure{}
+	}
 	s.ok(w, http.StatusOK, map[string]any{
 		"date":           digest.Date,
 		"entries":        digest.Entries,
@@ -43,7 +47,7 @@ func (s *Server) today(w http.ResponseWriter, r *http.Request) {
 		"checked":        digest.Checked,
 		"expected":       digest.Expected,
 		"failed":         digest.Failed,
-		"failures":       digest.Failures,
+		"failures":       failures,
 		"run_complete":   digest.RunComplete,
 		"stale_since":    digest.StaleSince,
 		"never_run":      digest.NeverRun,

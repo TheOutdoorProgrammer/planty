@@ -9,11 +9,13 @@ struct SettingsScreen: View {
     @State private var baseURL = ""
     @State private var token = ""
     @State private var probe: ProbeResult = .idle
+    @State private var push = PushRegistrationCenter.shared
 
     var body: some View {
         NavigationStack {
             Form {
                 connectionSection
+                notificationSection
                 householdSection
                 freshnessSection
                 modelsSection
@@ -31,6 +33,73 @@ struct SettingsScreen: View {
             }
             .task { load() }
         }
+    }
+
+    private var notificationSection: some View {
+        Section {
+            LabeledContent("Permission", value: permissionLabel)
+            LabeledContent("APNs registration", value: progressLabel(push.apnsRegistration))
+            LabeledContent("Token upload", value: progressLabel(push.tokenUpload))
+            LabeledContent("App environment", value: push.environment)
+            LabeledContent("Server environment", value: push.serverStatus?.environment ?? "unknown")
+
+            if let accepted = acceptedAt(push.tokenUpload) {
+                LabeledContent("Last server acceptance") {
+                    Text(RelativeAge.dayAndTime(accepted, now: Date()))
+                }
+            }
+            if let error = push.lastRegistrationError {
+                LabeledContent("Last APNs error") {
+                    Text(error).foregroundStyle(PlantyColor.red)
+                }
+            }
+            if case .failed(let error) = push.testDelivery {
+                Text(error).foregroundStyle(PlantyColor.red)
+            }
+            if case .accepted = push.testDelivery {
+                Label("APNs accepted the test notification.", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(PlantyColor.green)
+            }
+
+            Button(progressLabel(push.testDelivery) == "testing" ? "Sending test…" : "Send test notification") {
+                Task { await push.testNotification() }
+            }
+            .disabled(push.testDelivery == .pending)
+
+            Button("Retry notification setup") {
+                Task { await push.recover() }
+            }
+        } header: {
+            Text("Notifications")
+        } footer: {
+            Text("Permission, Apple registration, token upload, and APNs delivery are separate checks. The service connection test proves none of them.")
+        }
+        .task { await push.synchronize() }
+    }
+
+    private var permissionLabel: String {
+        switch push.permission {
+        case .authorized: "allowed"
+        case .provisional: "provisional"
+        case .ephemeral: "temporary"
+        case .denied: "denied"
+        case .notDetermined: "not requested"
+        @unknown default: "unknown"
+        }
+    }
+
+    private func progressLabel(_ progress: PushProgress) -> String {
+        switch progress {
+        case .idle: "not yet"
+        case .pending: "testing"
+        case .accepted: "accepted"
+        case .failed: "failed"
+        }
+    }
+
+    private func acceptedAt(_ progress: PushProgress) -> Date? {
+        guard case .accepted(let date) = progress else { return nil }
+        return date
     }
 
     /// What is true of the place rather than of any one plant. Kept here

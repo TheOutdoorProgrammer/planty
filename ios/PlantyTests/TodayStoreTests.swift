@@ -52,6 +52,8 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     private var _postmortems: [Postmortem] = []
     private var _harvests: [Harvest] = []
     private var _createdQuestions: [NewOpenQuestion] = []
+    private var _pushRegistrations: [PushDeviceRegistration] = []
+    private var _pushTests: [PushInstallationRequest] = []
 
     var answer: PlantAnswer {
         get { lock.withLock { _answer } }
@@ -82,6 +84,8 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
     }
 
     var createdQuestions: [NewOpenQuestion] { lock.withLock { _createdQuestions } }
+    var pushRegistrations: [PushDeviceRegistration] { lock.withLock { _pushRegistrations } }
+    var pushTests: [PushInstallationRequest] { lock.withLock { _pushTests } }
 
     var reminderList: [Reminder] {
         get { lock.withLock { _reminders } }
@@ -409,6 +413,44 @@ final class FakeAPI: PlantyAPI, @unchecked Sendable {
 
     func health() async throws {
         try check()
+    }
+
+    func registerPushDevice(_ device: PushDeviceRegistration) async throws -> PushRegistrationReceipt {
+        try check()
+        lock.withLock { _pushRegistrations.append(device) }
+        return PushRegistrationReceipt(
+            environment: device.environment,
+            installationID: device.installationID,
+            acceptedAt: .reference
+        )
+    }
+
+    func pushHealth(installationID: UUID, environment: String) async throws -> PushHealth {
+        try check()
+        let registered = lock.withLock {
+            _pushRegistrations.last {
+                $0.installationID == installationID && $0.environment == environment
+            }
+        }
+        return PushHealth(
+            server: PushServerStatus(
+                configured: true,
+                environment: environment,
+                bundleID: "zone.stout.Planty"
+            ),
+            registration: registered.map {
+                PushRegistrationReceipt(
+                    environment: $0.environment,
+                    installationID: $0.installationID,
+                    acceptedAt: .reference
+                )
+            }
+        )
+    }
+
+    func testPush(_ request: PushInstallationRequest) async throws {
+        try check()
+        lock.withLock { _pushTests.append(request) }
     }
 }
 

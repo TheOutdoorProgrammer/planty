@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
+	"github.com/google/uuid"
 )
 
 const (
@@ -40,10 +41,24 @@ type Sender struct {
 	environment string
 	privateKey  *ecdsa.PrivateKey
 	http        *http.Client
+	endpoint    string
 
 	mu        sync.Mutex
 	jwt       string
 	jwtIssued time.Time
+}
+
+type Status struct {
+	Configured  bool   `json:"configured"`
+	Environment string `json:"environment"`
+	BundleID    string `json:"bundle_id"`
+}
+
+func (s *Sender) Status() Status {
+	if s == nil {
+		return Status{}
+	}
+	return Status{Configured: true, Environment: s.environment, BundleID: s.bundleID}
 }
 
 // NewFromEnv returns nil until the APNs credentials are configured. Scheduled
@@ -73,10 +88,14 @@ func NewFromEnv(s *store.Store, log *slog.Logger) *Sender {
 		log.Error("APNs disabled: PLANTY_APNS_ENVIRONMENT must be production or sandbox")
 		return nil
 	}
+	endpoint := productionEndpoint
+	if environment == "sandbox" {
+		endpoint = sandboxEndpoint
+	}
 	return &Sender{
 		store: s, log: log, keyID: keyID, teamID: teamID, bundleID: bundleID,
 		environment: environment, privateKey: key,
-		http: &http.Client{Timeout: 20 * time.Second},
+		http: &http.Client{Timeout: 20 * time.Second}, endpoint: endpoint,
 	}
 }
 
@@ -120,17 +139,42 @@ func (s *Sender) Send(ctx context.Context, title, body string, extra map[string]
 	return nil
 }
 
+// SendTest proves the exact registered installation can be accepted by APNs.
+// It deliberately does not fan out to every phone.
+func (s *Sender) SendTest(ctx context.Context, installationID uuid.UUID, environment string) error {
+	if s == nil {
+		return errors.New("APNs is not configured")
+	}
+	if environment != s.environment {
+		return fmt.Errorf("app registered for %s but server sends to %s", environment, s.environment)
+	}
+	device, err := s.store.PushDeviceForInstallation(ctx, environment, installationID)
+	if err != nil {
+		return fmt.Errorf("find registered installation: %w", err)
+	}
+	payload, err := json.Marshal(map[string]any{
+		"aps": map[string]any{
+			"alert": map[string]string{
+				"title": "Planty notifications work",
+				"body":  "This came through APNs to this installation.",
+			},
+			"sound": "default",
+		},
+		"destination": map[string]string{"kind": "settings"},
+	})
+	if err != nil {
+		return err
+	}
+	return s.sendOne(ctx, device.Token, payload, "planty-test")
+}
+
 func (s *Sender) sendOne(ctx context.Context, token string, payload []byte, collapse string) error {
 	auth, err := s.authorization()
 	if err != nil {
 		return err
 	}
-	endpoint := productionEndpoint
-	if s.environment == "sandbox" {
-		endpoint = sandboxEndpoint
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
-		endpoint+"/3/device/"+token, strings.NewReader(string(payload)))
+		s.endpoint+"/3/device/"+token, strings.NewReader(string(payload)))
 	if err != nil {
 		return err
 	}

@@ -45,11 +45,13 @@ enum APIPath {
     static let listQuestions = "/v1/questions"
     static func listReminders(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
     static let listSensors = "/v1/sensors"
+    static let pushHealth = "/v1/push/health"
     static let ready = "/readyz"
     static let registerPushDevice = "/v1/push-devices"
     static func setModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
     static func setReminder(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
     static let shelter = "/v1/shelter"
+    static let testPush = "/v1/push/test"
     static let today = "/v1/today"
     static let unshelter = "/v1/unshelter"
     static func updateAway(id: String) -> String { "/v1/away/\(id)" }

@@ -69,6 +69,8 @@
     "/v1/questions/{id}/answer": {"post": {"operationId": "answerQuestion"}},
     "/v1/owner-update": {"post": {"operationId": "createOwnerUpdate"}},
     "/v1/push-devices": {"post": {"operationId": "registerPushDevice"}},
+    "/v1/push/health": {"get": {"operationId": "pushHealth"}},
+    "/v1/push/test": {"post": {"operationId": "testPush"}},
     "/v1/models": {"get": {"operationId": "listModels"}},
     "/v1/model-assignments": {"get": {"operationId": "listModelAssignments"}},
     "/v1/model-assignments/{job}": {
