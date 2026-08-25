@@ -30,10 +30,11 @@ struct ConsultScreen: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 16)
+                .plantyReadableContent()
             }
             .onChange(of: store.messages.count) { _, _ in
                 guard let last = store.messages.last else { return }
-                withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
+                proxy.scrollTo(last.id, anchor: .bottom)
             }
         }
         .plantyPage()

@@ -10,7 +10,7 @@ struct PlantFactsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Button {
-                withAnimation(.snappy) { open.toggle() }
+                open.toggle()
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: open ? "chevron.down" : "chevron.right")
@@ -22,7 +22,7 @@ struct PlantFactsCard: View {
                         Text(summary)
                             .font(.caption)
                             .foregroundStyle(PlantyColor.secondaryText)
-                            .lineLimit(1)
+                            .multilineTextAlignment(.trailing)
                     }
                 }
                 .foregroundStyle(PlantyColor.foreground)
@@ -46,7 +46,6 @@ struct PlantFactsCard: View {
                         }
                     }
                 }
-                .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

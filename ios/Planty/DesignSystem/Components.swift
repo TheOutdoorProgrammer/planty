@@ -24,6 +24,13 @@ extension View {
             .background(PlantyColor.background.ignoresSafeArea())
             .scrollContentBackground(.hidden)
     }
+
+    /// Keeps cards readable on iPad and split-screen without constraining
+    /// deliberate full-width photo and comparison surfaces.
+    func plantyReadableContent(maxWidth: CGFloat = 760) -> some View {
+        frame(maxWidth: maxWidth)
+            .frame(maxWidth: .infinity)
+    }
 }
 
 struct Eyebrow: View {
@@ -81,7 +88,7 @@ struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(PlantyColor.background)
+            .foregroundStyle(PlantyColor.onAccent)
             .frame(maxWidth: .infinity, minHeight: 52)
             .padding(.horizontal, 16)
             .background(
@@ -89,7 +96,6 @@ struct PrimaryButtonStyle: ButtonStyle {
                 in: RoundedRectangle(cornerRadius: 15, style: .continuous)
             )
             .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
@@ -109,7 +115,6 @@ struct SecondaryButtonStyle: ButtonStyle {
                     .stroke(PlantyColor.quietDecoration.opacity(0.2), lineWidth: 1)
             }
             .contentShape(RoundedRectangle(cornerRadius: 15, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.985 : 1)
     }
 }
 
@@ -152,11 +157,41 @@ struct SaveToast: View {
     var body: some View {
         Label(message, systemImage: "checkmark.circle.fill")
             .font(.subheadline.weight(.semibold))
-            .foregroundStyle(PlantyColor.background)
+            .foregroundStyle(PlantyColor.onAccent)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
             .background(PlantyColor.green, in: Capsule())
             .accessibilityAddTraits(.isStaticText)
+    }
+}
+
+/// A disclosure that visually occupies a row must be toggleable from the whole
+/// row. SwiftUI's DisclosureGroup label otherwise leaves card padding dead.
+struct PlantyDisclosureHeader: View {
+    let title: String
+    let icon: String
+    @Binding var isExpanded: Bool
+    var color = PlantyColor.secondaryText
+
+    var body: some View {
+        Button {
+            isExpanded.toggle()
+        } label: {
+            HStack(spacing: 8) {
+                Label(title, systemImage: icon)
+                    .font(.subheadline.weight(.semibold))
+                Spacer(minLength: 8)
+                Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                    .font(.caption.weight(.bold))
+                    .accessibilityHidden(true)
+            }
+            .foregroundStyle(color)
+            .frame(maxWidth: .infinity, minHeight: 44, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+        .accessibilityHint(isExpanded ? "Collapses this section" : "Expands this section")
     }
 }
 

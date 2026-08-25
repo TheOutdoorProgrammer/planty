@@ -155,7 +155,7 @@ struct ToxicityCard<Ask: View>: View {
     @ViewBuilder
     private var moreDisclosure: some View {
         Button {
-            withAnimation(.snappy) { showingDetail.toggle() }
+            showingDetail.toggle()
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: showingDetail ? "chevron.down" : "chevron.right")
@@ -177,7 +177,6 @@ struct ToxicityCard<Ask: View>: View {
                 details
                 provenance
             }
-            .transition(.opacity.combined(with: .move(edge: .top)))
         }
     }
 

@@ -8,6 +8,7 @@ struct PhotoComparisonScreen: View {
     let comparison: PhotoComparison
 
     @State private var index: Int
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     init(plant: Plant, comparison: PhotoComparison) {
         self.plant = plant
@@ -18,9 +19,22 @@ struct PhotoComparisonScreen: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                HStack(alignment: .top, spacing: 12) {
-                    pane(comparison.earliest, caption: "First")
-                    pane(comparison.photo(at: index), caption: "Then")
+                if dynamicTypeSize.isAccessibilitySize {
+                    VStack(alignment: .leading, spacing: 16) {
+                        pane(comparison.earliest, caption: "First")
+                        pane(comparison.photo(at: index), caption: "Then")
+                    }
+                } else {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 12) {
+                            pane(comparison.earliest, caption: "First")
+                            pane(comparison.photo(at: index), caption: "Then")
+                        }
+                        VStack(alignment: .leading, spacing: 16) {
+                            pane(comparison.earliest, caption: "First")
+                            pane(comparison.photo(at: index), caption: "Then")
+                        }
+                    }
                 }
 
                 if let span {
@@ -59,6 +73,7 @@ struct PhotoComparisonScreen: View {
                     .foregroundStyle(PlantyColor.secondaryText)
             }
         }
+        .frame(minWidth: 220)
     }
 
     @ViewBuilder

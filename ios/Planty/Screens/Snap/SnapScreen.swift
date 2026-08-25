@@ -77,6 +77,7 @@ struct SnapScreen: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            .plantyReadableContent()
         }
     }
 
@@ -89,6 +90,7 @@ struct SnapScreen: View {
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
+            .plantyReadableContent()
         }
     }
 

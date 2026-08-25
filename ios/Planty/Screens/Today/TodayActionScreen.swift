@@ -9,6 +9,7 @@ struct TodayActionScreen: View {
 
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
 
     @State private var isAddingPhoto = false
     @State private var isSavingPhoto = false
@@ -16,8 +17,13 @@ struct TodayActionScreen: View {
     @State private var photoSaved = false
     @State private var isWritingDetail = false
     @State private var writingKind: ObservationKind = .note
+    @State private var evidenceExpanded = false
 
-    private let actionColumns = [GridItem(.flexible()), GridItem(.flexible())]
+    private var actionColumns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.flexible()), GridItem(.flexible())]
+    }
     private let resolutionKinds: [ObservationKind] = [
         .watered, .misted, .fertilized, .repotted,
         .pruned, .moved, .harvested, .symptom, .note
@@ -39,6 +45,7 @@ struct TodayActionScreen: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 20)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .plantyReadableContent()
         }
         .plantyPage()
         .navigationTitle(entry.plant.commonName)
@@ -126,12 +133,18 @@ struct TodayActionScreen: View {
     }
 
     private var evidenceDisclosure: some View {
-        DisclosureGroup("Why Planty thinks this") {
-            EvidenceDetail(verdict: entry.verdict)
-                .padding(.top, 8)
+        VStack(alignment: .leading, spacing: 0) {
+            PlantyDisclosureHeader(
+                title: "Why Planty thinks this",
+                icon: "list.bullet.clipboard",
+                isExpanded: $evidenceExpanded,
+                color: PlantyColor.cyan
+            )
+            if evidenceExpanded {
+                EvidenceDetail(verdict: entry.verdict)
+                    .padding(.top, 8)
+            }
         }
-        .font(.footnote.weight(.semibold))
-        .tint(PlantyColor.cyan)
     }
 
     private var chatLink: some View {

@@ -11,7 +11,7 @@ struct StepsDisclosure: View {
         if !steps.isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 Button {
-                    withAnimation(.snappy) { open.toggle() }
+                    open.toggle()
                 } label: {
                     HStack(spacing: 6) {
                         Image(systemName: open ? "chevron.down" : "chevron.right")
@@ -39,7 +39,6 @@ struct StepsDisclosure: View {
                         ForEach(steps) { StepRow(step: $0) }
                     }
                     .padding(.leading, 4)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
         }
@@ -66,7 +65,7 @@ private struct StepRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Button {
-                withAnimation(.snappy) { open.toggle() }
+                open.toggle()
             } label: {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: step.icon)

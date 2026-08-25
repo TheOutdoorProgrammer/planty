@@ -32,5 +32,6 @@ struct RootTabView: View {
             guard let route = notification.object as? PlantyPushRoute else { return }
             session.openPushRoute(route)
         }
+        .onOpenURL { session.openDeepLink($0) }
     }
 }

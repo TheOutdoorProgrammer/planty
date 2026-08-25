@@ -12,6 +12,10 @@ enum PlantyColor {
     static let secondaryText = Color.secondary
     static let quietDecoration = Color(uiColor: .separator)
 
+    /// System accent colours are deliberately bright in both appearances.
+    /// Near-black remains legible on all of them; the page background does not.
+    static let onAccent = Color.black.opacity(0.88)
+
     static let green = Color(uiColor: .systemGreen)
     static let cyan = Color(uiColor: .systemTeal)
     static let orange = Color(uiColor: .systemOrange)

@@ -53,6 +53,7 @@ struct GardenScreen: View {
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 16)
+                .plantyReadableContent()
             }
             .plantyPage()
             .navigationTitle("More")

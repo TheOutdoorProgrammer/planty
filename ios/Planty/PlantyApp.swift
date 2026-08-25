@@ -9,7 +9,6 @@ struct PlantyApp: App {
         WindowGroup {
             RootTabView()
                 .environment(session)
-                .preferredColorScheme(.dark)
                 .tint(PlantyColor.pink)
                 .task(id: session.configuration.baseURL) {
                     guard session.configuration.isConfigured else { return }

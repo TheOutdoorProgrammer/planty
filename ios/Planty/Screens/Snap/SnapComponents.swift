@@ -16,7 +16,6 @@ struct PlantChip: View {
                     Text(plant.map(subtitle) ?? "Optional — you can choose after the photo")
                         .font(.caption)
                         .foregroundStyle(PlantyColor.secondaryText)
-                        .lineLimit(1)
                 }
                 Spacer(minLength: 8)
                 Image(systemName: "chevron.up.chevron.down")
@@ -49,6 +48,7 @@ struct CameraStage: View {
     let shutter: () -> Void
 
     @ScaledMetric(relativeTo: .largeTitle) private var shutterSize: CGFloat = 72
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
 
     var body: some View {
         VStack(spacing: 14) {
@@ -118,7 +118,7 @@ struct CameraStage: View {
                     .foregroundStyle(Color.white.opacity(0.8))
             }
         }
-        .frame(height: 390)
+        .frame(height: verticalSizeClass == .compact ? 240 : 390)
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 22, style: .continuous)

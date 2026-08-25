@@ -12,6 +12,7 @@ struct PlantStoryScreen: View {
     @State private var isHarvesting = false
     @State private var isConfirmingDeath = false
     @State private var isConfirmingArchive = false
+    @State private var isShowingLabel = false
     @State private var deletingPhoto: Photo?
     @State private var actionError: PlantyError?
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
@@ -68,6 +69,7 @@ struct PlantStoryScreen: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .plantyReadableContent()
         }
         .plantyPage()
         .navigationTitle(store.plant.commonName)
@@ -86,6 +88,11 @@ struct PlantStoryScreen: View {
                         isEditingToxicity = true
                     } label: {
                         Label("Edit toxicity", systemImage: "cross.case")
+                    }
+                    Button {
+                        isShowingLabel = true
+                    } label: {
+                        Label("Print QR label", systemImage: "qrcode")
                     }
                     if !store.plant.status.isRetired {
                         Button {
@@ -119,6 +126,9 @@ struct PlantStoryScreen: View {
             } setSheltered: { indoors in
                 await store.setSheltered(indoors)
             }
+        }
+        .sheet(isPresented: $isShowingLabel) {
+            PlantLabelSheet(plant: store.plant)
         }
         .sheet(isPresented: $isEditingToxicity) {
             ToxicityEditSheet(plant: store.plant, toxicity: store.toxicity) { toxicity in

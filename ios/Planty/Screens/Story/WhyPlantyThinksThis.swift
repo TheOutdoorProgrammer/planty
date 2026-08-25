@@ -11,22 +11,25 @@ struct WhyPlantyThinksThis: View {
 
     var body: some View {
         if !series.isEmpty || verdict != nil {
-            DisclosureGroup(isExpanded: $isExpanded) {
-                VStack(alignment: .leading, spacing: 18) {
-                    if let verdict {
-                        VerdictEvidenceBlock(verdict: verdict)
+            VStack(alignment: .leading, spacing: 0) {
+                PlantyDisclosureHeader(
+                    title: "Why Planty thinks this",
+                    icon: "chart.xyaxis.line",
+                    isExpanded: $isExpanded,
+                    color: PlantyColor.cyan
+                )
+                if isExpanded {
+                    VStack(alignment: .leading, spacing: 18) {
+                        if let verdict {
+                            VerdictEvidenceBlock(verdict: verdict)
+                        }
+                        ForEach(series) { one in
+                            SensorChartCard(series: one)
+                        }
                     }
-                    ForEach(series) { one in
-                        SensorChartCard(series: one)
-                    }
+                    .padding(.top, 12)
                 }
-                .padding(.top, 12)
-            } label: {
-                Label("Why Planty thinks this", systemImage: "chart.xyaxis.line")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(PlantyColor.cyan)
             }
-            .tint(PlantyColor.cyan)
             .plantyCard(border: PlantyColor.cyan.opacity(0.3))
         }
     }

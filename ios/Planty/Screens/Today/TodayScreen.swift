@@ -4,6 +4,7 @@ import SwiftUI
 /// anything to do? Secondary destinations stay visible, but below that answer.
 struct TodayScreen: View {
     @Environment(AppSession.self) private var session
+    @State private var deferredExpanded = false
 
     private var store: TodayStore { session.today }
 
@@ -26,6 +27,7 @@ struct TodayScreen: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 18)
                 .frame(maxWidth: .infinity, alignment: .leading)
+                .plantyReadableContent()
             }
             .plantyPage()
             .navigationTitle("Today")
@@ -121,16 +123,21 @@ struct TodayScreen: View {
         }
 
         if let deferredLabel = summary.deferredLabel {
-            DisclosureGroup {
-                VStack(spacing: 12) {
-                    cards(for: summary.deferred)
+            VStack(alignment: .leading, spacing: 0) {
+                PlantyDisclosureHeader(
+                    title: deferredLabel,
+                    icon: "clock.arrow.circlepath",
+                    isExpanded: $deferredExpanded
+                )
+                .accessibilityIdentifier("today.deferred.toggle")
+
+                if deferredExpanded {
+                    VStack(spacing: 12) {
+                        cards(for: summary.deferred)
+                    }
+                    .padding(.top, 12)
                 }
-                .padding(.top, 12)
-            } label: {
-                Label(deferredLabel, systemImage: "clock.arrow.circlepath")
-                    .font(.subheadline.weight(.semibold))
             }
-            .tint(PlantyColor.secondaryText)
             .plantyCard(padding: 14)
         }
     }
@@ -172,22 +179,31 @@ struct TodayScreen: View {
     private var shortcuts: some View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeading("Quick access")
-            HStack(spacing: 10) {
-                Button {
-                    session.selectedTab = .snap
-                } label: {
-                    ActionFace("Take photo", icon: "camera.fill")
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 10) {
+                    takePhotoShortcut
+                    plantsShortcut
                 }
-                .buttonStyle(SecondaryButtonStyle())
-
-                Button {
-                    session.selectedTab = .plants
-                } label: {
-                    ActionFace("Plants", icon: "leaf.fill")
+                VStack(spacing: 10) {
+                    takePhotoShortcut
+                    plantsShortcut
                 }
-                .buttonStyle(SecondaryButtonStyle())
             }
         }
+    }
+
+    private var takePhotoShortcut: some View {
+        Button { session.selectedTab = .snap } label: {
+            ActionFace("Take photo", icon: "camera.fill")
+        }
+        .buttonStyle(SecondaryButtonStyle())
+    }
+
+    private var plantsShortcut: some View {
+        Button { session.selectedTab = .plants } label: {
+            ActionFace("Plants", icon: "leaf.fill")
+        }
+        .buttonStyle(SecondaryButtonStyle())
     }
 
     private var settingsButton: some ToolbarContent {

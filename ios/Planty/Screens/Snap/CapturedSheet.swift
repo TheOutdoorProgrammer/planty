@@ -15,7 +15,13 @@ struct CapturedSheet: View {
     var identification: IdentificationStore?
     var useCandidate: ((IdentificationCandidate) -> Void)?
 
-    private let columns = [GridItem(.flexible()), GridItem(.flexible())]
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    private var columns: [GridItem] {
+        dynamicTypeSize.isAccessibilitySize
+            ? [GridItem(.flexible())]
+            : [GridItem(.flexible()), GridItem(.flexible())]
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
