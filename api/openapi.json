@@ -25,6 +25,20 @@
     },
     "/v1/plants/{slug}/health": {"get": {"operationId": "getPlantHealth"}},
     "/v1/plants/{slug}/health-events": {"post": {"operationId": "addHealthEvent"}},
+    "/v1/evidence-coverage": {"get": {"operationId": "getEvidenceCoverage"}},
+    "/v1/plants/{slug}/rechecks": {"post": {"operationId": "proposeRecheck"}},
+    "/v1/plants/{slug}/guardrails": {"get": {"operationId": "listGuardrails"}},
+    "/v1/evidence-windows/{id}": {"get": {"operationId": "getEvidenceWindow"}},
+    "/v1/evidence-windows/{id}/start": {"post": {"operationId": "startEvidenceWindow"}},
+    "/v1/evidence-windows/{id}/review": {"post": {"operationId": "reviewEvidenceWindow"}},
+    "/v1/evidence-windows/{id}/conclude": {"post": {"operationId": "concludeEvidenceWindow"}},
+    "/v1/evidence-windows/{id}/cancel": {"post": {"operationId": "cancelEvidenceWindow"}},
+    "/v1/guardrails/{id}/override": {"post": {"operationId": "overrideGuardrail"}},
+    "/v1/experiments": {
+      "get": {"operationId": "listExperiments"},
+      "post": {"operationId": "proposeExperiment"}
+    },
+    "/v1/experiments/{id}": {"get": {"operationId": "getExperiment"}},
     "/v1/plants/{slug}/notes": {
       "get": {"operationId": "listPlantNotes"},
       "post": {"operationId": "addPlantNote"}
@@ -130,6 +144,11 @@
       "HealthChangeKind": {"type": "string", "enum": ["baseline", "delta"]},
       "ActuatorKind": {"type": "string", "enum": ["fan", "switch"]},
       "ActuatorEventAction": {"type": "string", "enum": ["start_requested", "started", "start_failed", "stop_requested", "stopped", "stop_failed", "stop_noop"]},
+      "EvidenceWindowKind": {"type": "string", "enum": ["recheck", "experiment"]},
+      "EvidenceWindowStatus": {"type": "string", "enum": ["proposed", "active", "ready", "completed", "cancelled"]},
+      "EvidenceKind": {"type": "string", "enum": ["observation", "photo", "reading"]},
+      "EvidencePhase": {"type": "string", "enum": ["baseline", "review"]},
+      "EvidenceWindowOutcome": {"type": "string", "enum": ["improved", "unchanged", "worsened", "insufficient_evidence", "supported", "not_supported", "inconclusive", "stopped_for_safety", "cancelled"]},
       "SensorRole": {"type": "string", "enum": ["soil_moisture", "ambient_temp", "ambient_humidity", "illuminance"]},
       "AIJob": {"type": "string", "enum": ["assess", "identify", "consult", "ask", "postmortem", "owner_update"]},
       "PromptInstruction": {

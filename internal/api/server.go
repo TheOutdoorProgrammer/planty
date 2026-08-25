@@ -90,6 +90,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeAddObservation, s.addObservation)
 	mux.HandleFunc(routeGetPlantHealthPending, s.getPlantHealth)
 	mux.HandleFunc(routeAddHealthEventPending, s.addHealthEvent)
+	mux.HandleFunc(routeEvidenceCoveragePending, s.evidenceCoverage)
+	s.registerEvidenceWorkflowRoutes(mux)
 
 	mux.HandleFunc(routeListPlantNotes, s.listNotes)
 	mux.HandleFunc(routeAddPlantNote, s.addNote)
