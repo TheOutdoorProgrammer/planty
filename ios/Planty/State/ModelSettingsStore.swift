@@ -73,6 +73,10 @@ final class ModelSettingsStore {
         return models.first { $0.ref == ref }
     }
 
+    func canInspectHistoricalPhotos(for job: AIJob) -> Bool? {
+        assignment(for: job)?.offeredPhotos
+    }
+
     func assign(_ model: AIModel, to job: AIJob) async -> PlantyError? {
         await apply(job: job) {
             try await self.api.assign(job: job, provider: model.provider, model: model.modelID)

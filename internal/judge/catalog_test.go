@@ -40,6 +40,30 @@ func TestASeeingModelTakesEveryJob(t *testing.T) {
 	}
 }
 
+func TestHistoricalPhotoAccessIsASeparateCapability(t *testing.T) {
+	model := Model{
+		Provider: "test", ID: "vision-only",
+		Skills: Skills{Vision: true, Schema: true, Tools: true},
+	}
+	if err := model.CanDo(JobConsult); err == nil {
+		t.Fatal("a model that can see an attached image was allowed to promise on-demand history")
+	} else if !strings.Contains(err.Error(), "historical") {
+		t.Fatalf("capability refusal hid the actual limit: %v", err)
+	}
+}
+
+func TestDirectAnthropicAPIIsExplicitlyIneligibleForActingJobs(t *testing.T) {
+	backend := newAPIBackend("test", "claude-opus-5")
+	for _, job := range []Job{JobConsult, JobAsk} {
+		if err := backend.CanDo(job); err == nil {
+			t.Errorf("direct API was allowed on acting job %s", job)
+		}
+	}
+	if err := backend.CanDo(JobAssess); err != nil {
+		t.Fatalf("direct API was refused one-shot assessment: %v", err)
+	}
+}
+
 func TestAnUnknownJobIsRefusedRatherThanAllowed(t *testing.T) {
 	m, _ := Lookup("claude", "claude-opus-5")
 	if err := m.CanDo(Job("invented")); err == nil {

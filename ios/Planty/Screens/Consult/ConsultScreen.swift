@@ -3,6 +3,7 @@ import SwiftUI
 /// Ask Planty something. With a plant the record is the subject and pictures
 /// are optional; with none it is a scratch chat that files nothing anywhere.
 struct ConsultScreen: View {
+    @Environment(AppSession.self) private var session
     @State var store: ConsultStore
     @FocusState private var composerFocused: Bool
     @State private var isAttaching = false
@@ -14,6 +15,7 @@ struct ConsultScreen: View {
                     if !store.hasStarted {
                         opening
                     }
+                    historyCapabilityWarning
                     ForEach(store.messages) { message in
                         row(message)
                             .id(message.id)
@@ -39,6 +41,7 @@ struct ConsultScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .safeAreaInset(edge: .bottom) { composer }
         .task { await store.begin() }
+        .task { await session.models.loadIfNeeded() }
         .sheet(isPresented: $isAttaching) {
             PhotoAttachSheet { jpeg in store.attach(jpeg: jpeg) }
         }
@@ -71,6 +74,25 @@ struct ConsultScreen: View {
     private var openingTitle: String { store.openingTitle }
 
     private var openingBody: String { store.openingBody }
+
+    @ViewBuilder
+    private var historyCapabilityWarning: some View {
+        if store.plant != nil,
+           session.models.hasLoaded,
+           session.models.canInspectHistoricalPhotos(for: .consult) == false {
+            VStack(alignment: .leading, spacing: 8) {
+                Label("Older photos are unavailable to this model", systemImage: "photo.badge.exclamationmark")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(PlantyColor.yellow)
+                Text("It can use the written record and a photo attached to this message, but it cannot inspect the timeline on demand.")
+                    .font(.footnote)
+                    .foregroundStyle(PlantyColor.secondaryText)
+                Button("Choose another model") { session.isShowingSettings = true }
+                    .buttonStyle(SecondaryButtonStyle())
+            }
+            .plantyCard(border: PlantyColor.yellow.opacity(0.3), padding: 14)
+        }
+    }
 
     @ViewBuilder
     private func row(_ message: ConsultMessage) -> some View {

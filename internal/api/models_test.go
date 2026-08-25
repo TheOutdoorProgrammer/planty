@@ -30,6 +30,9 @@ func TestTheCatalogueIsListedSmartestFirstWithTheJobsEachCanDo(t *testing.T) {
 		jobs, _ := m["jobs"].([]any)
 		skills, _ := m["skills"].(map[string]any)
 		sees, _ := skills["vision"].(bool)
+		if _, declared := skills["offered_photos"]; !declared {
+			t.Errorf("%v did not declare offered-photo access separately", m["ref"])
+		}
 		for _, job := range jobs {
 			if job == "identify" && !sees {
 				t.Errorf("%v is offered for identification but cannot see", m["ref"])

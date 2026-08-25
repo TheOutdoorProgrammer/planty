@@ -25,11 +25,12 @@ type modelView struct {
 }
 
 type jobView struct {
-	Job      string `json:"job"`
-	Provider string `json:"provider"`
-	Model    string `json:"model"`
-	Ref      string `json:"ref"`
-	Default  bool   `json:"default"`
+	Job           string `json:"job"`
+	Provider      string `json:"provider"`
+	Model         string `json:"model"`
+	Ref           string `json:"ref"`
+	Default       bool   `json:"default"`
+	OfferedPhotos bool   `json:"offered_photos"`
 }
 
 func (s *Server) listModels(w http.ResponseWriter, r *http.Request) {
@@ -71,10 +72,16 @@ func (s *Server) listModelAssignments(w http.ResponseWriter, r *http.Request) {
 	out := make([]jobView, 0, len(judge.Jobs))
 	for _, job := range judge.Jobs {
 		view := jobView{Job: string(job), Default: true}
+		if s.judge != nil {
+			view.OfferedPhotos = s.judge.DefaultSkills().OfferedPhotos
+		}
 		if a, ok := chosen[job]; ok {
 			view.Provider, view.Model = a.Provider, a.Model
 			view.Ref = a.Provider + "/" + a.Model
 			view.Default = false
+			if model, found := judge.Lookup(a.Provider, a.Model); found {
+				view.OfferedPhotos = model.Skills.OfferedPhotos
+			}
 		}
 		out = append(out, view)
 	}
@@ -108,10 +115,14 @@ func (s *Server) setModelAssignment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
-	s.ok(w, http.StatusOK, jobView{
+	view := jobView{
 		Job: string(job), Provider: request.Provider, Model: request.Model,
 		Ref: request.Provider + "/" + request.Model,
-	})
+	}
+	if model, found := judge.Lookup(request.Provider, request.Model); found {
+		view.OfferedPhotos = model.Skills.OfferedPhotos
+	}
+	s.ok(w, http.StatusOK, view)
 }
 
 func (s *Server) clearModelAssignment(w http.ResponseWriter, r *http.Request) {
@@ -124,7 +135,11 @@ func (s *Server) clearModelAssignment(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.ok(w, http.StatusOK, jobView{Job: string(job), Default: true})
+	view := jobView{Job: string(job), Default: true}
+	if s.judge != nil {
+		view.OfferedPhotos = s.judge.DefaultSkills().OfferedPhotos
+	}
+	s.ok(w, http.StatusOK, view)
 }
 
 // requestedJob reads the job from the path, refusing one Planty does not have

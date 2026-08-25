@@ -92,8 +92,8 @@ func (b *openaiBackend) Judge(ctx context.Context, req Request) (Outcome, error)
 	// Built per request, not per backend: what the model may do belongs to the
 	// call that granted it, and a conversation must not inherit another's.
 	var box *toolbox
-	if req.Acting != nil {
-		box = newToolbox(req.Acting)
+	if req.Acting != nil || len(req.Offered) > 0 {
+		box = newToolbox(req.Acting, req.Offered...)
 	}
 	return b.converse(ctx, req, messages, box)
 }

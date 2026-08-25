@@ -2,6 +2,7 @@ package judge
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -43,36 +44,65 @@ type toolCall struct {
 // the loop cannot reach anything the Acting it was built from did not grant.
 type toolbox struct {
 	acting *Acting
+	offers []Offer
 	client *http.Client
 }
 
-func newToolbox(a *Acting) *toolbox {
-	return &toolbox{acting: a, client: &http.Client{Timeout: 30 * time.Second}}
+func newToolbox(a *Acting, offers ...Offer) *toolbox {
+	return &toolbox{acting: a, offers: offers, client: &http.Client{Timeout: 30 * time.Second}}
 }
 
 func (t *toolbox) definitions() []toolDef {
-	defs := []toolDef{{
-		Type: "function",
-		Function: functionDef{
-			Name: "planty_agent",
-			Description: "Run one Planty command against the garden's own records. " +
-				"The complete verb reference is in your instructions. " +
-				"Pass the whole command, for example: planty agent show --plant golden-pothos",
-			Parameters: map[string]any{
-				"type":                 "object",
-				"additionalProperties": false,
-				"required":             []string{"command"},
-				"properties": map[string]any{
-					"command": map[string]any{
-						"type":        "string",
-						"description": "The full command, beginning with `planty agent`",
+	defs := []toolDef{}
+	if t.acting != nil {
+		defs = append(defs, toolDef{
+			Type: "function",
+			Function: functionDef{
+				Name: "planty_agent",
+				Description: "Run one Planty command against the garden's own records. " +
+					"The complete verb reference is in your instructions. " +
+					"Pass the whole command, for example: planty agent show --plant golden-pothos",
+				Parameters: map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"required":             []string{"command"},
+					"properties": map[string]any{
+						"command": map[string]any{
+							"type":        "string",
+							"description": "The full command, beginning with `planty agent`",
+						},
 					},
 				},
 			},
-		},
-	}}
+		})
+	}
 
-	if len(t.acting.Trusted) == 0 {
+	if len(t.offers) > 0 {
+		var labels strings.Builder
+		for i, offer := range t.offers {
+			fmt.Fprintf(&labels, "%d: %s\n", i, offer.Label)
+		}
+		defs = append(defs, toolDef{
+			Type: "function",
+			Function: functionDef{
+				Name: "historical_photo",
+				Description: "Open one offered historical photograph by index. " +
+					"Only call this when seeing it could change the answer. Available:\n" + labels.String(),
+				Parameters: map[string]any{
+					"type":                 "object",
+					"additionalProperties": false,
+					"required":             []string{"index"},
+					"properties": map[string]any{
+						"index": map[string]any{
+							"type": "integer", "minimum": 0, "maximum": len(t.offers) - 1,
+						},
+					},
+				},
+			},
+		})
+	}
+
+	if t.acting == nil || len(t.acting.Trusted) == 0 {
 		return defs
 	}
 	return append(defs, toolDef{
@@ -97,22 +127,47 @@ func (t *toolbox) definitions() []toolDef {
 // run performs one tool call and returns what the model should be told. A
 // refusal is an answer, not an error: the model is expected to read the reason
 // and say so rather than retry blindly.
-func (t *toolbox) run(ctx context.Context, call toolCall) string {
+type toolResult struct {
+	Content any
+	Summary string
+}
+
+func textResult(body string) toolResult { return toolResult{Content: body, Summary: body} }
+
+func (t *toolbox) run(ctx context.Context, call toolCall) toolResult {
 	var args struct {
 		Command string `json:"command"`
 		URL     string `json:"url"`
+		Index   *int   `json:"index"`
 	}
 	if err := json.Unmarshal([]byte(call.Function.Arguments), &args); err != nil {
-		return "That call could not be read: " + err.Error()
+		return textResult("That call could not be read: " + err.Error())
 	}
 
 	switch call.Function.Name {
 	case "planty_agent":
-		return t.runAgent(ctx, args.Command)
+		return textResult(t.runAgent(ctx, args.Command))
 	case "web_fetch":
-		return t.fetch(ctx, args.URL)
+		return textResult(t.fetch(ctx, args.URL))
+	case "historical_photo":
+		if args.Index == nil || *args.Index < 0 || *args.Index >= len(t.offers) {
+			return textResult("That historical photograph index does not exist.")
+		}
+		offer := t.offers[*args.Index]
+		media := offer.Media
+		if media == "" {
+			media = "image/jpeg"
+		}
+		return toolResult{
+			Content: []contentPart{
+				{Type: "text", Text: offer.Label},
+				{Type: "image_url", ImageURL: &imageURL{URL: "data:" + media + ";base64," +
+					base64.StdEncoding.EncodeToString(offer.Bytes)}},
+			},
+			Summary: "Opened " + offer.Label,
+		}
 	default:
-		return fmt.Sprintf("There is no tool called %q.", call.Function.Name)
+		return textResult(fmt.Sprintf("There is no tool called %q.", call.Function.Name))
 	}
 }
 
@@ -282,12 +337,12 @@ func (b *openaiBackend) converse(ctx context.Context, req Request, messages []ch
 				Kind:   StepAction,
 				Tool:   call.Function.Name,
 				Detail: describeCall(call),
-				Output: clip(result),
+				Output: clip(result.Summary),
 			})
 			messages = append(messages, chatMessage{
 				Role:       "tool",
 				ToolCallID: call.ID,
-				Content:    result,
+				Content:    result.Content,
 			})
 		}
 	}
@@ -319,10 +374,14 @@ func describeCall(call toolCall) string {
 	var args struct {
 		Command string `json:"command"`
 		URL     string `json:"url"`
+		Index   *int   `json:"index"`
 	}
 	_ = json.Unmarshal([]byte(call.Function.Arguments), &args)
 	if args.Command != "" {
 		return args.Command
+	}
+	if args.Index != nil {
+		return fmt.Sprintf("historical photograph %d", *args.Index)
 	}
 	return args.URL
 }

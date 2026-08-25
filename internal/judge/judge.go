@@ -72,6 +72,13 @@ func (j *Judge) dispatch(ctx context.Context, req Request) (Outcome, error) {
 	if backend == nil {
 		return Outcome{}, fmt.Errorf("nothing can answer %s", req.Job)
 	}
+	if req.Job != "" {
+		if gate, ok := backend.(interface{ CanDo(Job) error }); ok {
+			if err := gate.CanDo(req.Job); err != nil {
+				return Outcome{}, err
+			}
+		}
+	}
 
 	req.Model = model
 	return backend.Judge(ctx, req)
@@ -136,6 +143,25 @@ func (j *Judge) Backend() string {
 		return "none"
 	}
 	return j.fallback.Name()
+}
+
+// DefaultSkills describes the unassigned backend. Assigned models carry their
+// own catalogue skills; the default still needs to be honest in diagnostics
+// and in the consultation UI.
+func (j *Judge) DefaultSkills() Skills {
+	if j == nil || j.fallback == nil {
+		return Skills{}
+	}
+	switch j.fallback.(type) {
+	case *cliBackend:
+		return claudeSkills
+	case *apiBackend:
+		return Skills{Vision: true, Schema: true}
+	case *openaiBackend:
+		return Skills{Vision: true, Schema: true, Tools: true, OfferedPhotos: true}
+	default:
+		return Skills{}
+	}
 }
 
 func backendForProvider(p Provider) Backend {

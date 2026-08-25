@@ -147,9 +147,9 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
 		addr = ":8080"
 	}
 
-	server := api.New(db, log)
+	seat := judge.New().Able(acting()).Assigned(db)
+	server := api.New(db, log).WithJudge(seat)
 	if config, enabled := photoConfig(); enabled {
-		seat := judge.New().Able(acting()).Assigned(db)
 		manager := photos.Manage(ctx, config, func(state photos.State, err error) {
 			if err != nil {
 				log.Warn("photo storage unavailable; retrying", "state", state, "error", err)

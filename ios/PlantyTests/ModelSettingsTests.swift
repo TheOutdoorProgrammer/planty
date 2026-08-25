@@ -10,15 +10,15 @@ struct ModelSettingsTests {
           "models": [
             {"provider":"claude","id":"claude-opus-5","ref":"claude/claude-opus-5",
              "name":"Claude Opus 5","rank":1,
-             "skills":{"vision":true,"schema":true,"tools":true},
+             "skills":{"vision":true,"schema":true,"tools":true,"offered_photos":true},
              "jobs":["assess","identify","consult","ask","postmortem","owner_update"]},
             {"provider":"opencode-go","id":"qwen3.8-max","ref":"opencode-go/qwen3.8-max",
              "name":"Qwen3.8 Max","rank":11,"note":"Best at photographs.",
-             "skills":{"vision":true,"schema":true,"tools":true},
+             "skills":{"vision":true,"schema":true,"tools":true,"offered_photos":true},
              "jobs":["assess","identify","consult","ask","postmortem","owner_update"]},
             {"provider":"opencode-go","id":"deepseek-v4-flash","ref":"opencode-go/deepseek-v4-flash",
              "name":"DeepSeek V4 Flash","rank":19,"note":"Text only.",
-             "skills":{"vision":false,"schema":true,"tools":true},
+             "skills":{"vision":false,"schema":true,"tools":true,"offered_photos":true},
              "jobs":["assess","postmortem","owner_update"]}
           ]
         }
@@ -48,16 +48,31 @@ struct ModelSettingsTests {
             {"assignments":[
               {"job":"assess","provider":"opencode-go","model":"deepseek-v4-flash",
                "ref":"opencode-go/deepseek-v4-flash","default":false},
-              {"job":"identify","default":true}
+              {"job":"identify","default":true},
+              {"job":"consult","default":true,"offered_photos":false}
             ]}
             """)
 
         let assignments = try await stub.client().jobAssignments()
         #expect(assignments.first?.job == .assess)
         #expect(assignments.first?.isDefault == false)
-        #expect(assignments.last?.job == .identify)
-        #expect(assignments.last?.isDefault == true)
-        #expect(assignments.last?.ref == nil)
+        #expect(assignments[1].job == .identify)
+        #expect(assignments[1].isDefault == true)
+        #expect(assignments[1].ref == nil)
+        #expect(assignments.last?.offeredPhotos == false)
+    }
+
+    @Test("The store exposes when the selected consultation provider cannot open history")
+    func historicalPhotoCapability() async {
+        let stub = IsolatedStubTransport()
+        stub.respond(routes: [
+            "/v1/models": Self.catalog,
+            "/v1/model-assignments": #"{"assignments":[{"job":"consult","default":true,"offered_photos":false}]}"#
+        ])
+        let store = await ModelSettingsStore(api: stub.client(), isConfigured: true)
+        await store.load()
+
+        #expect(await store.canInspectHistoricalPhotos(for: .consult) == false)
     }
 
     @Test("Assigning a job sends provider and model to that job's route")

@@ -47,6 +47,13 @@ func (s *Server) WithPhotos(p photos.Storage, j *judge.Judge) *Server {
 	return s
 }
 
+// WithJudge enables model-backed routes even when photograph storage is not
+// configured. The two dependencies fail independently.
+func (s *Server) WithJudge(j *judge.Judge) *Server {
+	s.judge = j
+	return s
+}
+
 // Handler returns the routed mux. Route patterns are generated from the
 // OpenAPI contract so the server and clients cannot silently spell one
 // differently. Every response receives a request id for log correlation.

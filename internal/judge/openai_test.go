@@ -178,6 +178,37 @@ func TestNoToolsAreOfferedWithoutActing(t *testing.T) {
 	}
 }
 
+func TestOfferedHistoricalPhotoIsOpenedOnDemandWithoutActingPrivileges(t *testing.T) {
+	call := `{"choices":[{"message":{"role":"assistant","content":"","tool_calls":[
+		{"id":"photo-1","type":"function","function":{"name":"historical_photo",
+		 "arguments":"{\"index\":0}"}}]}}]}`
+	backend, seen := serve(t, call, replied(t, `{"reply":"I compared it."}`))
+
+	out, err := backend.Judge(context.Background(), Request{
+		Turns:   []Turn{ask(text("Has it changed?"))},
+		Offered: []Offer{{Label: "1 August", Media: "image/jpeg", Bytes: []byte("jpeg")}},
+	})
+	if err != nil {
+		t.Fatalf("Judge: %v", err)
+	}
+	if len((*seen)[0].Tools) != 1 || (*seen)[0].Tools[0].Function.Name != "historical_photo" {
+		t.Fatalf("photo-only request got the wrong toolbox: %+v", (*seen)[0].Tools)
+	}
+	last := (*seen)[1].Messages[len((*seen)[1].Messages)-1]
+	// The in-memory request keeps the concrete []contentPart type; marshal it
+	// to assert the tool result actually carries image bytes, not another label.
+	raw, err := json.Marshal(last.Content)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "data:image/jpeg;base64,") {
+		t.Fatalf("tool result did not carry the selected image: %s", raw)
+	}
+	if len(out.Steps) == 0 || out.Steps[0].Tool != "historical_photo" {
+		t.Fatalf("opened photo was not disclosed: %+v", out.Steps)
+	}
+}
+
 func TestAnUngatedToolboxRunsNothing(t *testing.T) {
 	box := newToolbox(&Acting{Binary: "/bin/echo"})
 	got := box.runAgent(context.Background(), "planty agent today")

@@ -26,6 +26,20 @@ func newAPIBackend(apiKey, model string) *apiBackend {
 
 func (b *apiBackend) Name() string { return "anthropic api" }
 
+// CanDo makes the direct API's limitation explicit. It can answer structured
+// one-shot work, but it has no shared acting loop and cannot open only the
+// historical photograph a consultation asks for.
+func (b *apiBackend) CanDo(job Job) error {
+	need, ok := Needs[job]
+	if !ok {
+		return fmt.Errorf("no such job %q", job)
+	}
+	if need.Tools || need.OfferedPhotos {
+		return fmt.Errorf("anthropic api is ineligible for %s: it has no acting or offered-photo loop", job)
+	}
+	return nil
+}
+
 func (b *apiBackend) Judge(ctx context.Context, req Request) (Outcome, error) {
 	output := anthropic.OutputConfigParam{
 		Format: anthropic.JSONOutputFormatParam{Schema: req.Schema},

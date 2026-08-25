@@ -26,9 +26,10 @@ var Jobs = []Job{JobAssess, JobIdentify, JobConsult, JobAsk, JobPostmortem, JobO
 // both sides so a requirement cannot be phrased differently from the ability
 // that satisfies it.
 type Skills struct {
-	Vision bool `json:"vision"`
-	Schema bool `json:"schema"`
-	Tools  bool `json:"tools"`
+	Vision        bool `json:"vision"`
+	Schema        bool `json:"schema"`
+	Tools         bool `json:"tools"`
+	OfferedPhotos bool `json:"offered_photos"`
 }
 
 // Needs is what each job demands. Schema is universal because every call site
@@ -37,8 +38,8 @@ type Skills struct {
 var Needs = map[Job]Skills{
 	JobAssess:      {Schema: true},
 	JobIdentify:    {Schema: true, Vision: true},
-	JobConsult:     {Schema: true, Vision: true, Tools: true},
-	JobAsk:         {Schema: true, Vision: true, Tools: true},
+	JobConsult:     {Schema: true, Vision: true, Tools: true, OfferedPhotos: true},
+	JobAsk:         {Schema: true, Vision: true, Tools: true, OfferedPhotos: true},
 	JobPostmortem:  {Schema: true},
 	JobOwnerUpdate: {Schema: true},
 }
@@ -81,13 +82,16 @@ func (m Model) CanDo(job Job) error {
 	if need.Tools && !m.Skills.Tools {
 		return fmt.Errorf("%s cannot call tools, and %s lets the model run planty and read pages", m.Ref(), job)
 	}
+	if need.OfferedPhotos && !m.Skills.OfferedPhotos {
+		return fmt.Errorf("%s cannot open offered historical photographs, which %s promises", m.Ref(), job)
+	}
 	return nil
 }
 
 // claudeSkills is what any Claude model reached through `claude -p` can do.
 // The CLI supplies the tool loop, so tools come from the backend rather than
 // from the model.
-var claudeSkills = Skills{Vision: true, Schema: true, Tools: true}
+var claudeSkills = Skills{Vision: true, Schema: true, Tools: true, OfferedPhotos: true}
 
 // known records observed capability, never advertised capability: gpt-5.6-luna
 // accepts response_format, answers 200, and ignores it, so it is absent here.
@@ -98,19 +102,19 @@ var known = []Model{
 	{Provider: "claude", ID: "claude-haiku-4-5-20251001", Name: "Claude Haiku 4.5", Rank: 3, Skills: claudeSkills},
 
 	{Provider: "opencode-go", ID: "kimi-k3", Name: "Kimi K3", Rank: 10,
-		Skills: Skills{Vision: true, Schema: true, Tools: true},
+		Skills: Skills{Vision: true, Schema: true, Tools: true, OfferedPhotos: true},
 		Note: "Only reasons at maximum effort, and has the smallest request " +
 			"allowance of any model here, so it occasionally refuses outright."},
 	{Provider: "opencode-go", ID: "qwen3.8-max", Name: "Qwen3.8 Max", Rank: 11,
-		Skills: Skills{Vision: true, Schema: true, Tools: true},
+		Skills: Skills{Vision: true, Schema: true, Tools: true, OfferedPhotos: true},
 		Note:   "Best measured at identifying things from a photograph."},
 	{Provider: "opencode-go", ID: "glm-5.2", Name: "GLM-5.2", Rank: 14,
-		Skills: Skills{Schema: true, Tools: true}, Note: "Text only."},
+		Skills: Skills{Schema: true, Tools: true, OfferedPhotos: true}, Note: "Text only."},
 	{Provider: "opencode-go", ID: "mimo-v2.5", Name: "MiMo-V2.5", Rank: 18,
-		Skills: Skills{Vision: true, Schema: true, Tools: true},
+		Skills: Skills{Vision: true, Schema: true, Tools: true, OfferedPhotos: true},
 		Note:   "The cheapest model that can still see and return a validated answer."},
 	{Provider: "opencode-go", ID: "deepseek-v4-flash", Name: "DeepSeek V4 Flash", Rank: 19,
-		Skills: Skills{Schema: true, Tools: true}, Note: "Text only."},
+		Skills: Skills{Schema: true, Tools: true, OfferedPhotos: true}, Note: "Text only."},
 }
 
 // Catalog is every model the given providers can reach, smartest first. A

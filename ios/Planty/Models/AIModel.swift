@@ -6,6 +6,16 @@ struct AIModelSkills: Codable, Sendable, Hashable {
     let vision: Bool
     let schema: Bool
     let tools: Bool
+    let offeredPhotos: Bool?
+
+    var canOpenOfferedPhotos: Bool { offeredPhotos == true }
+
+    enum CodingKeys: String, CodingKey {
+        case vision
+        case schema
+        case tools
+        case offeredPhotos = "offered_photos"
+    }
 }
 
 /// One selectable model. `jobs` is the server's own list of what this model may
@@ -45,6 +55,7 @@ struct JobAssignment: Codable, Sendable, Hashable, Identifiable {
     let model: String?
     let ref: String?
     let isDefault: Bool
+    let offeredPhotos: Bool?
 
     var id: AIJob { job }
 
@@ -54,6 +65,7 @@ struct JobAssignment: Codable, Sendable, Hashable, Identifiable {
         case model
         case ref
         case isDefault = "default"
+        case offeredPhotos = "offered_photos"
     }
 }
 
