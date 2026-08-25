@@ -133,20 +133,27 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 		return Answer{}, fmt.Errorf("no question was asked")
 	}
 
-	schema, err := answerSchema()
-	if err != nil {
-		return Answer{}, err
-	}
-
-	system := consultSystem
-	if j.acting != nil {
-		system += fmt.Sprintf(actingSystem, j.acting.Usage, aboutOnePlant(h.Plant.Slug))
-		if j.acting.Sources != "" {
-			system += "\n\n" + j.acting.Sources
-		}
-	}
+	system := j.conversationSystem(consultSystem, aboutOnePlant(h.Plant.Slug))
 
 	turns := []Turn{ask(text(record(h, ongoing)))}
+	turns = append(turns, replay(prior)...)
+	turns = append(turns, ask(text(asked)))
+	return j.answerConversation(ctx, JobConsult, system, turns, offered, conversation, len(prior) > 0)
+}
+
+func (j *Judge) conversationSystem(base, subject string) string {
+	if j.acting == nil {
+		return base
+	}
+	system := base + fmt.Sprintf(actingSystem, j.acting.Usage, subject)
+	if j.acting.Sources != "" {
+		system += "\n\n" + j.acting.Sources
+	}
+	return system
+}
+
+func replay(prior []PriorAnswer) []Turn {
+	turns := make([]Turn, 0, len(prior)*2)
 	for _, turn := range prior {
 		reply, err := json.Marshal(turn.Reply)
 		if err != nil {
@@ -154,26 +161,23 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 		}
 		turns = append(turns, ask(text(turn.Asked)), answered(string(reply)))
 	}
-	turns = append(turns, ask(text(asked)))
+	return turns
+}
 
+func (j *Judge) answerConversation(ctx context.Context, job Job, system string, turns []Turn,
+	offered []Offer, conversation uuid.UUID, resuming bool) (Answer, error) {
+	schema, err := answerSchema()
+	if err != nil {
+		return Answer{}, err
+	}
 	outcome, err := j.dispatch(ctx, Request{
-		Job:       JobConsult,
-		System:    system,
-		Turns:     turns,
-		Offered:   offered,
-		Schema:    schema,
-		MaxTokens: 2048,
-		Session:   &Session{ID: conversation, Resuming: len(prior) > 0},
-		Live:      true,
-		Acting:    j.acting,
-		// A conversation is answered rather than deliberated over, and a slow
-		// reply to "is this normal" is a worse answer than a quick one.
-		Effort: EffortMedium,
+		Job: job, System: system, Turns: turns, Offered: offered, Schema: schema,
+		MaxTokens: 2048, Session: &Session{ID: conversation, Resuming: resuming},
+		Live: true, Acting: j.acting, Effort: EffortMedium,
 	})
 	if err != nil {
 		return Answer{}, err
 	}
-
 	var out Answer
 	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
 		return Answer{}, fmt.Errorf("decode answer: %w", err)

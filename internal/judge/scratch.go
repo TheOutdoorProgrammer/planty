@@ -2,7 +2,6 @@ package judge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -42,21 +41,10 @@ func (j *Judge) Ask(ctx context.Context, asked string, shown []Offer,
 		return Answer{}, fmt.Errorf("nothing was asked and nothing was shown")
 	}
 
-	schema, err := answerSchema()
-	if err != nil {
-		return Answer{}, err
-	}
-
 	// The same powers as every other chat. A question about a plant in a shop
 	// is worth as much as one about a plant on the shelf, and the person can
 	// decide mid-conversation that they are buying it.
-	system := scratchSystem
-	if j.acting != nil {
-		system += fmt.Sprintf(actingSystem, j.acting.Usage, aboutNothingYet)
-		if j.acting.Sources != "" {
-			system += "\n\n" + j.acting.Sources
-		}
-	}
+	system := j.conversationSystem(scratchSystem, aboutNothingYet)
 
 	// A photograph with no question is still a question, and the commonest one.
 	opening := asked
@@ -64,36 +52,7 @@ func (j *Judge) Ask(ctx context.Context, asked string, shown []Offer,
 		opening = "What is this, and is there anything I should know about it?"
 	}
 
-	var turns []Turn
-	for _, turn := range prior {
-		reply, err := json.Marshal(turn.Reply)
-		if err != nil {
-			continue
-		}
-		turns = append(turns, ask(text(turn.Asked)), answered(string(reply)))
-	}
+	turns := replay(prior)
 	turns = append(turns, ask(text(opening)))
-
-	outcome, err := j.dispatch(ctx, Request{
-		Job:       JobAsk,
-		System:    system,
-		Turns:     turns,
-		Offered:   shown,
-		Schema:    schema,
-		MaxTokens: 2048,
-		Session:   &Session{ID: conversation, Resuming: len(prior) > 0},
-		Live:      true,
-		Acting:    j.acting,
-		Effort:    EffortMedium,
-	})
-	if err != nil {
-		return Answer{}, err
-	}
-
-	var out Answer
-	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
-		return Answer{}, fmt.Errorf("decode answer: %w", err)
-	}
-	out.Steps = outcome.Steps
-	return out, nil
+	return j.answerConversation(ctx, JobAsk, system, turns, shown, conversation, len(prior) > 0)
 }
