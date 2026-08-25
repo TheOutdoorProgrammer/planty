@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/google/uuid"
@@ -24,7 +25,13 @@ func (d Deps) actuators(ctx context.Context, out io.Writer, args []string) error
 		if lease, err := d.Store.ActiveActuatorLease(ctx, actuator.ID); err == nil {
 			state = "on until " + lease.Deadline.Format(stamp)
 		}
-		_, _ = fmt.Fprintf(out, "%s: %s (%s, %s) %s\n", actuator.ID, actuator.Name, actuator.Kind, actuator.EntityID, state)
+		plantIDs := make([]string, 0, len(actuator.PlantIDs))
+		for _, plantID := range actuator.PlantIDs {
+			plantIDs = append(plantIDs, plantID.String())
+		}
+		_, _ = fmt.Fprintf(out, "%s: %s (%s, %s) plants=%s %s\n",
+			actuator.ID, actuator.Name, actuator.Kind, actuator.EntityID,
+			strings.Join(plantIDs, ","), state)
 	}
 	return nil
 }

@@ -18,8 +18,11 @@ func (h *agentActuatorHA) CallService(_ context.Context, domain, service string,
 }
 
 func TestAgentActuatorVerbsUsePlantyIDAndIdempotency(t *testing.T) {
-	deps, _, ctx := toxicityDeps(t)
-	actuator, err := deps.Store.RegisterActuator(ctx, plant.Actuator{EntityID: "switch.agent_fan", Name: "Agent fan", Kind: plant.ActuatorSwitch})
+	deps, grown, ctx := toxicityDeps(t)
+	actuator, err := deps.Store.RegisterActuator(ctx, plant.Actuator{
+		EntityID: "switch.agent_fan", Name: "Agent fan", Kind: plant.ActuatorSwitch,
+		PlantIDs: []uuid.UUID{grown.ID},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

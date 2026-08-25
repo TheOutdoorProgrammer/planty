@@ -11,9 +11,23 @@ import (
 
 func TestActuatorRegistryLeaseAndAuditAreDurableAndIdempotent(t *testing.T) {
 	s, ctx := testStore(t)
-	actuator, err := s.RegisterActuator(ctx, plant.Actuator{EntityID: "fan.test_cabinet", Name: "Test cabinet", Kind: plant.ActuatorFan})
+	grown, err := s.CreatePlant(ctx, plant.Plant{
+		CommonName: "Actuator store test", Domain: plant.DomainHouseplant,
+		Steward: plant.StewardSelf, Status: plant.StatusAlive, Location: "test",
+		Accessibility: plant.AccessEasy, WateringMethod: plant.WateringHand,
+	})
 	if err != nil {
 		t.Fatal(err)
+	}
+	actuator, err := s.RegisterActuator(ctx, plant.Actuator{
+		EntityID: "fan.test_cabinet", Name: "Test cabinet", Kind: plant.ActuatorFan,
+		PlantIDs: []uuid.UUID{grown.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(actuator.PlantIDs) != 1 || actuator.PlantIDs[0] != grown.ID {
+		t.Fatalf("plant assignments = %#v", actuator.PlantIDs)
 	}
 	key := uuid.New()
 	_, lease, created, err := s.BeginActuatorLease(ctx, plant.ActuatorLease{
@@ -21,6 +35,10 @@ func TestActuatorRegistryLeaseAndAuditAreDurableAndIdempotent(t *testing.T) {
 	})
 	if err != nil || !created || lease.Deadline.IsZero() {
 		t.Fatalf("begin = %#v created=%v err=%v", lease, created, err)
+	}
+	listed, err := s.Actuators(ctx)
+	if err != nil || len(listed) != 1 || listed[0].ActiveLease == nil || listed[0].ActiveLease.ID != lease.ID {
+		t.Fatalf("active lease was not restored: %#v err=%v", listed, err)
 	}
 	_, replay, created, err := s.BeginActuatorLease(ctx, plant.ActuatorLease{
 		ActuatorID: actuator.ID, RequestedSeconds: 30, Actor: "tester", Source: plant.SourceApp, IdempotencyKey: key,

@@ -38,6 +38,12 @@ type IncidentEnvironmentFailure struct {
 	EntityID     string
 }
 
+type IncidentActuatorFailure struct {
+	EventID    uuid.UUID
+	ActuatorID uuid.UUID
+	PlantID    uuid.UUID
+}
+
 // IncidentSignalsForRun refuses partial and failed garden runs before exposing
 // anomaly rows to the deterministic correlation pass.
 func (s *Store) IncidentSignalsForRun(ctx context.Context, runID uuid.UUID) (JudgmentRun, []IncidentSignal, error) {
@@ -140,6 +146,33 @@ func (s *Store) IncidentEnvironmentFailures(ctx context.Context, run JudgmentRun
 	return out, rows.Err()
 }
 
+func (s *Store) IncidentActuatorFailures(ctx context.Context, run JudgmentRun, plantIDs []uuid.UUID) ([]IncidentActuatorFailure, error) {
+	if run.CompletedAt == nil || len(plantIDs) == 0 {
+		return []IncidentActuatorFailure{}, nil
+	}
+	rows, err := s.pool.Query(ctx, `SELECT DISTINCT e.id, e.actuator_id, ap.plant_id
+		FROM plant_actuator_events e
+		JOIN plant_actuator_plants ap ON ap.actuator_id = e.actuator_id
+		WHERE ap.plant_id = ANY($1)
+		  AND e.action IN ('start_failed','stop_failed')
+		  AND e.created_at >= $2::timestamptz - interval '24 hours'
+		  AND e.created_at <= $3
+		ORDER BY e.actuator_id, ap.plant_id, e.id`, plantIDs, run.StartedAt, *run.CompletedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := []IncidentActuatorFailure{}
+	for rows.Next() {
+		var failure IncidentActuatorFailure
+		if err := rows.Scan(&failure.EventID, &failure.ActuatorID, &failure.PlantID); err != nil {
+			return nil, err
+		}
+		out = append(out, failure)
+	}
+	return out, rows.Err()
+}
+
 func (s *Store) UpsertIncidentCandidate(ctx context.Context, candidate plant.IncidentCandidate) (plant.GardenIncident, bool, error) {
 	if err := candidate.Valid(); err != nil {
 		return plant.GardenIncident{}, false, err
@@ -234,7 +267,10 @@ func validateIncidentCandidateEvidence(ctx context.Context, tx pgx.Tx, candidate
 		query string
 	}{
 		{"observations", candidate.Evidence.ObservationIDs, `SELECT count(*) FROM observations WHERE id = ANY($1) AND plant_id = ANY($2)`},
-		{"actuator events", candidate.Evidence.ActuatorEventIDs, `SELECT count(*) FROM plant_actuator_events WHERE id = ANY($1) AND $2::uuid[] IS NOT NULL`},
+		{"actuator events", candidate.Evidence.ActuatorEventIDs, `SELECT count(DISTINCT e.id)
+			FROM plant_actuator_events e
+			JOIN plant_actuator_plants ap ON ap.actuator_id = e.actuator_id
+			WHERE e.id = ANY($1) AND ap.plant_id = ANY($2)`},
 	}
 	for _, check := range checks {
 		if len(check.ids) == 0 {

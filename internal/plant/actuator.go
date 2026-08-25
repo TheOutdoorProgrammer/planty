@@ -18,12 +18,14 @@ const (
 )
 
 type Actuator struct {
-	ID        uuid.UUID    `json:"id"`
-	EntityID  string       `json:"entity_id"`
-	Name      string       `json:"name"`
-	Kind      ActuatorKind `json:"kind"`
-	CreatedAt time.Time    `json:"created_at"`
-	UpdatedAt time.Time    `json:"updated_at"`
+	ID          uuid.UUID      `json:"id"`
+	EntityID    string         `json:"entity_id"`
+	Name        string         `json:"name"`
+	Kind        ActuatorKind   `json:"kind"`
+	PlantIDs    []uuid.UUID    `json:"plant_ids"`
+	ActiveLease *ActuatorLease `json:"active_lease,omitempty"`
+	CreatedAt   time.Time      `json:"created_at"`
+	UpdatedAt   time.Time      `json:"updated_at"`
 }
 
 func (a Actuator) Valid() error {
@@ -36,6 +38,19 @@ func (a Actuator) Valid() error {
 	}
 	if a.Kind != ActuatorKind(domain) {
 		return invalid("actuator kind must match its entity_id domain")
+	}
+	if len(a.PlantIDs) == 0 {
+		return invalid("actuator must be assigned to at least one plant")
+	}
+	seen := make(map[uuid.UUID]struct{}, len(a.PlantIDs))
+	for _, id := range a.PlantIDs {
+		if id == uuid.Nil {
+			return invalid("actuator plant_ids must not contain an empty id")
+		}
+		if _, duplicate := seen[id]; duplicate {
+			return invalid("actuator plant_ids must not contain duplicates")
+		}
+		seen[id] = struct{}{}
 	}
 	return nil
 }

@@ -28,7 +28,18 @@ func TestActuatorControlUsesRegisteredEntityAndReconcilesDeadline(t *testing.T) 
 	if err := db.Migrate(ctx); err != nil {
 		t.Fatal(err)
 	}
-	actuator, err := db.RegisterActuator(ctx, plant.Actuator{EntityID: "fan.job_test", Name: "Job test", Kind: plant.ActuatorFan})
+	grown, err := db.CreatePlant(ctx, plant.Plant{
+		CommonName: "Actuator job test", Domain: plant.DomainHouseplant,
+		Steward: plant.StewardSelf, Status: plant.StatusAlive, Location: "test",
+		Accessibility: plant.AccessEasy, WateringMethod: plant.WateringHand,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	actuator, err := db.RegisterActuator(ctx, plant.Actuator{
+		EntityID: "fan.job_test", Name: "Job test", Kind: plant.ActuatorFan,
+		PlantIDs: []uuid.UUID{grown.ID},
+	})
 	if err != nil {
 		t.Fatal(err)
 	}

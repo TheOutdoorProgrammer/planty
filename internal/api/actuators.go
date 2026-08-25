@@ -12,17 +12,6 @@ import (
 	"github.com/google/uuid"
 )
 
-const (
-	routeDiscoverActuatorsPending = "GET /v1/home-assistant/actuators"
-	routeListActuatorsPending     = "GET /v1/actuators"
-	routeRegisterActuatorPending  = "POST /v1/actuators"
-	routeUpdateActuatorPending    = "PATCH /v1/actuators/{id}"
-	routeDeleteActuatorPending    = "DELETE /v1/actuators/{id}"
-	routeActuatorEventsPending    = "GET /v1/actuators/{id}/events"
-	routeStartActuatorPending     = "POST /v1/actuators/{id}/start"
-	routeStopActuatorPending      = "POST /v1/actuators/{id}/stop"
-)
-
 func (s *Server) actuatorControl() job.ActuatorControl {
 	return job.ActuatorControl{Store: s.store, HA: s.actuatorHA, Log: s.log}
 }
@@ -57,8 +46,9 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		EntityID string `json:"entity_id"`
-		Name     string `json:"name"`
+		EntityID string      `json:"entity_id"`
+		Name     string      `json:"name"`
+		PlantIDs []uuid.UUID `json:"plant_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		s.fail(w, http.StatusBadRequest, err)
@@ -84,7 +74,8 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	created, err := s.store.RegisterActuator(r.Context(), plant.Actuator{
-		EntityID: strings.TrimSpace(request.EntityID), Name: request.Name, Kind: plant.ActuatorKind(candidateDomain),
+		EntityID: strings.TrimSpace(request.EntityID), Name: request.Name,
+		Kind: plant.ActuatorKind(candidateDomain), PlantIDs: request.PlantIDs,
 	})
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
@@ -99,13 +90,14 @@ func (s *Server) updateActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		Name string `json:"name"`
+		Name     string      `json:"name"`
+		PlantIDs []uuid.UUID `json:"plant_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
-	updated, err := s.store.RenameActuator(r.Context(), id, request.Name)
+	updated, err := s.store.UpdateActuator(r.Context(), id, request.Name, request.PlantIDs)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return

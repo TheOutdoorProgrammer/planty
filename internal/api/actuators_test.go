@@ -9,6 +9,7 @@ import (
 
 	"github.com/TheOutdoorProgrammer/planty/internal/api"
 	"github.com/TheOutdoorProgrammer/planty/internal/ha"
+	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/google/uuid"
 )
 
@@ -24,7 +25,15 @@ func (h *actuatorAPIHA) CallService(_ context.Context, domain, service string, d
 }
 
 func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T) {
-	_, db, _ := newServer(t)
+	_, db, ctx := newServer(t)
+	grown, err := db.CreatePlant(ctx, plant.Plant{
+		CommonName: "Actuator API test", Domain: plant.DomainHouseplant,
+		Steward: plant.StewardSelf, Status: plant.StatusAlive, Location: "test",
+		Accessibility: plant.AccessEasy, WateringMethod: plant.WateringHand,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
 	fake := &actuatorAPIHA{entities: []ha.Entity{
 		{EntityID: "sensor.humidity", Domain: "sensor", FriendlyName: "Humidity", Available: true},
 		{EntityID: "light.grow", Domain: "light", FriendlyName: "Grow light", Available: true},
@@ -41,7 +50,9 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 	if rejected.Code != http.StatusBadRequest {
 		t.Fatalf("registered non-actuator with status %d", rejected.Code)
 	}
-	created, actuator := do(t, server, http.MethodPost, "/v1/actuators", map[string]any{"entity_id": "switch.plant_fan"})
+	created, actuator := do(t, server, http.MethodPost, "/v1/actuators", map[string]any{
+		"entity_id": "switch.plant_fan", "plant_ids": []string{grown.ID.String()},
+	})
 	if created.Code != http.StatusCreated || actuator["entity_id"] != "switch.plant_fan" {
 		t.Fatalf("created = %d %#v", created.Code, actuator)
 	}

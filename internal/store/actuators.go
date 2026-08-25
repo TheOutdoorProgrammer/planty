@@ -23,7 +23,6 @@ func (s *Store) Actuators(ctx context.Context) ([]plant.Actuator, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
 	out := []plant.Actuator{}
 	for rows.Next() {
 		actuator, err := scanActuator(rows)
@@ -32,7 +31,17 @@ func (s *Store) Actuators(ctx context.Context) ([]plant.Actuator, error) {
 		}
 		out = append(out, actuator)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return nil, err
+	}
+	rows.Close()
+	for i := range out {
+		if err := s.hydrateActuator(ctx, &out[i]); err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 func (s *Store) Actuator(ctx context.Context, id uuid.UUID) (plant.Actuator, error) {
@@ -41,7 +50,13 @@ func (s *Store) Actuator(ctx context.Context, id uuid.UUID) (plant.Actuator, err
 	if errors.Is(err, pgx.ErrNoRows) {
 		return plant.Actuator{}, ErrNotFound
 	}
-	return actuator, err
+	if err != nil {
+		return plant.Actuator{}, err
+	}
+	if err := s.hydrateActuator(ctx, &actuator); err != nil {
+		return plant.Actuator{}, err
+	}
+	return actuator, nil
 }
 
 func (s *Store) RegisterActuator(ctx context.Context, actuator plant.Actuator) (plant.Actuator, error) {
@@ -50,24 +65,108 @@ func (s *Store) RegisterActuator(ctx context.Context, actuator plant.Actuator) (
 	if err := actuator.Valid(); err != nil {
 		return plant.Actuator{}, err
 	}
-	created, err := scanActuator(s.pool.QueryRow(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return plant.Actuator{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	created, err := scanActuator(tx.QueryRow(ctx, `
 		INSERT INTO plant_actuators (entity_id, name, kind) VALUES ($1,$2,$3)
 		RETURNING `+actuatorColumns, actuator.EntityID, actuator.Name, actuator.Kind))
-	return created, classify(err)
+	if err != nil {
+		return plant.Actuator{}, classify(err)
+	}
+	if err := replaceActuatorPlants(ctx, tx, created.ID, actuator.PlantIDs); err != nil {
+		return plant.Actuator{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return plant.Actuator{}, err
+	}
+	return s.Actuator(ctx, created.ID)
 }
 
-func (s *Store) RenameActuator(ctx context.Context, id uuid.UUID, name string) (plant.Actuator, error) {
+func (s *Store) UpdateActuator(ctx context.Context, id uuid.UUID, name string, plantIDs []uuid.UUID) (plant.Actuator, error) {
 	name = strings.TrimSpace(name)
-	if name == "" {
-		return plant.Actuator{}, fmt.Errorf("%w: actuator name is required", plant.ErrInvalid)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return plant.Actuator{}, err
 	}
-	actuator, err := scanActuator(s.pool.QueryRow(ctx, `UPDATE plant_actuators
-		SET name = $2, updated_at = now() WHERE id = $1 AND deleted_at IS NULL
-		RETURNING `+actuatorColumns, id, name))
+	defer func() { _ = tx.Rollback(ctx) }()
+	actuator, err := scanActuator(tx.QueryRow(ctx, `SELECT `+actuatorColumns+`
+		FROM plant_actuators WHERE id = $1 AND deleted_at IS NULL FOR UPDATE`, id))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return plant.Actuator{}, ErrNotFound
 	}
-	return actuator, err
+	if err != nil {
+		return plant.Actuator{}, err
+	}
+	actuator.Name = name
+	actuator.PlantIDs = plantIDs
+	if err := actuator.Valid(); err != nil {
+		return plant.Actuator{}, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE plant_actuators SET name = $2, updated_at = now()
+		WHERE id = $1`, id, name); err != nil {
+		return plant.Actuator{}, err
+	}
+	if err := replaceActuatorPlants(ctx, tx, id, plantIDs); err != nil {
+		return plant.Actuator{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return plant.Actuator{}, err
+	}
+	return s.Actuator(ctx, id)
+}
+
+func replaceActuatorPlants(ctx context.Context, tx pgx.Tx, actuatorID uuid.UUID, plantIDs []uuid.UUID) error {
+	var living int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM plants
+		WHERE id = ANY($1) AND archived_at IS NULL`, plantIDs).Scan(&living); err != nil {
+		return err
+	}
+	if living != len(plantIDs) {
+		return fmt.Errorf("%w: every actuator plant_id must name a living plant", plant.ErrInvalid)
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM plant_actuator_plants WHERE actuator_id = $1`, actuatorID); err != nil {
+		return err
+	}
+	for _, plantID := range plantIDs {
+		if _, err := tx.Exec(ctx, `INSERT INTO plant_actuator_plants (actuator_id, plant_id)
+			VALUES ($1,$2)`, actuatorID, plantID); err != nil {
+			return classify(err)
+		}
+	}
+	return nil
+}
+
+func (s *Store) hydrateActuator(ctx context.Context, actuator *plant.Actuator) error {
+	rows, err := s.pool.Query(ctx, `SELECT plant_id FROM plant_actuator_plants
+		WHERE actuator_id = $1 ORDER BY plant_id`, actuator.ID)
+	if err != nil {
+		return err
+	}
+	for rows.Next() {
+		var plantID uuid.UUID
+		if err := rows.Scan(&plantID); err != nil {
+			rows.Close()
+			return err
+		}
+		actuator.PlantIDs = append(actuator.PlantIDs, plantID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	lease, err := s.ActiveActuatorLease(ctx, actuator.ID)
+	if err == nil {
+		actuator.ActiveLease = &lease
+		return nil
+	}
+	if errors.Is(err, ErrNotFound) {
+		return nil
+	}
+	return err
 }
 
 func (s *Store) DeleteActuator(ctx context.Context, id uuid.UUID) error {

@@ -80,6 +80,47 @@ func (r IncidentRadar) Run(ctx context.Context, runID uuid.UUID) ([]plant.Garden
 			members, fmt.Sprintf("Shared factor worth checking: a plant in Home Assistant area %q has a new action while independent environmental sensors have no reading for this run.", area), nil, ids))
 	}
 
+	actuatorFailures, err := r.Store.IncidentActuatorFailures(ctx, run, plantIDs)
+	if err != nil {
+		return nil, err
+	}
+	signalsByPlant := make(map[uuid.UUID]store.IncidentSignal, len(signals))
+	for _, signal := range signals {
+		signalsByPlant[signal.Plant.ID] = signal
+	}
+	type actuatorGroup struct {
+		members map[uuid.UUID]store.IncidentSignal
+		events  map[uuid.UUID]bool
+	}
+	byActuator := map[uuid.UUID]*actuatorGroup{}
+	for _, failure := range actuatorFailures {
+		signal, affected := signalsByPlant[failure.PlantID]
+		if !affected {
+			continue
+		}
+		group := byActuator[failure.ActuatorID]
+		if group == nil {
+			group = &actuatorGroup{members: map[uuid.UUID]store.IncidentSignal{}, events: map[uuid.UUID]bool{}}
+			byActuator[failure.ActuatorID] = group
+		}
+		group.members[signal.Plant.ID] = signal
+		group.events[failure.EventID] = true
+	}
+	for actuatorID, group := range byActuator {
+		members := make([]store.IncidentSignal, 0, len(group.members))
+		for _, signal := range group.members {
+			members = append(members, signal)
+		}
+		eventIDs := make([]uuid.UUID, 0, len(group.events))
+		for eventID := range group.events {
+			eventIDs = append(eventIDs, eventID)
+		}
+		candidate := incidentCandidate(runID, plant.FactorActuatorFailure, actuatorID.String(), members,
+			fmt.Sprintf("Shared factor worth checking: %d affected plant entries are assigned to an actuator with a failed command near this complete run.", len(members)), nil, nil)
+		candidate.Evidence.ActuatorEventIDs = eventIDs
+		candidates = append(candidates, candidate)
+	}
+
 	sort.Slice(candidates, func(i, j int) bool {
 		if candidates[i].Factor == candidates[j].Factor {
 			return candidates[i].FactorRef < candidates[j].FactorRef

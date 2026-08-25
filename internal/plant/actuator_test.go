@@ -9,12 +9,14 @@ import (
 )
 
 func TestActuatorRequiresMatchingAllowlistedDomainAndBoundedLease(t *testing.T) {
-	if err := (Actuator{Name: "Cabinet fan", EntityID: "fan.cabinet", Kind: ActuatorFan}).Valid(); err != nil {
+	plantID := uuid.New()
+	if err := (Actuator{Name: "Cabinet fan", EntityID: "fan.cabinet", Kind: ActuatorFan, PlantIDs: []uuid.UUID{plantID}}).Valid(); err != nil {
 		t.Fatal(err)
 	}
 	for _, actuator := range []Actuator{
-		{Name: "Light", EntityID: "light.grow", Kind: ActuatorSwitch},
-		{Name: "Wrong domain", EntityID: "fan.cabinet", Kind: ActuatorSwitch},
+		{Name: "Light", EntityID: "light.grow", Kind: ActuatorSwitch, PlantIDs: []uuid.UUID{plantID}},
+		{Name: "Wrong domain", EntityID: "fan.cabinet", Kind: ActuatorSwitch, PlantIDs: []uuid.UUID{plantID}},
+		{Name: "Unassigned", EntityID: "fan.unassigned", Kind: ActuatorFan},
 	} {
 		if !errors.Is(actuator.Valid(), ErrInvalid) {
 			t.Fatalf("accepted invalid actuator %#v", actuator)

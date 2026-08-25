@@ -96,6 +96,8 @@ An uncalibrated link produces readings but must never produce an automated water
 `plant_actuators` is the explicit allowlist of Home Assistant `fan` and `switch` entities Planty may control.
 Discovery only offers those two domains for selection and never registers or actuates an entity by guessing from its name.
 Every start and stop route takes the Planty actuator UUID, never a caller-supplied Home Assistant entity ID.
+`plant_actuator_plants` assigns each registration to one or more living plants, and registration is refused without that explicit relationship.
+A shared room fan remains one actuator assigned to several plants rather than several registrations for one Home Assistant entity.
 
 `plant_actuator_leases` persists the requested duration and absolute shutdown deadline before Home Assistant receives `turn_on`.
 Durations are bounded to one hour, only one unfinished lease may exist per actuator, and command idempotency keys make request retries incapable of extending or repeating a run.
@@ -172,7 +174,7 @@ Resolution preserves the actor, conclusion, and one of `confirmed_common_cause`,
 
 Current-location grouping is deliberately limited to the current `plants.location` value.
 Planty does not infer historical pest exposure until movement history records both sides of a move.
-Registered-actuator grouping likewise remains dormant until an actuator has inspectable plant or area membership; a failed unrelated smart plug is not evidence about a plant.
+Registered-actuator correlation follows `plant_actuator_plants`, so a failed unrelated smart plug is never evidence about a plant.
 
 ## plant_health_events
 
