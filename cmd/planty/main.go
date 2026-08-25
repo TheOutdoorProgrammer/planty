@@ -25,6 +25,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/scheduledjob"
 	"github.com/TheOutdoorProgrammer/planty/internal/seed"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
+	"github.com/TheOutdoorProgrammer/planty/internal/telemetry"
 )
 
 const usage = `planty <command>
@@ -51,6 +52,7 @@ const usage = `planty <command>
 
 func main() {
 	log := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+	log = slog.New(telemetry.LogHandler(log.Handler()))
 	if err := run(log); err != nil {
 		log.Error("planty", "error", err)
 		os.Exit(1)
@@ -84,6 +86,17 @@ func run(log *slog.Logger) error {
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	shutdownTelemetry, err := telemetry.Start(ctx, "planty", version, log)
+	if err != nil {
+		return fmt.Errorf("start telemetry: %w", err)
+	}
+	defer func() {
+		flushCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer cancel()
+		if err := shutdownTelemetry(flushCtx); err != nil {
+			log.Error("flush telemetry", "error", err)
+		}
+	}()
 
 	if os.Args[1] == "agent" {
 		store.SilenceMigrations()
@@ -197,7 +210,7 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 
 	srv := &http.Server{
 		Addr:              addr,
-		Handler:           server.Handler(),
+		Handler:           telemetry.HTTPHandler(server.Handler(), "planty.http"),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
