@@ -93,6 +93,9 @@ The exported IPA must contain the matching `aps-environment` entitlement in the 
 The public install page is [fledge.theoutdoorprogrammer.com/a/zone.stout.Planty](https://fledge.theoutdoorprogrammer.com/a/zone.stout.Planty).
 `fledge.stout.zone` is an internal LAN verification route used by the deployment environment, not the user-facing distribution URL.
 The app checks the Fledge feed embedded at release time and can offer a newer build.
+The release workflow uses Quill's optional Apple signing action with the persistent Distribution identity in `APPSTORE_CERTIFICATES_FILE_BASE64` and `APPSTORE_CERTIFICATES_PASSWORD`.
+The action uses `ASC_ISSUER_ID`, `ASC_KEY_ID`, and `ASC_KEY_P8` to create or reuse an Ad Hoc profile bound to that certificate, the enabled iOS devices, and Planty's App ID capabilities.
+The workflow verifies the signed IPA and its production APNs entitlement before staging it for publication.
 
 ## Testing
 
