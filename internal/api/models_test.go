@@ -61,11 +61,11 @@ func TestAssigningAndClearingAJob(t *testing.T) {
 	h, _, _ := newServer(t)
 
 	rec, body := do(t, h, http.MethodPut, "/v1/model-assignments/assess",
-		map[string]string{"provider": "opencode-go", "model": "deepseek-v4-flash"})
+		map[string]string{"provider": "opencode-go", "model": "qwen3.8-max"})
 	if rec.Code != http.StatusOK {
 		t.Fatalf("assigning: %d %s", rec.Code, rec.Body.String())
 	}
-	if body["ref"] != "opencode-go/deepseek-v4-flash" {
+	if body["ref"] != "opencode-go/qwen3.8-max" {
 		t.Errorf("the assignment came back as %v", body["ref"])
 	}
 

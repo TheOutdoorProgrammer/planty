@@ -17,7 +17,7 @@ func TestAnAssignmentRoundTripsAndIsReadBackAsAModel(t *testing.T) {
 	}
 
 	err := s.SetModelAssignment(ctx, ModelAssignment{
-		Job: judge.JobAssess, Provider: "opencode-go", Model: "deepseek-v4-flash",
+		Job: judge.JobAssess, Provider: "opencode-go", Model: "qwen3.8-max",
 	})
 	if err != nil {
 		t.Fatalf("SetModelAssignment: %v", err)
@@ -27,7 +27,7 @@ func TestAnAssignmentRoundTripsAndIsReadBackAsAModel(t *testing.T) {
 	if !ok {
 		t.Fatal("the assignment did not come back")
 	}
-	if got.Ref() != "opencode-go/deepseek-v4-flash" {
+	if got.Ref() != "opencode-go/qwen3.8-max" {
 		t.Errorf("got %s", got.Ref())
 	}
 	if !got.Skills.Schema {
