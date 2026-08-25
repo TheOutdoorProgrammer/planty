@@ -45,6 +45,7 @@ const (
 	routeListQuestions             = "GET /v1/questions"
 	routeListReminders             = "GET /v1/plants/{slug}/reminders"
 	routeListSensors               = "GET /v1/sensors"
+	routeReady                     = "GET /readyz"
 	routeRegisterPushDevice        = "POST /v1/push-devices"
 	routeSetModelAssignment        = "PUT /v1/model-assignments/{job}"
 	routeSetReminder               = "PUT /v1/plants/{slug}/reminders"

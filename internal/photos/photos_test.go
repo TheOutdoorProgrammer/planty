@@ -2,8 +2,10 @@ package photos
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -100,5 +102,43 @@ func TestKeysDoNotCollideWithinASecond(t *testing.T) {
 	}
 	if !strings.HasPrefix(first, "golden-pothos/2026/08/18/") {
 		t.Errorf("key %q is not laid out as a timeline", first)
+	}
+}
+
+// This is the shared-node restart in miniature: Planty starts first, the
+// object store refuses the first connection, and the same Manager becomes
+// ready later without being replaced.
+func TestManagerRecoversWhenStorageStartsAfterPlanty(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	states := make(chan State, 2)
+	var attempts atomic.Int32
+	m := &Manager{
+		state: StateStarting,
+		open: func(context.Context, Config) (*Store, error) {
+			if attempts.Add(1) == 1 {
+				return nil, errors.New("connection refused")
+			}
+			return &Store{}, nil
+		},
+		retryMin: time.Millisecond,
+		retryMax: 2 * time.Millisecond,
+		changed:  func(state State, _ error) { states <- state },
+	}
+	go m.run(ctx)
+
+	for _, want := range []State{StateUnavailable, StateReady} {
+		select {
+		case got := <-states:
+			if got != want {
+				t.Fatalf("state = %q, want %q", got, want)
+			}
+		case <-time.After(time.Second):
+			t.Fatalf("never reached %q", want)
+		}
+	}
+	if store, err := m.store(); err != nil || store == nil {
+		t.Fatalf("manager did not expose the recovered store: %v", err)
 	}
 }

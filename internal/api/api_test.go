@@ -14,6 +14,7 @@ import (
 
 	"github.com/TheOutdoorProgrammer/planty/internal/api"
 	"github.com/TheOutdoorProgrammer/planty/internal/pgtest"
+	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -93,6 +94,45 @@ func TestHealthzNeedsNothing(t *testing.T) {
 	}
 	if out["status"] != "ok" {
 		t.Errorf("got %v, want ok", out["status"])
+	}
+}
+
+type readinessPhotos struct{ state photos.State }
+
+func (p *readinessPhotos) Status() (photos.State, error) { return p.state, nil }
+func (p *readinessPhotos) Put(context.Context, string, string, io.Reader, int64) (string, error) {
+	return "", nil
+}
+func (p *readinessPhotos) Get(context.Context, string) (io.ReadCloser, error) { return nil, nil }
+func (p *readinessPhotos) URL(context.Context, string, time.Duration) (string, error) {
+	return "", nil
+}
+func (p *readinessPhotos) Delete(context.Context, string) error { return nil }
+
+func TestReadinessWaitsForConfiguredPhotosWithoutKillingLiveness(t *testing.T) {
+	_, db, _ := newServer(t)
+	storage := &readinessPhotos{state: photos.StateUnavailable}
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := api.New(db, quiet).WithPhotos(storage, nil).Handler()
+
+	live, body := do(t, h, http.MethodGet, "/healthz", nil)
+	if live.Code != http.StatusOK {
+		t.Fatalf("liveness = %d, want 200", live.Code)
+	}
+	components, _ := body["components"].(map[string]any)
+	if components["photos"] != "unavailable" {
+		t.Fatalf("health components = %#v", components)
+	}
+
+	notReady, _ := do(t, h, http.MethodGet, "/readyz", nil)
+	if notReady.Code != http.StatusServiceUnavailable {
+		t.Fatalf("readiness = %d, want 503", notReady.Code)
+	}
+
+	storage.state = photos.StateReady
+	ready, body := do(t, h, http.MethodGet, "/readyz", nil)
+	if ready.Code != http.StatusOK || body["status"] != "ready" {
+		t.Fatalf("ready response = %d %#v", ready.Code, body)
 	}
 }
 

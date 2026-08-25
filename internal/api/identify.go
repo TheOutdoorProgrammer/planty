@@ -78,11 +78,6 @@ func (s *Server) plantFromPhoto(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusUnprocessableEntity, err)
 		return
 	}
-	if p.Slug, err = s.store.FreeSlug(r.Context(), p.CommonName); err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
-		return
-	}
-
 	created, err := s.store.CreatePlant(r.Context(), p)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)

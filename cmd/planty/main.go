@@ -145,12 +145,16 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
 	}
 
 	server := api.New(db, log)
-	if store, err := photoStore(ctx); err != nil {
-		log.Warn("photo storage unavailable, photo routes disabled", "error", err)
-	} else if store != nil {
+	if config, enabled := photoConfig(); enabled {
 		seat := judge.New().Able(acting()).Assigned(db)
-		server = server.WithPhotos(store, seat)
-		log.Info("photo storage ready", "judge", backendName(seat), "can_act", acting() != nil)
+		manager := photos.Manage(ctx, config, func(state photos.State, err error) {
+			if err != nil {
+				log.Warn("photo storage unavailable; retrying", "state", state, "error", err)
+				return
+			}
+			log.Info("photo storage ready", "judge", backendName(seat), "can_act", acting() != nil)
+		})
+		server = server.WithPhotos(manager, seat)
 	}
 
 	srv := &http.Server{
@@ -173,16 +177,16 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger) error {
 	return nil
 }
 
-func photoStore(ctx context.Context) (*photos.Store, error) {
+func photoConfig() (photos.Config, bool) {
 	endpoint := os.Getenv("PLANTY_S3_ENDPOINT")
 	if endpoint == "" {
-		return nil, nil
+		return photos.Config{}, false
 	}
 	bucket := os.Getenv("PLANTY_S3_BUCKET")
 	if bucket == "" {
 		bucket = "planty"
 	}
-	return photos.Open(ctx, photos.Config{
+	return photos.Config{
 		Endpoint:       endpoint,
 		PublicEndpoint: os.Getenv("PLANTY_S3_PUBLIC_ENDPOINT"),
 		AccessKey:      os.Getenv("PLANTY_S3_ACCESS_KEY"),
@@ -190,7 +194,7 @@ func photoStore(ctx context.Context) (*photos.Store, error) {
 		Bucket:         bucket,
 		UseSSL:         os.Getenv("PLANTY_S3_SSL") == "true",
 		PublicSSL:      os.Getenv("PLANTY_S3_PUBLIC_SSL") != "false",
-	})
+	}, true
 }
 
 // Home Assistant is only Planty's sensor, weather, and actuator bus. Notification

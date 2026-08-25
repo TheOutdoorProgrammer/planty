@@ -14,6 +14,14 @@ import (
 
 // SavePhoto records an uploaded image. Bytes live in object storage.
 func (s *Store) SavePhoto(ctx context.Context, p plant.Photo) (plant.Photo, error) {
+	saved, _, err := s.SavePhotoOnce(ctx, p)
+	return saved, err
+}
+
+// SavePhotoOnce atomically claims a content hash and reports whether this call
+// inserted it. Callers use inserted to remove a concurrently uploaded losing
+// object instead of leaking bytes that no database row references.
+func (s *Store) SavePhotoOnce(ctx context.Context, p plant.Photo) (plant.Photo, bool, error) {
 	if p.TakenAt.IsZero() {
 		p.TakenAt = time.Now().UTC()
 	}
@@ -24,18 +32,21 @@ func (s *Store) SavePhoto(ctx context.Context, p plant.Photo) (plant.Photo, erro
 		owner = p.PlantID
 	}
 
-	// The same capture saved and then asked about arrives twice. Returning the
-	// first row rather than writing a second is what keeps a timeline free of
-	// pairs nobody can tell apart.
-	if existing, found, err := s.PhotoByHash(ctx, p.PlantID, p.ContentHash); err != nil {
-		return plant.Photo{}, err
-	} else if found {
-		return existing, nil
+	conflict := ""
+	if p.ContentHash != "" {
+		if p.PlantID == uuid.Nil {
+			conflict = ` ON CONFLICT (content_hash)
+				WHERE content_hash IS NOT NULL AND plant_id IS NULL DO NOTHING`
+		} else {
+			conflict = ` ON CONFLICT (plant_id, content_hash)
+				WHERE content_hash IS NOT NULL AND plant_id IS NOT NULL DO NOTHING`
+		}
 	}
 
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO photos (plant_id, storage_key, taken_at, caption, content_hash)
 		VALUES ($1, $2, $3, nullif($4,''), nullif($5,''))
+		`+conflict+`
 		RETURNING id, plant_id, storage_key, taken_at, coalesce(caption,''),
 		          coalesce(vision_findings,''), analyzed_at, created_at`,
 		owner, p.StorageKey, p.TakenAt, p.Caption, p.ContentHash)
@@ -44,11 +55,24 @@ func (s *Store) SavePhoto(ctx context.Context, p plant.Photo) (plant.Photo, erro
 	var back *uuid.UUID
 	err := row.Scan(&out.ID, &back, &out.StorageKey, &out.TakenAt,
 		&out.Caption, &out.VisionFindings, &out.AnalyzedAt, &out.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) && p.ContentHash != "" {
+		existing, found, lookupErr := s.PhotoByHash(ctx, p.PlantID, p.ContentHash)
+		if lookupErr != nil {
+			return plant.Photo{}, false, lookupErr
+		}
+		if !found {
+			return plant.Photo{}, false, fmt.Errorf("photo hash conflict disappeared")
+		}
+		return existing, false, nil
+	}
+	if err != nil {
+		return plant.Photo{}, false, err
+	}
 	if back != nil {
 		out.PlantID = *back
 	}
 	out.ContentHash = p.ContentHash
-	return out, err
+	return out, true, nil
 }
 
 // PhotoByHash finds an identical upload already filed against the same owner,

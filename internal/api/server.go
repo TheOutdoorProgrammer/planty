@@ -26,7 +26,7 @@ const requestIDHeader = "X-Request-ID"
 type Server struct {
 	store         *store.Store
 	log           *slog.Logger
-	photos        *photos.Store
+	photos        photos.Storage
 	judge         *judge.Judge
 	homeAssistant homeAssistantDiscoverer
 }
@@ -42,7 +42,7 @@ func New(s *store.Store, log *slog.Logger) *Server {
 }
 
 // WithPhotos enables the photo timeline and vision diagnosis routes.
-func (s *Server) WithPhotos(p *photos.Store, j *judge.Judge) *Server {
+func (s *Server) WithPhotos(p photos.Storage, j *judge.Judge) *Server {
 	s.photos, s.judge = p, j
 	return s
 }
@@ -54,6 +54,7 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc(routeHealth, s.health)
+	mux.HandleFunc(routeReady, s.ready)
 
 	mux.HandleFunc(routeListPlants, s.listPlants)
 	mux.HandleFunc(routeCreatePlant, s.createPlant)
@@ -141,7 +142,39 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusServiceUnavailable, err)
 		return
 	}
-	s.ok(w, http.StatusOK, map[string]string{"status": "ok"})
+	s.ok(w, http.StatusOK, map[string]any{
+		"status": "ok",
+		"components": map[string]string{
+			"database": "ready",
+			"photos":   s.photoState(),
+		},
+	})
+}
+
+// ready is stricter than liveness: a configured dependency that is still
+// reconnecting keeps this pod out of service without asking Kubernetes to kill
+// the process that is doing the healing.
+func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.Healthy(r.Context()); err != nil {
+		s.fail(w, http.StatusServiceUnavailable, err)
+		return
+	}
+	if state := s.photoState(); state == string(photos.StateStarting) || state == string(photos.StateUnavailable) {
+		s.fail(w, http.StatusServiceUnavailable, photos.ErrUnavailable)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]string{"status": "ready"})
+}
+
+func (s *Server) photoState() string {
+	if s.photos == nil {
+		return "disabled"
+	}
+	if reporter, ok := s.photos.(interface{ Status() (photos.State, error) }); ok {
+		state, _ := reporter.Status()
+		return string(state)
+	}
+	return string(photos.StateReady)
 }
 
 func (s *Server) ok(w http.ResponseWriter, code int, body any) {

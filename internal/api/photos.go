@@ -99,13 +99,29 @@ func (s *Server) keepPhoto(ctx context.Context, p plant.Plant, body []byte,
 		return plant.Photo{}, err
 	}
 
-	return s.store.SavePhoto(ctx, plant.Photo{
+	saved, inserted, err := s.store.SavePhotoOnce(ctx, plant.Photo{
 		PlantID:     p.ID,
 		StorageKey:  key,
 		TakenAt:     takenAt,
 		Caption:     caption,
 		ContentHash: sum,
 	})
+	if err != nil {
+		return plant.Photo{}, s.compensatePhoto(ctx, key, err)
+	}
+	if !inserted && saved.StorageKey != key {
+		if err := s.photos.Delete(ctx, key); err != nil {
+			return plant.Photo{}, fmt.Errorf("discard duplicate object: %w", err)
+		}
+	}
+	return saved, nil
+}
+
+func (s *Server) compensatePhoto(ctx context.Context, key string, cause error) error {
+	if err := s.photos.Delete(ctx, key); err != nil {
+		return errors.Join(cause, fmt.Errorf("remove unreferenced photo %s: %w", key, err))
+	}
+	return cause
 }
 
 func statusForPhoto(err error) int {
@@ -114,6 +130,8 @@ func statusForPhoto(err error) int {
 		return http.StatusUnsupportedMediaType
 	case errors.Is(err, ErrPhotoSize):
 		return http.StatusRequestEntityTooLarge
+	case errors.Is(err, photos.ErrUnavailable):
+		return http.StatusServiceUnavailable
 	default:
 		return http.StatusBadGateway
 	}

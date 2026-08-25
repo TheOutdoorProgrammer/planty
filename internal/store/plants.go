@@ -75,16 +75,6 @@ func (s *Store) CreatePlant(ctx context.Context, p plant.Plant) (plant.Plant, er
 	if err := p.Valid(); err != nil {
 		return plant.Plant{}, err
 	}
-	if p.Slug == "" {
-		// FreeSlug rather than Slugify: owning two ferns is ordinary, and the
-		// plain form collided so the second one was refused outright. Two
-		// callers already did this and the plain create endpoint did not.
-		free, err := s.FreeSlug(ctx, p.CommonName)
-		if err != nil {
-			return plant.Plant{}, err
-		}
-		p.Slug = free
-	}
 
 	profile, err := json.Marshal(p.CareProfile)
 	if err != nil {
@@ -95,7 +85,45 @@ func (s *Store) CreatePlant(ctx context.Context, p plant.Plant) (plant.Plant, er
 		return plant.Plant{}, err
 	}
 
-	row := s.pool.QueryRow(ctx, `
+	if p.Slug == "" {
+		tx, err := s.pool.Begin(ctx)
+		if err != nil {
+			return plant.Plant{}, err
+		}
+		defer func() { _ = tx.Rollback(ctx) }()
+
+		base := Slugify(p.CommonName)
+		if base == "" {
+			return plant.Plant{}, fmt.Errorf("no slug can be made from %q", p.CommonName)
+		}
+		// One allocator per base slug. The lock is transaction-scoped, so a
+		// crashed creator cannot strand it and unrelated plant names proceed.
+		if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, base); err != nil {
+			return plant.Plant{}, fmt.Errorf("lock slug %s: %w", base, err)
+		}
+		p.Slug, err = freeSlug(ctx, tx, base)
+		if err != nil {
+			return plant.Plant{}, err
+		}
+		created, err := insertPlant(ctx, tx, p, profile, toxicity)
+		if err != nil {
+			return plant.Plant{}, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return plant.Plant{}, err
+		}
+		return created, nil
+	}
+
+	return insertPlant(ctx, s.pool, p, profile, toxicity)
+}
+
+type plantInserter interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}
+
+func insertPlant(ctx context.Context, db plantInserter, p plant.Plant, profile, toxicity []byte) (plant.Plant, error) {
+	row := db.QueryRow(ctx, `
 		INSERT INTO plants (
 			slug, common_name, botanical_name, variety,
 			domain, steward, status, location, ha_area,
@@ -259,8 +287,15 @@ func (s *Store) FreeSlug(ctx context.Context, name string) (string, error) {
 	if base == "" {
 		return "", fmt.Errorf("no slug can be made from %q", name)
 	}
+	return freeSlug(ctx, s.pool, base)
+}
 
-	rows, err := s.pool.Query(ctx,
+type slugQuerier interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
+func freeSlug(ctx context.Context, db slugQuerier, base string) (string, error) {
+	rows, err := db.Query(ctx,
 		`SELECT slug FROM plants WHERE slug = $1 OR slug LIKE $1 || '-%'`, base)
 	if err != nil {
 		return "", fmt.Errorf("look up slugs like %s: %w", base, err)
@@ -287,5 +322,5 @@ func (s *Store) FreeSlug(ctx context.Context, name string) (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("no free slug for %q", name)
+	return "", fmt.Errorf("no free slug for %q", base)
 }

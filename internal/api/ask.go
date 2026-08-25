@@ -131,12 +131,17 @@ func (s *Server) attach(ctx context.Context, conversation uuid.UUID, encoded str
 		return nil, nil, err
 	}
 
-	saved, err := s.store.SavePhoto(ctx, plant.Photo{
+	saved, inserted, err := s.store.SavePhotoOnce(ctx, plant.Photo{
 		StorageKey: key, TakenAt: taken,
 		ContentHash: fmt.Sprintf("%x", sha256.Sum256(raw)),
 	})
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, s.compensatePhoto(ctx, key, err)
+	}
+	if !inserted && saved.StorageKey != key {
+		if err := s.photos.Delete(ctx, key); err != nil {
+			return nil, nil, fmt.Errorf("discard duplicate object: %w", err)
+		}
 	}
 
 	// The id travels with it, because attaching it to a plant later is a
