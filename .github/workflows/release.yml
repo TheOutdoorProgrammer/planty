@@ -61,11 +61,13 @@ jobs:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           TEAM: ${{ secrets.APPLE_TEAM_ID }}
           PLANTY_BASE_URL: ${{ secrets.PLANTY_BASE_URL }}
+          PLANTY_API_TOKEN: ${{ secrets.PLANTY_API_TOKEN }}
           FLEDGE_BASE_URL: ${{ secrets.FLEDGE_URL }}
           # Monotonic and never reused, which is all a build number owes anyone.
           BUILD_NUMBER: ${{ github.run_number }}
         run: |
           set -euo pipefail
+          : "${PLANTY_API_TOKEN:?PLANTY_API_TOKEN must be configured before releasing}"
           auth=(
             -allowProvisioningUpdates
             -authenticationKeyPath "$RUNNER_TEMP/keys/AuthKey_$ASC_KEY_ID.p8"
@@ -87,6 +89,7 @@ jobs:
             CODE_SIGNING_REQUIRED=NO \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             PLANTY_BASE_URL="$PLANTY_BASE_URL" \
+            PLANTY_API_TOKEN="$PLANTY_API_TOKEN" \
             FLEDGE_BASE_URL="$FLEDGE_BASE_URL"
 
           # GitHub's ephemeral runner has no persistent signing key and asking
