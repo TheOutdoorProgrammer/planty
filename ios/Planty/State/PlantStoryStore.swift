@@ -12,6 +12,7 @@ final class PlantStoryStore {
     private(set) var error: PlantyError?
     private(set) var isLoading = false
     private(set) var isLoadingEarlier = false
+    private(set) var isAssessing = false
     private(set) var hasLoaded = false
 
     private let api: any PlantyAPI
@@ -50,8 +51,8 @@ final class PlantStoryStore {
     /// A verdict older than the policy allows cannot make this plant look calm.
     var freshness: Freshness {
         guard let verdict else { return .stale(since: .distantPast, reason: .checkedNothing) }
-        let age = clock().timeIntervalSince(verdict.forDate)
-        return age > policy.maxAge ? .stale(since: verdict.forDate, reason: .tooOld) : .fresh
+        let age = clock().timeIntervalSince(verdict.createdAt)
+        return age > policy.maxAge ? .stale(since: verdict.createdAt, reason: .tooOld) : .fresh
     }
 
     var careState: CareState {
@@ -61,7 +62,7 @@ final class PlantStoryStore {
     /// "Last compared today at 8:04 AM", or an honest admission there is none.
     var lastComparedLine: String {
         guard let verdict else { return "Planty has not compared anything yet." }
-        return "Last compared \(RelativeAge.dayAndTime(verdict.forDate, now: clock()))"
+        return "Last compared \(RelativeAge.dayAndTime(verdict.createdAt, now: clock()))"
     }
 
     var hasPhotos: Bool { !timeline.photos.isEmpty }
@@ -178,12 +179,38 @@ final class PlantStoryStore {
     /// Failures come back to the sheet that asked instead of landing in
     /// `error`, which the screen reads as "the story did not load".
     func record(_ kind: ObservationKind, note: String? = nil) async -> PlantyError? {
+        switch await recordEntry(kind, note: note) {
+        case .success: nil
+        case .failure(let error): error
+        }
+    }
+
+    func recordEntry(
+        _ kind: ObservationKind,
+        note: String? = nil
+    ) async -> Result<PlantObservation, PlantyError> {
         do {
             let created = try await api.addObservation(
                 slug: plant.slug,
                 observation: NewObservation(kind: kind, body: note)
             )
             timeline.observations.insert(created, at: 0)
+            return .success(created)
+        } catch {
+            return .failure(PlantyError.from(error))
+        }
+    }
+
+    func assessNow() async -> PlantyError? {
+        guard !isAssessing else { return nil }
+        isAssessing = true
+        defer { isAssessing = false }
+
+        do {
+            let fresh = try await api.assess(slug: plant.slug)
+            detail?.verdict = fresh
+            timeline.verdicts.removeAll { $0.id == fresh.id }
+            timeline.verdicts.insert(fresh, at: 0)
             return nil
         } catch {
             return PlantyError.from(error)

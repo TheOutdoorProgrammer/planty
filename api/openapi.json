@@ -68,6 +68,9 @@
     "/v1/photos/{id}": {"delete": {"operationId": "deletePhoto"}},
     "/v1/plants/{slug}/timeline": {"get": {"operationId": "getTimeline"}},
     "/v1/plants/{slug}/ask": {"post": {"operationId": "askPlant"}},
+    "/v1/plants/{slug}/assess": {"post": {"operationId": "assessPlant"}},
+    "/v1/plants/{slug}/conversations": {"get": {"operationId": "listPlantConversations"}},
+    "/v1/plants/{slug}/conversations/{id}": {"get": {"operationId": "getPlantConversation"}},
     "/v1/plants/{slug}/reminders": {
       "get": {"operationId": "listReminders"},
       "put": {"operationId": "setReminder"}

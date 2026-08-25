@@ -120,6 +120,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeDeletePhoto, s.deletePhoto)
 	mux.HandleFunc(routeGetTimeline, s.timeline)
 	mux.HandleFunc(routeAskPlant, s.consult)
+	mux.HandleFunc(routeAssessPlant, s.assessPlant)
+	mux.HandleFunc(routeListPlantConversations, s.listPlantConversations)
+	mux.HandleFunc(routeGetPlantConversation, s.getPlantConversation)
 
 	mux.HandleFunc(routeListReminders, s.listReminders)
 	mux.HandleFunc(routeSetReminder, s.setReminder)

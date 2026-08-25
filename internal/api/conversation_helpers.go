@@ -36,13 +36,21 @@ func (s *Server) conversationHistory(ctx context.Context, ownerID uuid.UUID,
 // Keeping it here means a new field cannot be returned by plant chat but
 // silently disappear from scratch chat, or vice versa.
 func conversationResponse(saved store.ConsultTurn) map[string]any {
+	suggestions := saved.Reply.Suggestions
+	if suggestions == nil {
+		suggestions = []string{}
+	}
+	steps := saved.Reply.Steps
+	if steps == nil {
+		steps = []judge.Step{}
+	}
 	return map[string]any{
 		"id":                   saved.ID,
 		"conversation_id":      saved.ConversationID,
 		"reply":                saved.Reply.Reply,
 		"confidence":           saved.Reply.Confidence,
 		"looked_at":            saved.Reply.LookedAt,
-		"suggested_follow_ups": saved.Reply.Suggestions,
-		"steps":                saved.Reply.Steps,
+		"suggested_follow_ups": suggestions,
+		"steps":                steps,
 	}
 }

@@ -32,7 +32,8 @@ struct PlantStoryScreen: View {
                 EvidenceWorkflowSection(
                     plant: store.plant,
                     photos: store.timeline.photos,
-                    observations: store.timeline.observations
+                    observations: store.timeline.observations,
+                    record: store.recordEntry
                 )
 
                 if !store.plant.status.isRetired {
@@ -285,6 +286,24 @@ struct PlantStoryScreen: View {
             Text(store.verdict?.reasoning ?? store.careState.sentence)
                 .font(.body)
                 .foregroundStyle(PlantyColor.secondaryText)
+            if store.hasPhotos {
+                Button {
+                    Task { actionError = await store.assessNow() }
+                } label: {
+                    HStack {
+                        if store.isAssessing {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "sparkles")
+                        }
+                        Text(store.isAssessing ? "Analyzing latest photo…" : "Analyze latest photo again")
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .disabled(store.isAssessing)
+                .accessibilityHint("Runs a fresh Planty assessment now using the newest photo and current care record")
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .plantyCard(border: store.careState.color.opacity(0.22))
@@ -295,9 +314,9 @@ struct PlantStoryScreen: View {
             SectionHeading("Actions")
             LazyVGrid(columns: actionColumns, spacing: 10) {
                 NavigationLink {
-                    ConsultScreen(store: session.consultStore(for: store.plant))
+                    PlantChatsScreen(store: session.chatsStore(for: store.plant))
                 } label: {
-                    ActionFace("Ask Planty", icon: "bubble.left.and.text.bubble.right.fill")
+                    ActionFace("Planty chats", icon: "bubble.left.and.text.bubble.right.fill")
                 }
                 .buttonStyle(SecondaryButtonStyle())
 
@@ -341,9 +360,9 @@ struct PlantStoryScreen: View {
             SectionHeading("Reference")
             LazyVGrid(columns: actionColumns, spacing: 10) {
                 NavigationLink {
-                    ConsultScreen(store: session.consultStore(for: store.plant))
+                    PlantChatsScreen(store: session.chatsStore(for: store.plant))
                 } label: {
-                    ActionFace("Ask Planty", icon: "bubble.left.and.text.bubble.right.fill")
+                    ActionFace("Planty chats", icon: "bubble.left.and.text.bubble.right.fill")
                 }
                 .buttonStyle(SecondaryButtonStyle())
 

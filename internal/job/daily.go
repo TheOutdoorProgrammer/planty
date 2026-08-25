@@ -103,6 +103,37 @@ func (d Daily) Run(ctx context.Context) error {
 	return d.notify(ctx, digest)
 }
 
+// AssessPlant runs the same evidence gathering and judgment as the daily job
+// for one plant without sending a garden-wide notification.
+func (d Daily) AssessPlant(ctx context.Context, p plant.Plant) (plant.Verdict, error) {
+	if d.Judge == nil {
+		return plant.Verdict{}, errors.New("no model backend is configured")
+	}
+
+	run, err := d.Store.StartJudgmentRun(ctx, 1)
+	if err != nil {
+		return plant.Verdict{}, fmt.Errorf("start judgment run: %w", err)
+	}
+	result, assessErr := d.judgeOne(ctx, run.ID, p)
+	if err := d.Store.RecordJudgmentPlantResult(ctx, run.ID,
+		judgmentResult(p.ID, result, assessErr)); err != nil {
+		return plant.Verdict{}, fmt.Errorf("record judgment result: %w", err)
+	}
+	if err := d.Store.CompleteJudgmentRun(ctx, run.ID); err != nil {
+		return plant.Verdict{}, fmt.Errorf("complete judgment run: %w", err)
+	}
+	if assessErr != nil {
+		return plant.Verdict{}, assessErr
+	}
+	d.detectIncidents(ctx, run.ID)
+
+	verdict, err := d.Store.LatestVerdict(ctx, p.ID)
+	if err != nil {
+		return plant.Verdict{}, fmt.Errorf("read fresh verdict: %w", err)
+	}
+	return verdict, nil
+}
+
 func (d Daily) judgeOne(ctx context.Context, runID uuid.UUID, p plant.Plant) (judge.Result, error) {
 	evidence, err := d.gather(ctx, p)
 	if err != nil {

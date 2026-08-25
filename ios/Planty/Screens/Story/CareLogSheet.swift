@@ -7,13 +7,23 @@ struct CareLogSheet: View {
     let record: (ObservationKind, String?) async -> PlantyError?
 
     @Environment(\.dismiss) private var dismiss
-    @State private var kind = ObservationKind.watered
+    @State private var kind: ObservationKind
     @State private var note = ""
     @State private var action = AsyncSheetAction()
 
     private static let kinds: [ObservationKind] = [
         .watered, .misted, .fertilized, .pruned, .repotted, .moved, .note, .symptom
     ]
+
+    init(
+        plantName: String,
+        initialKind: ObservationKind = .watered,
+        record: @escaping (ObservationKind, String?) async -> PlantyError?
+    ) {
+        self.plantName = plantName
+        self.record = record
+        _kind = State(initialValue: initialKind)
+    }
 
     var body: some View {
         NavigationStack {

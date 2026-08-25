@@ -98,6 +98,27 @@ func TestEvidenceWindowRunsOneClosedLoopLifecycle(t *testing.T) {
 	}
 }
 
+func TestEvidenceWindowRejectsAnInterventionBeforeItsBaseline(t *testing.T) {
+	s, ctx := testStore(t)
+	p := newPlant(t, s, ctx, "Evidence ordering")
+	baseline := testPhoto(t, s, ctx, p.ID, "baseline")
+	window, err := s.ProposeEvidenceWindow(ctx, testRecheckProposal(t, p, baseline))
+	if err != nil {
+		t.Fatal(err)
+	}
+	intervention, err := s.AddObservation(ctx, plant.Observation{
+		PlantID: p.ID, Kind: plant.ObservedMoved, Source: plant.SourceApp,
+		Actor: "joey", OccurredAt: baseline.TakenAt.Add(-time.Hour),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.StartEvidenceWindow(ctx, window.ID, intervention.ID, plant.SourceApp, "joey"); err == nil {
+		t.Fatal("an intervention before the baseline started the evidence window")
+	}
+}
+
 func TestEvidenceWindowRejectsEvidenceOwnedByAnotherPlant(t *testing.T) {
 	s, ctx := testStore(t)
 	first := newPlant(t, s, ctx, "Evidence owner one")

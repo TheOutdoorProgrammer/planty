@@ -39,6 +39,40 @@ struct ConsultStoreTests {
         #expect(api.asked.last?.1.conversationID == conversation)
     }
 
+    @Test("A saved conversation reopens with its transcript and continues")
+    @MainActor
+    func savedConversationResumes() async {
+        let conversationID = UUID()
+        let api = FakeAPI()
+        api.answer = .fixture(conversationID: conversationID)
+        let turn = PlantConversationTurn(
+            id: UUID(),
+            conversationID: conversationID,
+            asked: "What caused this spot?",
+            reply: "It looks like old mechanical damage.",
+            confidence: 0.8,
+            lookedAt: "photo.jpg",
+            suggestedFollowUps: [],
+            steps: [],
+            photoID: UUID(),
+            createdAt: .reference
+        )
+        let store = ConsultStore(
+            api: api,
+            plant: .fixture(),
+            conversation: PlantConversation(id: conversationID, turns: [turn])
+        )
+
+        #expect(store.messages.count == 2)
+        #expect(store.messages.first?.text == "What caused this spot?")
+        #expect(store.messages.first?.photoID == turn.photoID)
+
+        await store.send("Has it changed since then?")
+
+        #expect(api.asked.last?.1.conversationID == conversationID)
+        #expect(store.messages.count == 4)
+    }
+
     @Test("An empty question is not sent")
     @MainActor
     func blankQuestionsAreIgnored() async {

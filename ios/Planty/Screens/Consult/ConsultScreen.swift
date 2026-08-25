@@ -118,6 +118,13 @@ struct ConsultScreen: View {
                         .frame(maxWidth: 220, maxHeight: 220)
                         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .accessibilityLabel("Photo you sent")
+                } else if message.photoID != nil {
+                    Label("Photo attached", systemImage: "photo.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(PlantyColor.background)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(PlantyColor.pink, in: Capsule())
                 }
                 if !message.text.isEmpty {
                     Text(message.text)

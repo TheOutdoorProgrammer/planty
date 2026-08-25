@@ -174,6 +174,10 @@ final class AppSession {
         ConsultStore(api: api, plant: plant, pending: question)
     }
 
+    func chatsStore(for plant: Plant) -> PlantChatsStore {
+        PlantChatsStore(api: api, plant: plant)
+    }
+
     /// Keeps the exact Today recommendation attached to the conversation while
     /// showing only the user's own words in the transcript.
     func consultStore(for entry: DigestEntry) -> ConsultStore {

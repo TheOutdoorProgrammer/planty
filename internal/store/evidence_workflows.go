@@ -176,11 +176,13 @@ func (s *Store) StartEvidenceWindow(ctx context.Context, id, observationID uuid.
 
 	var interventionPlant uuid.UUID
 	var interventionKind plant.ObservationKind
+	var interventionAt time.Time
 	err = tx.QueryRow(ctx, `
-		SELECT o.plant_id, o.kind
+		SELECT o.plant_id, o.kind, o.occurred_at
 		FROM observations o
 		JOIN evidence_window_plants p ON p.plant_id = o.plant_id AND p.window_id = $1
-		WHERE o.id = $2`, id, observationID).Scan(&interventionPlant, &interventionKind)
+		WHERE o.id = $2`, id, observationID).
+		Scan(&interventionPlant, &interventionKind, &interventionAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return plant.EvidenceWindow{}, fmt.Errorf("%w: intervention observation does not belong to a window plant", plant.ErrInvalid)
 	}
@@ -189,6 +191,13 @@ func (s *Store) StartEvidenceWindow(ctx context.Context, id, observationID uuid.
 	}
 	if interventionKind != window.InterventionKind {
 		return plant.EvidenceWindow{}, fmt.Errorf("%w: intervention observation is %q, want %q", plant.ErrInvalid, interventionKind, window.InterventionKind)
+	}
+	baselineAt, err := validateWindowEvidence(ctx, tx, window.Baseline, now)
+	if err != nil {
+		return plant.EvidenceWindow{}, err
+	}
+	if interventionAt.Before(baselineAt) {
+		return plant.EvidenceWindow{}, fmt.Errorf("%w: intervention predates the baseline evidence", plant.ErrInvalid)
 	}
 	_ = interventionPlant
 

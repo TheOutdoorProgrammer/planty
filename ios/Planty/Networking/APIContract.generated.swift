@@ -13,6 +13,7 @@ enum APIPath {
     static func archivePlant(slug: String) -> String { "/v1/plants/\(slug)" }
     static let ask = "/v1/ask"
     static func askPlant(slug: String) -> String { "/v1/plants/\(slug)/ask" }
+    static func assessPlant(slug: String) -> String { "/v1/plants/\(slug)/assess" }
     static func calibrateSensor(id: String) -> String { "/v1/sensors/\(id)" }
     static func cancelEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)/cancel" }
     static func clearModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
@@ -39,6 +40,7 @@ enum APIPath {
     static func getExperiment(id: String) -> String { "/v1/experiments/\(id)" }
     static func getIncident(id: String) -> String { "/v1/incidents/\(id)" }
     static func getPlant(slug: String) -> String { "/v1/plants/\(slug)" }
+    static func getPlantConversation(slug: String, id: String) -> String { "/v1/plants/\(slug)/conversations/\(id)" }
     static func getPlantHealth(slug: String) -> String { "/v1/plants/\(slug)/health" }
     static func getTimeline(slug: String) -> String { "/v1/plants/\(slug)/timeline" }
     static let harvestSummary = "/v1/harvests/summary"
@@ -58,6 +60,7 @@ enum APIPath {
     static let listModelAssignments = "/v1/model-assignments"
     static let listModels = "/v1/models"
     static func listObservations(slug: String) -> String { "/v1/plants/\(slug)/observations" }
+    static func listPlantConversations(slug: String) -> String { "/v1/plants/\(slug)/conversations" }
     static func listPlantHarvests(slug: String) -> String { "/v1/plants/\(slug)/harvests" }
     static func listPlantNotes(slug: String) -> String { "/v1/plants/\(slug)/notes" }
     static let listPlants = "/v1/plants"

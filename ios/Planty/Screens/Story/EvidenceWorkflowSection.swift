@@ -4,6 +4,7 @@ struct EvidenceWorkflowSection: View {
     let plant: Plant
     let photos: [Photo]
     let observations: [PlantObservation]
+    let record: (ObservationKind, String?) async -> Result<PlantObservation, PlantyError>
 
     @Environment(AppSession.self) private var session
     @State private var proposesRecheck = false
@@ -13,7 +14,7 @@ struct EvidenceWorkflowSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            SectionHeading("Evidence rechecks", detail: "Compare the same question before and after one recorded intervention.")
+            SectionHeading("Care change follow-ups", detail: "Compare a baseline photo with what changed after a real care action.")
 
             ForEach(guardrails) { window in
                 GuardrailCard(window: window, plant: plant)
@@ -21,17 +22,23 @@ struct EvidenceWorkflowSection: View {
 
             if windows.isEmpty {
                 Text(photos.isEmpty
-                    ? "A recheck needs a baseline photo. This story has none to reference."
-                    : "No recheck is known for this plant.")
+                    ? "A before-and-after check needs a baseline photo. This story has none to reference."
+                    : "No care change is being tracked for this plant.")
                     .font(.subheadline)
                     .foregroundStyle(PlantyColor.secondaryText)
             } else {
                 ForEach(windows) { window in
-                    RecheckCard(window: window, plant: plant, photos: photos, observations: observations)
+                    RecheckCard(
+                        window: window,
+                        plant: plant,
+                        photos: photos,
+                        observations: observations,
+                        record: record
+                    )
                 }
             }
 
-            Button("Propose a photo recheck") { proposesRecheck = true }
+            Button("Track a care change") { proposesRecheck = true }
                 .buttonStyle(SecondaryButtonStyle())
                 .disabled(photos.isEmpty)
         }
@@ -81,6 +88,7 @@ private struct RecheckCard: View {
     let plant: Plant
     let photos: [Photo]
     let observations: [PlantObservation]
+    let record: (ObservationKind, String?) async -> Result<PlantObservation, PlantyError>
     @State private var acts = false
 
     var body: some View {
@@ -108,7 +116,13 @@ private struct RecheckCard: View {
         }
         .plantyCard(border: PlantyColor.cyan.opacity(0.22), padding: 14)
         .sheet(isPresented: $acts) {
-            RecheckActionSheet(window: window, plant: plant, photos: photos, observations: observations)
+            RecheckActionSheet(
+                window: window,
+                plant: plant,
+                photos: photos,
+                observations: observations,
+                record: record
+            )
         }
     }
 
@@ -128,7 +142,7 @@ private struct RecheckCard: View {
     }
 
     private var actionLabel: String {
-        switch window.status { case .proposed: "Start with intervention record"; case .active: "Attach review evidence"; case .ready: "Conclude recheck"; default: "Review" }
+        switch window.status { case .proposed: "Choose the care record"; case .active: "Attach follow-up photo"; case .ready: "Conclude follow-up"; default: "Review" }
     }
 }
 
@@ -148,7 +162,7 @@ private struct RecheckProposalSheet: View {
         NavigationStack {
             Form {
                 if let failure { Section { SheetErrorRow(headline: "The recheck was not proposed.", error: failure) } }
-                Section("Intervention") { Picker("Kind", selection: $kind) { ForEach(kinds, id: \.self) { Text($0.label).tag($0) } } }
+                Section("Care action") { Picker("What changed", selection: $kind) { ForEach(kinds, id: \.self) { Text($0.label).tag($0) } } }
                 Section("Baseline photo") {
                     Picker("Photo", selection: $baselineID) {
                         Text("Choose a photo").tag(UUID?.none)
@@ -157,16 +171,23 @@ private struct RecheckProposalSheet: View {
                         }
                     }
                 }
-                Section("Expected review evidence") { TextField("Photo instruction", text: $instruction, axis: .vertical).lineLimit(2...5) }
+                Section {
+                    TextField("How to take the comparison photo", text: $instruction, axis: .vertical)
+                        .lineLimit(2...5)
+                } header: {
+                    Text("Photo to take later")
+                } footer: {
+                    Text("This is guidance for you when the follow-up window opens. Planty cannot take the photo itself.")
+                }
                 Section("Bounded window") {
                     LabeledContent("Earliest", value: bounds.0.formatted(date: .abbreviated, time: .shortened))
                     LabeledContent("Latest", value: bounds.1.formatted(date: .abbreviated, time: .shortened))
                 }
             }
-            .plantyPage().navigationTitle("Propose recheck").navigationBarTitleDisplayMode(.inline)
+            .plantyPage().navigationTitle("Track a care change").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Propose") { Task { await submit() } }.disabled(baselineID == nil || instruction.cleaned.isEmpty) }
+                ToolbarItem(placement: .confirmationAction) { Button("Create") { Task { await submit() } }.disabled(baselineID == nil || instruction.cleaned.isEmpty) }
             }
         }
     }
@@ -195,22 +216,33 @@ private struct RecheckProposalSheet: View {
 
 private struct RecheckActionSheet: View {
     let window: EvidenceWindow; let plant: Plant; let photos: [Photo]; let observations: [PlantObservation]
+    let record: (ObservationKind, String?) async -> Result<PlantObservation, PlantyError>
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
     @State private var selectedID: UUID?
     @State private var outcome: EvidenceWindowOutcome = .improved
     @State private var conclusion = ""
     @State private var failure: PlantyError?
+    @State private var newlyRecorded: PlantObservation?
+    @State private var logsIntervention = false
 
     var body: some View {
         NavigationStack {
             Form {
                 if let failure { Section { SheetErrorRow(headline: "The recheck was not changed.", error: failure) } }
                 if window.status == .proposed {
-                    Section("Recorded intervention") {
-                        evidencePicker(observations.filter {
-                            $0.kind == window.interventionKind && $0.createdAt >= window.createdAt
-                        }.map { ($0.id, $0.occurredAt) })
+                    Section("Recorded care action") {
+                        let choices = matchingObservations
+                        if choices.isEmpty {
+                            Text("There is no \(window.interventionKind.label.lowercased()) entry to attach yet. Log what you did, then Planty can start the before-and-after clock.")
+                                .font(.subheadline)
+                                .foregroundStyle(PlantyColor.secondaryText)
+                            Button("Log \(window.interventionKind.label.lowercased())") {
+                                logsIntervention = true
+                            }
+                        } else {
+                            evidencePicker(choices.map { ($0.id, $0.occurredAt) })
+                        }
                     }
                 } else if window.status == .active {
                     Section("Review photo") {
@@ -238,6 +270,38 @@ private struct RecheckActionSheet: View {
                 ToolbarItem(placement: .confirmationAction) { Button("Save") { Task { await submit() } }.disabled(window.status == .ready ? conclusion.cleaned.isEmpty : selectedID == nil) }
             }
         }
+        .sheet(isPresented: $logsIntervention) {
+            CareLogSheet(
+                plantName: plant.commonName,
+                initialKind: window.interventionKind
+            ) { kind, note in
+                switch await record(kind, note) {
+                case .success(let observation):
+                    newlyRecorded = observation
+                    selectedID = observation.id
+                    return nil
+                case .failure(let error):
+                    return error
+                }
+            }
+            .presentationDetents([.medium, .large])
+        }
+    }
+
+    private var matchingObservations: [PlantObservation] {
+        let baselineAt = photos
+            .filter { window.baseline.map(\.id).contains($0.id) }
+            .map(\.takenAt)
+            .max()
+        return ([newlyRecorded].compactMap { $0 } + observations)
+            .filter {
+                guard $0.kind == window.interventionKind else { return false }
+                guard let baselineAt else { return true }
+                return $0.occurredAt >= baselineAt
+            }
+            .reduce(into: [UUID: PlantObservation]()) { $0[$1.id] = $1 }
+            .values
+            .sorted { $0.occurredAt > $1.occurredAt }
     }
 
     private func evidencePicker(_ choices: [(UUID, Date)]) -> some View {

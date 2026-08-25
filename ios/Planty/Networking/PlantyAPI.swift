@@ -71,6 +71,9 @@ protocol PlantyAPI: Sendable {
     func shelter(slugs: [String], indoors: Bool) async throws -> Int
     func identify(jpeg: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate]
     func ask(slug: String, question: PlantQuestion) async throws -> PlantAnswer
+    func assess(slug: String) async throws -> Verdict
+    func conversations(slug: String) async throws -> [PlantConversationSummary]
+    func conversation(slug: String, id: UUID) async throws -> PlantConversation
     func ask(_ question: ScratchQuestion) async throws -> PlantAnswer
     func createPlantFromPhoto(_ request: PlantFromPhoto) async throws -> PlantFromPhotoResult
     func linkSensor(_ link: NewSensorLink) async throws -> SensorLink
@@ -103,6 +106,16 @@ protocol PlantyAPI: Sendable {
 }
 
 extension PlantyAPI {
+    func assess(slug: String) async throws -> Verdict {
+        throw PlantyError.server(status: 503, message: "On-demand analysis is unavailable from this client.")
+    }
+
+    func conversations(slug: String) async throws -> [PlantConversationSummary] { [] }
+
+    func conversation(slug: String, id: UUID) async throws -> PlantConversation {
+        throw PlantyError.server(status: 503, message: "Chat history is unavailable from this client.")
+    }
+
     func scheduledJobs() async throws -> [ScheduledJob] { [] }
 
     func runScheduledJob(_ job: ScheduledJobID) async throws -> ScheduledJobRun {

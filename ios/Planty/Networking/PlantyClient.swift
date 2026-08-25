@@ -72,6 +72,24 @@ struct PlantyClient: PlantyAPI {
                        body: question, patience: Patience.model)
     }
 
+    func assess(slug: String) async throws -> Verdict {
+        try await send("POST", APIPath.assessPlant(slug: escaped(slug)),
+                       body: EmptyBody(), patience: Patience.model)
+    }
+
+    func conversations(slug: String) async throws -> [PlantConversationSummary] {
+        let response: PlantConversationListResponse = try await get(
+            APIPath.listPlantConversations(slug: escaped(slug))
+        )
+        return response.conversations
+    }
+
+    func conversation(slug: String, id: UUID) async throws -> PlantConversation {
+        try await get(APIPath.getPlantConversation(
+            slug: escaped(slug), id: id.uuidString
+        ))
+    }
+
     func ask(_ question: ScratchQuestion) async throws -> PlantAnswer {
         try await send("POST", APIPath.ask, body: question, patience: Patience.model)
     }

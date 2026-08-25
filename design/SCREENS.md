@@ -71,6 +71,10 @@ A plant story combines:
 - Notes, reminders, harvests, and consultations.
 - Actions for capture, care recording, editing, and contextual questions.
 
+When a photograph exists, **Analyze latest photo again** runs a fresh assessment immediately using the newest photo and current record.
+It is separate from a care change follow-up, which compares a baseline with later evidence only after a real watering, move, repot, fertilizing, or pruning record.
+The follow-up flow explains that its later-photo instruction is guidance for the person taking the photo and offers to log a missing care action inline.
+
 Photograph comparison becomes available when at least two photos exist.
 Unknown toxicity is labeled “Not checked” and is never styled as safe.
 
@@ -82,6 +86,7 @@ When the model needs a historical photo, it may fetch only photographs and trust
 
 Acting consultations may run only the documented `planty agent` commands accepted by the server's refusal gate.
 The interface shows recorded changes as results rather than trusting conversational prose as proof that a write happened.
+Each plant lists all of its saved consultations, shows the first question and newest answer, and can reopen the full transcript with the original conversation context for another follow-up.
 
 ## More
 

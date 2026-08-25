@@ -103,6 +103,7 @@ struct ConsultMessage: Identifiable, Sendable, Hashable {
     let speaker: Speaker
     let text: String
     var photo: Data?
+    var photoID: UUID?
     var answer: PlantAnswer?
 }
 
@@ -149,13 +150,32 @@ final class ConsultStore {
         plant: Plant?,
         attachment: Data? = nil,
         pending: String? = nil,
-        origin: ConsultOrigin? = nil
+        origin: ConsultOrigin? = nil,
+        conversation: PlantConversation? = nil
     ) {
         self.api = api
         self.plant = plant
         self.attachment = attachment
         self.pending = pending
         self.origin = origin
+
+        if let conversation {
+            conversationID = conversation.id
+            messages = conversation.turns.flatMap { turn in
+                [
+                    ConsultMessage(
+                        speaker: .user,
+                        text: turn.asked,
+                        photoID: turn.photoID
+                    ),
+                    ConsultMessage(
+                        speaker: .planty,
+                        text: turn.reply,
+                        answer: turn.answer
+                    )
+                ]
+            }
+        }
     }
 
     var title: String {
