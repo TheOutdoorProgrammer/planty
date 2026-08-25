@@ -34,6 +34,7 @@ final class AppSession {
     let garden: GardenStore
     let choices: ManagedChoicesStore
     let models: ModelSettingsStore
+    let images: ImageRepository
     private(set) var identification: IdentificationStore
     let updates: UpdateStore
 
@@ -45,13 +46,16 @@ final class AppSession {
         defaults: UserDefaults = .standard,
         tokens: any TokenStoring = KeychainTokenStore(),
         api: (any PlantyAPI)? = nil,
+        images: ImageRepository? = nil,
     ) {
         self.defaults = defaults
         self.tokens = tokens
+        let imageRepository = images ?? ImageRepository()
+        self.images = imageRepository
 
         let resolved = PlantyConfiguration.resolve(defaults: defaults, tokens: tokens)
         configuration = resolved
-        let client = api ?? PlantyClient(configuration: resolved)
+        let client = api ?? PlantyClient(configuration: resolved, images: imageRepository)
         self.api = client
 
         today = TodayStore(api: client, isConfigured: resolved.isConfigured)
@@ -94,7 +98,7 @@ final class AppSession {
         )
 
         configuration = PlantyConfiguration.resolve(defaults: defaults, tokens: tokens)
-        let client = PlantyClient(configuration: configuration)
+        let client = PlantyClient(configuration: configuration, images: images)
         apiGeneration += 1
         api = client
 
@@ -200,6 +204,12 @@ final class AppSession {
     }
 
     func openPushRoute(_ route: PlantyPushRoute) {
+        switch route {
+        case .settings:
+            break
+        default:
+            isShowingSettings = false
+        }
         switch route {
         case .settings:
             isShowingSettings = true

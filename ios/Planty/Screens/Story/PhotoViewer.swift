@@ -9,6 +9,7 @@ struct PhotoViewer: View {
     let photo: Photo?
     let localJPEG: Data?
 
+    @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
     @State private var zoom: CGFloat = 1
     @State private var settled: CGFloat = 1
@@ -32,10 +33,8 @@ struct PhotoViewer: View {
                         .onEnded { _ in settled = zoom }
                 )
                 .onTapGesture(count: 2) {
-                    withAnimation(.snappy) {
-                        zoom = zoom > 1 ? 1 : 3
-                        settled = zoom
-                    }
+                    zoom = zoom > 1 ? 1 : 3
+                    settled = zoom
                 }
         }
         .overlay(alignment: .topTrailing) { closeButton }
@@ -52,7 +51,7 @@ struct PhotoViewer: View {
         } else if source == nil {
             unavailable
         } else {
-            ProgressView().tint(PlantyColor.foreground)
+            ProgressView().tint(.white)
         }
     }
 
@@ -63,10 +62,20 @@ struct PhotoViewer: View {
     private func gather() async {
         if let localJPEG {
             loaded = UIImage(data: localJPEG)
+            if let photo {
+                await session.images.seed(
+                    localJPEG,
+                    for: .photo(photo, rendition: .original)
+                )
+            }
             return
         }
         guard let source else { return }
-        guard let (data, _) = try? await URLSession.shared.data(from: source) else { return }
+        let key = photo.map { ImageCacheKey.photo($0, rendition: .original) }
+            ?? ImageCacheKey.cover(plant, rendition: .original)
+        guard let data = try? await session.images.data(for: key, from: source),
+              !Task.isCancelled
+        else { return }
         loaded = UIImage(data: data)
     }
 
@@ -80,11 +89,11 @@ struct PhotoViewer: View {
                 } label: {
                     Group {
                         if isSaving {
-                            ProgressView().tint(PlantyColor.foreground)
+                            ProgressView().tint(.white)
                         } else {
                             Image(systemName: "arrow.down.circle")
                                 .font(.headline)
-                                .foregroundStyle(PlantyColor.foreground)
+                                .foregroundStyle(.white)
                         }
                     }
                     .frame(width: 44, height: 44)
@@ -96,7 +105,7 @@ struct PhotoViewer: View {
                 ShareLink(item: Image(uiImage: loaded), preview: .init("Photo", image: Image(uiImage: loaded))) {
                     Image(systemName: "square.and.arrow.up")
                         .font(.headline)
-                        .foregroundStyle(PlantyColor.foreground)
+                        .foregroundStyle(.white)
                         .frame(width: 44, height: 44)
                         .background(.black.opacity(0.5), in: Circle())
                 }
@@ -106,13 +115,13 @@ struct PhotoViewer: View {
                     Text(saveResult.message)
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(saveResult == .saved
-                            ? PlantyColor.foreground : PlantyColor.orange)
+                            ? Color.white : PlantyColor.orange)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 6)
                         .background(.black.opacity(0.5), in: Capsule())
                         .task {
                             try? await Task.sleep(for: .seconds(2))
-                            withAnimation { self.saveResult = nil }
+                            self.saveResult = nil
                         }
                 }
             }
@@ -129,9 +138,9 @@ struct PhotoViewer: View {
             try await PHPhotoLibrary.shared().performChanges {
                 PHAssetChangeRequest.creationRequestForAsset(from: image)
             }
-            withAnimation { saveResult = .saved }
+            saveResult = .saved
         } catch {
-            withAnimation { saveResult = .failed }
+            saveResult = .failed
         }
     }
 
@@ -142,7 +151,7 @@ struct PhotoViewer: View {
             Text("That photograph could not be loaded.")
                 .font(.subheadline)
         }
-        .foregroundStyle(PlantyColor.secondaryText)
+        .foregroundStyle(.white.opacity(0.75))
     }
 
     private var closeButton: some View {
@@ -151,7 +160,7 @@ struct PhotoViewer: View {
         } label: {
             Image(systemName: "xmark")
                 .font(.headline)
-                .foregroundStyle(PlantyColor.foreground)
+                .foregroundStyle(.white)
                 .frame(width: 44, height: 44)
                 .background(.black.opacity(0.5), in: Circle())
         }
@@ -169,7 +178,7 @@ struct PhotoViewer: View {
                     Text(words).font(.caption)
                 }
             }
-            .foregroundStyle(PlantyColor.foreground)
+            .foregroundStyle(.white)
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
             .background(.black.opacity(0.5), in: Capsule())

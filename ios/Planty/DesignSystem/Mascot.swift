@@ -38,10 +38,15 @@ struct PlantPhotoView: View {
     var localJPEG: Data?
     var height: CGFloat = 220
 
+    @Environment(AppSession.self) private var session
+
     /// Off for the small tiles in a list, where a tap means "open the plant".
     var opensFullScreen = true
 
     @State private var isViewing = false
+    @State private var loadedImage: UIImage?
+    @State private var loadedKey: ImageCacheKey?
+    @State private var loadFailed = false
 
     var body: some View {
         Group {
@@ -49,8 +54,10 @@ struct PlantPhotoView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-            } else if let url = photo?.renderableURL ?? plant.renderablePhotoURL {
-                remote(url)
+            } else if let photo, let url = photo.renderableURL {
+                remote(url, key: .photo(photo, rendition: .thumbnail))
+            } else if let url = plant.renderablePhotoURL {
+                remote(url, key: .cover(plant, rendition: .thumbnail))
             } else {
                 placeholder
             }
@@ -78,18 +85,38 @@ struct PlantPhotoView: View {
 
     /// A presigned link expires, so a failure here is ordinary rather than an
     /// error worth shouting about: it falls back to the same stand-in.
-    private func remote(_ url: URL) -> some View {
-        AsyncImage(url: url) { phase in
-            switch phase {
-            case .success(let image):
-                image.resizable().scaledToFill()
-            case .empty:
+    private func remote(_ url: URL, key: ImageCacheKey) -> some View {
+        Group {
+            if loadedKey == key, let loadedImage {
+                Image(uiImage: loadedImage)
+                    .resizable()
+                    .scaledToFill()
+            } else {
                 ZStack {
                     placeholder
-                    ProgressView().tint(PlantyColor.green)
+                    if !loadFailed {
+                        ProgressView().tint(PlantyColor.green)
+                    }
                 }
-            default:
-                placeholder
+            }
+        }
+        .task(id: key) {
+            loadedImage = nil
+            loadedKey = nil
+            loadFailed = false
+            do {
+                let data = try await session.images.data(for: key, from: url)
+                try Task.checkCancellation()
+                guard let image = UIImage(data: data) else {
+                    loadFailed = true
+                    return
+                }
+                loadedImage = image
+                loadedKey = key
+            } catch is CancellationError {
+                return
+            } catch {
+                loadFailed = true
             }
         }
     }

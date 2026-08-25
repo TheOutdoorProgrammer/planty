@@ -91,4 +91,23 @@ struct PushRegistrationTests {
             return
         }
     }
+
+    @Test("A push destination is not hidden behind an open settings sheet")
+    func routedPushDismissesSettings() {
+        let session = AppSession(
+            defaults: defaults(),
+            tokens: InMemoryTokenStore(),
+            api: FakeAPI()
+        )
+        session.isShowingSettings = true
+
+        session.openPushRoute(.plant("mona"))
+
+        #expect(!session.isShowingSettings)
+        #expect(session.selectedTab == .plants)
+        #expect(session.pendingPlantSlug == "mona")
+
+        session.openPushRoute(.settings)
+        #expect(session.isShowingSettings)
+    }
 }

@@ -5,6 +5,7 @@ import Foundation
 struct PlantyClient: PlantyAPI {
     let configuration: PlantyConfiguration
     let session: URLSession
+    let images: ImageRepository?
 
     /// The session used for anything waiting on a model. Injected alongside the
     /// ordinary one so a test can drive both through the same stub.
@@ -13,10 +14,12 @@ struct PlantyClient: PlantyAPI {
     init(
         configuration: PlantyConfiguration,
         session: URLSession = .plantyDefault,
-        patientSession: URLSession? = nil
+        patientSession: URLSession? = nil,
+        images: ImageRepository? = nil
     ) {
         self.configuration = configuration
         self.session = session
+        self.images = images
         self.patientSession = patientSession ?? (session === URLSession.plantyDefault
             ? .plantyPatient
             : session)
@@ -288,7 +291,20 @@ struct PlantyClient: PlantyAPI {
         var request = try makeRequest("POST", APIPath.uploadPhoto(slug: escaped(slug)))
         request.setValue(body.contentType, forHTTPHeaderField: "Content-Type")
         request.httpBody = body.finished()
-        return try decode(Photo.self, from: try await perform(request))
+        let photo = try decode(Photo.self, from: try await perform(request))
+        if let images {
+            await images.seed(jpeg, for: .photo(photo, rendition: .original))
+            await images.seed(jpeg, for: .photo(photo, rendition: .thumbnail))
+            await images.seed(
+                jpeg,
+                for: .cover(slug: slug, changedAt: photo.takenAt, rendition: .original)
+            )
+            await images.seed(
+                jpeg,
+                for: .cover(slug: slug, changedAt: photo.takenAt, rendition: .thumbnail)
+            )
+        }
+        return photo
     }
 }
 

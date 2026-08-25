@@ -98,11 +98,13 @@ final class IsolatedStubTransport {
 
     func client(
         baseURL: String = "https://planty.test",
-        token: String? = "s3cret"
+        token: String? = "s3cret",
+        images: ImageRepository? = nil
     ) -> PlantyClient {
         PlantyClient(
             configuration: PlantyConfiguration(baseURL: URL(string: baseURL), token: token),
-            session: session()
+            session: session(),
+            images: images
         )
     }
 
