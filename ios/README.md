@@ -1,151 +1,100 @@
 # Planty for iOS
 
-The field app.
-It answers one question: what should I do while I am standing here with this plant?
+Planty for iOS is the field app for deciding and recording what to do while standing beside a plant.
+It uses Swift 6.3, Swift 6 language mode, SwiftUI, and iOS 26, and it keeps no garden database of its own.
 
-Swift 6.3 toolchain, Swift 6 language mode, SwiftUI, iOS 26.
-It is a client of the HTTP service in this repo and keeps no database of its own.
+The current product principles are in [design/UI-CONCEPT.md](../design/UI-CONCEPT.md), current screen behavior is in [design/SCREENS.md](../design/SCREENS.md), and the canonical wire contract is [api/openapi.json](../api/openapi.json).
+[design/Prototype/](../design/Prototype/) is historical visual exploration rather than a source of shipped behavior.
 
-The design this implements is `design/UI-CONCEPT.md`, `design/SCREENS.md` and `design/DESIGN-NOTES.md`.
-The wire contract is `docs/DATA-MODEL.md`.
-`design/Prototype/` is untouched and stays the visual reference.
-
-## Build and run
+## Build and test
 
 ```sh
 cd ios
 xcodebuild -project Planty.xcodeproj -scheme Planty \
-  -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' \
   build
-```
 
-Tests:
-
-```sh
 xcodebuild -project Planty.xcodeproj -scheme Planty \
-  -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 17' \
   test
 ```
 
-Open it in Xcode with `open Planty.xcodeproj`.
-The app target uses a file-system synchronized group, so a new `.swift` file under `Planty/` joins the build with no project edit.
+Open the project with `open Planty.xcodeproj`.
+The target uses a file-system synchronized group, so adding a Swift file under `Planty/` does not require a project-file edit.
 
 ## Configuration
 
-Nothing is hardcoded.
-The base URL and bearer token resolve in this order, first match wins:
+The base URL and optional bearer token resolve in this order:
 
-1. What the user typed in Settings. The URL lives in `UserDefaults`; the token lives in the **Keychain**, never in defaults.
-2. `PLANTY_BASE_URL` and `PLANTY_API_TOKEN`, substituted into `Planty-Info.plist` at build time.
+1. Values entered in Settings, with the URL in `UserDefaults` and the token in the Keychain.
+2. `PLANTY_BASE_URL` and `PLANTY_API_TOKEN` embedded through `Planty-Info.plist` at build time.
 
-Neither present is a real state the app names out loud, rather than a screen that looks calm with nothing behind it.
+The current LAN deployment has no API authentication, so its token is empty.
+The client retains optional bearer support so an authenticated deployment does not require a networking rewrite.
 
-Bake the values in at build time:
+Settings has **Save and test**, which calls `/healthz` and proves only API reachability.
+It does not prove APNs permission, registration, token upload, or notification delivery; explicit push diagnostics are tracked in [ROADMAP.md](../ROADMAP.md).
 
-```sh
-xcodebuild ... PLANTY_BASE_URL=https://planty.example PLANTY_API_TOKEN=your-token build
-```
+## App structure
 
-Or leave them out, launch, and use the profile button on Today.
-Settings has a **Save and test** button that hits `/healthz` and reports what happened.
+The app has four tabs:
 
-## What talks to what
+- **Today** shows current care actions and distinguishes calm from stale or incomplete evidence.
+- **Capture** takes or imports a photograph, identifies or selects a plant, saves the timeline entry, and records quick care.
+- **Plants** opens the searchable library and each plant's story.
+- **More** contains away mode, cold shelter state, owner questions, harvest history, postmortem lessons, owner updates, and settings.
 
 ```mermaid
 graph TD
   Views[SwiftUI screens] --> Stores[Observable stores]
-  Stores --> Presentation[TodayPresentation]
+  Stores --> Presentation[Presentation policies]
   Stores --> API[PlantyAPI protocol]
-  API --> Client[PlantyClient over URLSession]
-  Client --> Service[Planty HTTP service]
-  Presentation --> Freshness[Freshness policy]
+  API --> Client[PlantyClient]
+  Client --> Service[Planty service]
 ```
 
-`PlantyAPI` is the seam.
-Screens never touch `URLSession`, which is what lets the state logic be tested without a network or a clock.
+`PlantyAPI` is the test seam.
+Screens do not touch `URLSession`, and generated path and enum code comes from the repository's OpenAPI contract.
 
-| Layer | Where |
+| Layer | Path |
 | --- | --- |
 | Wire models | `Planty/Models/` |
-| HTTP client, coders, errors | `Planty/Networking/` |
-| Observable state and the calm/stale rule | `Planty/State/` |
-| Colours and shared controls | `Planty/DesignSystem/` |
+| HTTP, updates, dates, and errors | `Planty/Networking/` |
+| Observable application state | `Planty/State/` |
+| Colors and shared controls | `Planty/DesignSystem/` |
 | Screens | `Planty/Screens/` |
 
-## The rule this app exists to honour
+## Truthfulness rules
 
-**Stale data must never render as calm.**
+Stale data must never render as calm.
+The service's `stale_since`, digest age, and latest garden-wide run outcome all participate in freshness, and a stale calm verdict becomes unknown while a stale urgent verdict remains urgent.
 
-`Digest.freshness(now:knownPlantCount:policy:)` decides, and its precedence is deliberate:
+Unknown toxicity must never render as reassurance.
+Unknown is outside the safe-to-severe color ramp and ranks above safe when the app summarizes mixed audience ratings.
 
-1. The service's own `stale_since` outranks everything.
-2. Then the digest being older than the policy allows.
-3. Then a run that finished having checked zero plants while plants exist.
+A failed write must remain retryable.
+Photo intake, care completion, reminder completion, and consultation flows keep user input when the server call fails, while idempotency keys make safe retries possible where an action records care.
 
-`TodayPresentation.make` turns that into one of eight states.
-Calm and stale are different screens with different words and different colour, and the mascot appears in one and never the other.
+## Notifications and distribution
 
-The asymmetry in `CareState.resolve` matters just as much: staleness can take reassurance away, never an alarm.
-A stale `none` verdict becomes `Unknown`; a stale `urgent` verdict stays `Urgent`.
+The app requests notification permission, registers with APNs, and uploads its production or sandbox token to Planty.
+The exported IPA must contain the matching `aps-environment` entitlement in the signed application, and the release workflow verifies that exact signature before publishing.
 
-**And its sibling: an unknown toxicity must never render as reassurance.**
-
-`ToxicityRating.unknown` means nobody looked it up, which is not a gentler `safe`.
-Three things enforce it, and all three are tested.
-`Toxicity.init(from:)` decodes an absent or unrecognised rating to `unknown` rather than to nothing.
-`ToxicityRating.severityOrder` ranks `unknown` *above* `safe`, so `Toxicity.worst` can never headline "safe" while a column was never filled in.
-`ToxicityChip` gives it a dashed purple outline and no fill, off the green-to-red ramp entirely, labelled "Not checked" in words.
-
-Divergence gets the same treatment for the same reason.
-Nearly every houseplant reads identically for cats, dogs and people, so the rare plant that does not is exactly the one that kills something: a lily is a sore stomach for a dog and renal failure for a cat.
-`Toxicity.divergenceSentence` says so in a sentence rather than leaving somebody to notice it by comparing three chips.
-
-`FreshnessPolicy.maxAge` defaults to **36 hours**.
-`DESIGN-NOTES.md` lists "what makes a daily verdict current enough for the calm state" as an open question; 36 hours is the answer this implementation picked, because the run is daily, one missed morning is explainable and two is not.
-Change it in one place.
+The public install page is [fledge.theoutdoorprogrammer.com/a/zone.stout.Planty](https://fledge.theoutdoorprogrammer.com/a/zone.stout.Planty).
+`fledge.stout.zone` is an internal LAN verification route used by the deployment environment, not the user-facing distribution URL.
+The app checks the Fledge feed embedded at release time and can offer a newer build.
 
 ## Testing
 
-255 tests, Swift Testing, no network.
+The suite uses Swift Testing and stubbed transports, so normal tests require no live service or network.
+It covers configuration precedence, request method and path, decoding of real Go-shaped JSON, freshness and care-state resolution, stores, completion idempotency, capture metadata, photo intake, notes, reminders, garden workflows, update checks, and generated-contract drift.
+CI and releases run the suite on the iPhone 17 simulator.
 
-- `DateDecodingTests`: Go writes RFC3339 with up to nine fractional digits and none at all when zero, which no single `ISO8601DateFormatter` reads. `PlantyDateFormat` clips the fraction to three digits and tries both.
-- `ModelDecodingTests`: real Go-shaped JSON, snake_case keys, unknown enum fallback, calibration maths, and `Plant.risk` matching the Go `Plant.Risk()` it mirrors.
-- `PlantyClientTests`: a stubbed `URLProtocol` covering the auth header, query building, status-to-error mapping and malformed bodies.
-- `FreshnessTests`, `TodayPresentationTests`, `LibraryStatusTests`: the calm/stale rule from every angle.
-- `TodayStoreTests`, `CaptureStoreTests`: postponing never acknowledges, completing records before acknowledging, a failed upload never drops the photo.
-- `ToxicityTests`: the unknown rule above from every angle, plus divergence detection and the two ways a plant can have no ratings.
-- `ConsultPhotoTests`: a photo rides along with the question, a failed send keeps it, and a scratch chat creates no plant and writes to no timeline.
+## Implementation traps
 
-## Verified against a live service
-
-The networking layer has been driven end to end against a mock service shaped like the Go handlers, and Today's calm, action and stale states were each confirmed on an iOS 26.5 simulator.
-
-## What is stubbed, and why
-
-| Thing | State | Why |
-| --- | --- | --- |
-| **Away mode, post-mortem, ask-the-owner** | absent from the app | The endpoints exist (`POST /v1/away`, `GET /v1/postmortems`, `GET\|POST /v1/questions`); no screen has been built on them yet. |
-| **Notifications** | absent | Deep links need a push payload contract that does not exist. The cold watch and escalation already notify through Home Assistant, which is where a phone actually gets told. |
-| **Full-screen photo comparison scrubber** | built | Reachable from a plant's story once it has two photos. |
-
-## Assumptions that turned out to be wrong
-
-Four rows used to sit above saying the service had not shipped something.
-Three of them were wrong in a way worth recording, because in each case the client had quietly invented a contract rather than reading the documented one.
-
-- **Photo bytes were never going to arrive.** The timeline mints a presigned `url` per photo and always had; the app's `Photo` did not decode it and `PlantPhotoView` had no remote path, so every photo it did not just take rendered as a placeholder. Both fixed.
-- **The timeline was assumed to return five merged arrays.** It returns photos and a count, exactly as documented. The observations, readings and current verdict come from `GET /v1/plants/{slug}`, which the app already fetched alongside it and then ignored. `PlantTimeline.merging(_:)` joins them, which is what makes the story more than a row of pictures and what fills the sensor evidence disclosure.
-- **`POST /v1/harvests` does not exist and never did.** The documented route is `POST /v1/plants/{slug}/harvests`. The Dusk plugin had guessed the same wrong path independently. Both fixed, and the path is now pinned by a test on each side.
-
-The lesson is the same one each time: nothing tested which URL was called, only what went in the body.
-`PlantyClientTests` now asserts method and path for every write.
-
-## Notes for whoever picks this up
-
-- **`PlantObservation`, not `Observation`.** The model type cannot be called `Observation`: that shadows the module name the `@Observable` macro expands against, and the failure is a wall of unrelated macro errors.
-- **`RelativeAge.phrase` uses `RelativeDateTimeFormatter`**, not `.formatted(.relative:)`. The latter takes no reference date and silently uses the system clock, which made a fixed-clock test print "last year".
-- **The camera is only prepared while Snap is selected.** `TabView` builds neighbouring tabs eagerly, and asking for the camera before the user has opened Snap is how a permission prompt gets denied.
-- **Simulators have no camera.** `CameraAvailability.unavailable` is a first-class state with a Photos picker, so the whole flow is exercisable without a device.
-- **`PLANTY_START_TAB`** is a DEBUG-only environment variable that opens the app straight onto a tab, for screenshot runs: `SIMCTL_CHILD_PLANTY_START_TAB=plants xcrun simctl launch <device> zone.stout.Planty`.
-- **Simulator builds need no team**, while device archives must supply `DEVELOPMENT_TEAM`. The target owns `Planty.entitlements`; the release workflow creates an unsigned archive, ad-hoc signs it with those entitlements, then lets export replace that signature with Apple's managed distribution signing.
-- **The mascot is a lavender seal**, from `design/logo/animals/planty-manatee.png`. Several design docs still describe a pink starfish; `CHECKLIST.md` section 9 is the one that is current.
+- Use `PlantObservation`, not `Observation`, because the latter shadows the Observation module used by `@Observable` macro expansion.
+- Use `RelativeDateTimeFormatter` when the reference date matters; `.formatted(.relative:)` silently uses the system clock.
+- Prepare the camera only while Capture is selected because `TabView` constructs neighboring tabs eagerly.
+- Treat camera unavailability as a supported state and keep the Photos picker available for simulators.
+- Use `PLANTY_START_TAB` only in DEBUG screenshot runs.
+- Inspect the exported app's code-signing entitlements when debugging APNs, not only the provisioning profile or App ID capability.

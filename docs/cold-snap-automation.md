@@ -1,62 +1,40 @@
-# Bring the plants in
+# Cold-snap watch
 
-The first thing Planty should do, and the only piece with a real deadline.
+Planty's afternoon cold watch is shipped as the `planty cold` CronJob.
+It warns before the temperature falls, records which plants were carried inside, and later tells the user when those plants can go back out.
 
-Your friend's sheet says it plainly: below 55F they come indoors, one night is survivable, and *consistent* weather below 55F will kill them.
-It is the only instruction in the sheet whose stated consequence is death, it applies to five plants that belong to someone else, and it needs no sensors and nothing bought.
+## Why it uses a forecast
 
-## Why the forecast, not the thermometer
+A current-temperature trigger fires after the useful action window has closed.
+The job therefore reads a daily forecast in mid-afternoon, while there is still time to move pots before the overnight low.
 
-The obvious version triggers on outdoor temperature crossing 55F. That version is useless.
+`PLANTY_WEATHER_ENTITY` must name a Home Assistant weather entity that supports a daily forecast.
+The live deployment uses `weather.forecast_home`; the public deployment template must be overridden when its example entity cannot return daily periods.
 
-By the time it is 54F outside it is already dark, the plants have already been cold for hours, and the person who has to carry five pots indoors is asleep.
-An alert that fires at the moment of harm is not a warning, it is a postmortem.
+## Warning rule
 
-So the trigger is the **forecast overnight low**, checked in the afternoon while there is still daylight and a conscious human.
-`weather.nws_home` already publishes it. NWS is the better of the two weather entities here for this, because its overnight lows are a real forecast product rather than an interpolation.
+Each plant may carry its own `min_temp_f`.
+Planty warns when the forecast low is within 3F of that minimum, which intentionally favors the cheap false positive over the expensive false negative.
+A forecast is regional, a porch can run colder, and the cost of carrying a pot unnecessarily is much smaller than the cost of killing it.
 
-## The design
+The APNs alert names the at-risk plants, their owners, and the forecast low.
+When away mode is active, the backup contact is included in the text, but it is not a second delivery route.
+Planty does not use Home Assistant notifications or house speakers.
 
-**Trigger:** time, once daily, mid to late afternoon. Early enough to act, late enough that the forecast has settled.
+## Shelter state
 
-**Condition:** tonight's forecast low is at or below the threshold.
+The warning is answerable through `POST /v1/shelter`.
+Sheltering a plant sets its `sheltered_at` timestamp, prevents the same outside warning from repeating, and makes the plant eligible for the reverse workflow.
+Clients may shelter selected slugs or all plants with a temperature threshold because the real interaction often happens with an armful of pots.
 
-**Threshold: 58F, not 55F.** Three reasons to build in margin:
+Once the forecast is warm enough for the most tender sheltered plant, `planty cold` sends a second APNs alert telling the user to put the plants back out.
+`POST /v1/unshelter` clears the state after that happens.
+Without this half of the loop, a successful cold warning could leave outdoor plants in a dark room indefinitely.
 
-- A forecast low is a regional number, and a front porch at 3am is usually colder than the airport the forecast came from
-- Forecasts move, and they move down as often as up
-- The cost of a false positive is carrying plants inside unnecessarily. The cost of a false negative is killing someone else's plants. These are not remotely symmetrical, so bias hard toward the cheap mistake.
+## Boundaries
 
-**Action:** actionable notification naming the plants, the forecast low, and the time. Not a generic "it's cold."
+Planty knows only what the forecast says and what a person recorded through shelter or unshelter.
+It does not infer a plant's physical location, move anything, escalate through speakers, or repeatedly announce an unacknowledged alert.
 
-**Escalation:** unacknowledged an hour before sunset, announce it on the house speakers via the existing `script.announce`. Unacknowledged after dark, repeat. This is the rare case that earns escalation: it is other people's plants, the window closes at sunset, and there is no second chance the next morning.
-
-**Acknowledgement:** the notification carries a "brought them in" action that sets an `input_boolean`. That boolean is what stops the escalation, and it is also what tells the reverse automation there is something outside to bring back.
-
-## The half nobody builds
-
-An automation that only tells you to bring plants *in* leaves five tropical plants sitting in a dark room in August, which over a week is its own way of killing them.
-
-So there is a second automation: once the boolean says they are inside, and the forecast shows a daytime high comfortably above the threshold with no cold night following, **tell you to put them back out.**
-
-This is the half people forget, and it is the half that quietly does the damage, because bringing plants in feels like the responsible act and nobody notices the plants slowly declining indoors afterwards.
-
-## Runaway safety
-
-This one is a notification, not a valve, so it cannot flood anything.
-But the failure mode still matters: a repeat loop that keeps announcing after the plants are already inside will train you to ignore announcements, and the announcement channel is shared with things that matter more.
-
-So the escalation is bounded by count, not only by the acknowledgement boolean, and the boolean is `restored` across restarts.
-
-That restart detail is the same trap that cost the water: Home Assistant restarts twice a day here, and anything depending on `for:` duration or on unrestored state silently resets. Applies to notification loops exactly as much as to valves.
-
-## What it does not do
-
-It does not move the plants. It does not know whether they are actually outside beyond what you told it. It does not distinguish which plants are on the porch versus already indoors, until the plant registry exists and carries a location.
-
-Once the registry lands, this gets better: it names the specific plants that are outside, and it stops nagging about the ones already in.
-
-## Open
-
-- Confirm the porch is the coldest location, and whether it is covered. A covered porch runs a few degrees warmer than open air and holds heat longer
-- Whether the sequoia sprout has a different threshold. Giant sequoia is a mountain tree and is far more cold tolerant than the tropicals, so it may not need to come in at all. Worth asking the owner rather than assuming, since the answer changes how many pots get carried
+The owner's 55F instruction remains authoritative for the sabbatical plants.
+Species-specific exceptions, including whether the sequoia sprout needs the same threshold, should be confirmed with the owner and then recorded on the plant rather than hardcoded into the job.

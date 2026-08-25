@@ -1,138 +1,120 @@
 # Planty
 
-Keeps houseplants alive when the person responsible for them has no idea what he is doing.
+Planty keeps houseplants alive when the person responsible for them has no idea what he is doing.
 
-Planty watches soil moisture and cabinet humidity through Home Assistant, remembers what every plant is and who it belongs to, looks at photographs of them over time, and once a day says one short thing: water that one, ignore the rest.
-Most days it says nothing needs doing, which is the point.
+It watches soil moisture and room conditions through Home Assistant, remembers each plant and its owner, compares photographs over time, and gives one short answer: act on this plant or leave it alone.
+Most days it should confidently say that nothing needs doing.
 
-It exists because an automatic waterer running on a timer is a drowning machine.
-It waters on a schedule and has no idea whether water reached soil, so a clogged line waters nothing, a stuck one floods, an already wet pot gets watered anyway, and all three report success.
+## The product rule
 
-## The loop
+A missing, stale, or partial check is never an all-clear.
+Planty preserves the difference between current calm, an unfinished judgment, stale evidence, and a system that has never run.
 
-1. A soil sensor reads dry.
-2. Home Assistant runs the pump.
-3. The pump reports that it ran.
-4. The soil sensor confirms water actually reached the soil.
-5. If step 3 succeeded and step 4 did not, that dripper is clogged, and you are told.
+It also refuses to turn watering into a timer.
+The scheduled jobs observe and notify; `planty water` is manual-only and remains unsafe for scheduling until an independent pump cutoff and durable delivery verification exist.
 
-Step 5 is the whole product.
-A timer cannot do it, and neither can a person who is not standing there at the time.
+## Surfaces
 
-## Three surfaces, one brain
+The Go service is the only owner of state.
 
-The Go service is the only thing that owns state.
-Everything else is a way of talking to it.
-
-| Surface | What it is for |
+| Surface | Purpose |
 | --- | --- |
-| **Service** (Go, Kubernetes, Postgres) | Ingests readings, stores observations and photos, calls Claude for judgment, generates the daily verdict |
-| **iOS app** (SwiftUI, `ios/`) | For when you are standing in front of the plant holding a watering can. Photograph it, log what you did, edit its record, keep notes, set reminders, ask it anything, and record the death of one |
-| **Dusk plugin** ([dusk-plugin-planty](https://github.com/NerdsWhoFish/dusk-plugin-planty)) | The same operations, for agents. Add a plant by describing it, log that you watered something, ask what needs doing |
+| **Service** | Stores the garden in PostgreSQL, reads Home Assistant, stores photographs in MinIO, runs model jobs, and sends APNs notifications. |
+| **iOS app** | Shows today's work, captures photographs, records care, keeps plant stories, handles consultations, and manages garden workflows. |
+| **Dusk plugin** | Gives agents the same API-backed records and actions without copying Planty's state into Dusk. |
 
-The app and the plugin call the same API and have the same powers.
-
-**Everything is reachable by hand.** The conversation is an accelerator, never the only road: anything you can ask for in the chat is also a control on a screen, and anything a screen can do the API can do too.
-Anything you can do by tapping, an agent can do by asking, and the other way round.
-The plugin stores nothing in Dusk: it hands everything to this service and reflects back what the service says.
+Anything important is reachable without a conversation.
+The app and plugin are clients of the same generated HTTP contract in [api/openapi.json](api/openapi.json).
 
 ## Running it
 
 ```sh
 export PLANTY_DATABASE_URL=postgres://planty:...@localhost:5432/planty
-planty migrate    # apply the schema
-planty seed       # load the sabbatical plants and their open questions
-planty serve      # the HTTP API on :8080
+planty migrate
+planty seed
+planty serve
 ```
 
-Scheduled work, one command each, wired as CronJobs in `deploy/`:
+Scheduled work is one command per Kubernetes CronJob:
 
-| Command | Cadence | What it does |
+| Command | Cadence | Purpose |
 | --- | --- | --- |
-| `planty ingest` | every 20 min | Pull current sensor values from Home Assistant |
-| `planty daily` | 08:00 | Judge every plant, sweep for autopsies, send one digest |
-| `planty away` | 08:30 | Pre-departure watering pass, or the briefing on return |
-| `planty cold` | 15:00 | Tonight's forecast: what comes in, and what can go back out |
-| `planty remind` | hourly | The chores nothing measures: misting, feeding, hand watering |
-| `planty autopsy <slug>` | on demand | Work out what killed a plant |
+| `planty ingest` | Every 20 minutes | Import current sensor readings from Home Assistant. |
+| `planty daily` | 08:00 | Judge active plants, persist the garden-wide run, sweep for postmortems, and send a digest. |
+| `planty away` | 08:30 | Send the pre-departure pass or return briefing. |
+| `planty thirst` | 09:00 and 18:00 | Report calibrated plants that appear dry without moving water. |
+| `planty chase` | 13:00 and 20:00 | Follow up on open care actions. |
+| `planty cold` | 15:00 | Warn about tonight's low or tell the user when sheltered plants can go back out. |
+| `planty remind` | Hourly | Send due chores that sensors cannot observe. |
 
-Scheduled alerts are delivered directly to the iOS app through APNs. Home Assistant supplies sensor data, forecasts, and actuator calls only; it is never a notification fallback.
+`planty autopsy <slug>` is an on-demand model job.
+`planty water` is an on-demand actuator command and has no schedule by design.
 
-## Who pays for the judgment
+## Model providers
 
-Every model call goes through one interface with two implementations, chosen by `PLANTY_JUDGE`.
+Planty chooses a model per job rather than forcing assessment, identification, consultation, postmortem, and owner-update work through one model.
+The iOS Settings screen persists those assignments, and the service rejects a model that lacks the vision, schema, or tool capabilities a job requires.
 
-| `PLANTY_JUDGE` | What answers | What it needs |
-| --- | --- | --- |
-| `cli` | The Claude Code binary, against a subscription | `claude` on `PATH` and `CLAUDE_CODE_OAUTH_TOKEN` from `claude setup-token` |
-| `api` | The Anthropic API, metered | `ANTHROPIC_API_KEY` |
+Providers are declared with `PLANTY_PROVIDERS`.
+The configured fallback selected by `PLANTY_JUDGE` can use the Claude Code subscription or the direct Anthropic API, while declared OpenAI-compatible providers use the shared chat-completions harness.
+The Claude Code CLI and OpenAI-compatible harness support acting jobs; the direct Anthropic API fallback is one-shot and cannot execute Planty tools.
+Current photographs can reach any verified vision model, but only the Claude Code CLI can selectively open historical photographs that were offered rather than attached.
 
-Unset, an API key wins if there is one and the CLI is used otherwise.
-Neither being available is a supported state: the judge is nil, the watering line and the cold watch carry on, and only the parts that need an opinion report unavailable.
+[ADR 0001](adr/0001-buy-judgments-through-the-claude-code-cli.md) explains the subscription-backed default.
+[ADR 0007](adr/0007-choose-a-model-per-job.md) records per-job selection, and [ADR 0008](adr/0008-run-the-acting-loop-in-the-openai-compatible-harness.md) records the later shared tool loop.
 
-`adr/0001` records why the CLI is the default here and what it costs, which is mostly image size and the seconds a photograph takes to reach the model.
+## Integrations and boundaries
 
-## What the photographs are for
+Home Assistant supplies sensor readings, a forecast, and an optional LetPot actuator.
+It is not a notification transport.
+Planty sends scheduled alerts directly to registered iOS devices through APNs and fails the job when native delivery is unavailable.
 
-Sensors measure water.
-They cannot see spider mites, root rot, light burn, or new growth.
+MinIO stores photograph bytes and PostgreSQL stores their metadata and object keys.
+`PLANTY_S3_PUBLIC_ENDPOINT` must name the same bucket through a hostname the phone can reach because a presigned URL cannot be rewritten after signing.
 
-Planty keeps a photo timeline per plant and reads it with a vision model, so the useful finding is not "soil is at 34%" but "the yellowing on the lower leaves has progressed since July 20th, and that is overwatering, not light".
-That comparison over time is the single most valuable thing in here and the reason a phone app exists at all.
+The service has no authentication and must remain LAN-only.
+The plant data is not especially sensitive, but the pod holds credentials for Home Assistant, model providers, APNs, and object storage.
 
-## Three states, never two
+## Repository map
 
-"Nothing needs doing", "the data is stale", and "the judgment has never run" are three different answers and the API returns them as three different fields.
-Collapsing them is how this class of system kills things: silence that looks like reassurance.
+| Path | Contents |
+| --- | --- |
+| `api/` | Canonical OpenAPI contract. |
+| `cmd/planty/` | Service, migrations, seed command, agent command, and scheduled jobs. |
+| `internal/` | Domain, storage, API, model, job, photo, seed, notification, and constrained-agent implementations. |
+| `ios/` | SwiftUI field app. |
+| `deploy/` | Public Kubernetes templates mirrored and completed in the private Flux repository. |
+| `docs/` | Current domain and integration behavior. |
+| `design/` | Current product principles plus explicitly historical visual exploration. |
+| `adr/` | Immutable architectural decisions. |
 
-## Things it deliberately does not do
+## Documentation
 
-**It does not ask you to take readings.**
-Sensors do that.
-If the design ever requires typing in a number, the design is wrong.
-Manual entry is for exceptions: repotted this, spotted mites, watered by hand.
-
-**It does not automate the mushroom kit.**
-Kits live four to eight weeks, the variable that matters is airflow rather than humidity, and the correct misting trigger is "the surface looks dry", which is not a number any sensor produces.
-An RH threshold misting automation over mists, and over misting is precisely how bacterial blotch happens.
-A daily reminder and a fan on a plug is the entire correct implementation, and it lives in `docs/home-assistant.md`.
-
-**It does not route alerts through the house.**
-Notifications belong to Planty and go directly through APNs to registered iOS devices. If native push cannot deliver, the scheduled job fails loudly rather than switching to Home Assistant notify services or speakers.
-
-**It has no authentication, on purpose.**
-Keep it on the LAN.
-The plant data is dull but the pod holds a Home Assistant token and an Anthropic key.
-
-## Layout
-
-```text
-cmd/planty/          The binary: serve plus the scheduled jobs
-internal/plant/      Domain types shared by every surface
-internal/store/      Postgres, and the only thing that touches it
-internal/api/        HTTP, the whole contract in docs/DATA-MODEL.md
-internal/judge/      Claude: daily verdicts, consultations, identification, autopsies
-internal/agent/      The only commands a model may run, and the hook that enforces it
-internal/job/        Scheduled work
-internal/photos/     S3/MinIO object storage
-internal/seed/       The sabbatical plants, as shipped data
-docs/                The data model, the friend's care sheet, the HA side
-adr/                 Decisions worth not re-arguing
-deploy/              Kubernetes manifests, mirrored into the Flux repo
-design/              UI concept, screen specs, SwiftUI prototype, logo
-ios/                 The app
-```
+- [Delivered capabilities](CHECKLIST.md)
+- [Roadmap](ROADMAP.md)
+- [Data model and API behavior](docs/DATA-MODEL.md)
+- [Managed choices and constrained vocabulary](docs/managed-choices.md)
+- [Friend's plant-care ground truth](docs/friends-plants.md)
+- [Home Assistant boundary](docs/home-assistant.md)
+- [Cold-snap behavior](docs/cold-snap-automation.md)
+- [Push and owner updates](docs/push-and-owner-updates.md)
+- [iOS implementation](ios/README.md)
+- [Deployment](deploy/README.md)
+- [Current UI concept](design/UI-CONCEPT.md)
+- [Screen behavior](design/SCREENS.md)
+- [Mascot and historical identity work](design/MASCOT.md)
 
 ## Tests
 
 ```sh
-go test -race ./...                                   # unit
-PLANTY_TEST_DATABASE_URL=postgres://... go test ./internal/store/...   # integration
+go test -race ./...
+PLANTY_TEST_DATABASE_URL=postgres://... go test ./internal/store/...
 ```
 
-The integration tests exist because a digest query once compiled cleanly, passed every unit test, and was rejected outright by Postgres.
-Anything touching SQL gets an integration test.
+SQL behavior gets integration coverage because a query can compile, satisfy every mock, and still be rejected by PostgreSQL.
+The iOS test command is documented in [ios/README.md](ios/README.md).
 
 ## License
 
-TBD.
+No license file is currently included.
+Until one is added, copyright law grants no permission to copy, modify, or distribute this code.

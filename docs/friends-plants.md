@@ -42,7 +42,7 @@ This is the single clearest case of the group-by-thirst rule in the whole collec
 ### The 55F rule is the highest-value automation in the project
 
 It needs no sensors, no purchases and no soil data.
-`weather.nws_home` already forecasts overnight lows.
+The live deployment reads a daily forecast from `weather.forecast_home`; any configured entity is acceptable if Home Assistant reports daily periods for it.
 Missing one cold snap kills five plants that belong to someone else, and it is the only rule in the sheet whose stated failure mode is death.
 
 It also has to fire on the **forecast**, not on the current temperature.

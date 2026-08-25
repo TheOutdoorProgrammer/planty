@@ -1,7 +1,10 @@
-# The model
+# Domain model and contract rationale
 
 The service owns all of it.
 The iOS app and the Dusk plugin are two clients of the same HTTP API with the same powers, and neither keeps its own copy.
+
+This document explains the stable domain choices and behavior that are easy to misunderstand.
+It is not an exhaustive schema reference: SQL migrations in `internal/store/migrations/` are canonical for storage, and `api/openapi.json` is canonical for the HTTP wire contract.
 
 ## Three domains, one table
 
@@ -138,6 +141,33 @@ For the edible domains. `id`, `plant_id`, `occurred_at`, `quantity`, `unit`, `no
 
 Kept apart from observations because harvests aggregate: yield per plant per season is a real question, and burying it in a free text observation body makes it unanswerable.
 
+## Conversations, notes, reminders, and questions
+
+`diagnosis_turns` stores both plant consultations and scratch conversations, distinguished by kind and conversation id.
+A turn may refer to a plant and a photograph, but both can be absent for a question about something not yet in the garden.
+
+`notes` stores editable human prose either against one plant or against the household.
+Household notes are included in every consultation because facts such as “there is a cat here” affect advice without belonging to one pot.
+
+`reminders` stores standing intent, while `reminder_completions` and observations prove which scheduled occurrence was actually completed.
+A notification does not advance the care schedule by itself.
+
+Owner questions are durable records rather than conversation-only prompts, so uncertainty can be answered later and remain attached to the plant.
+
+## Reliability and configuration records
+
+`judgment_runs` records the expected, succeeded, failed, and completed counts for a whole daily attempt.
+That aggregate is what prevents one fresh verdict from making a partial run look like a current garden-wide all-clear.
+
+`care_completions` and `reminder_completions` bind idempotency keys to the observations they create.
+A phone can retry after losing a response without duplicating care history or closing the wrong occurrence.
+
+`push_devices` stores APNs tokens by production or sandbox environment.
+`model_assignments` stores only jobs moved away from their environment default, so an empty table preserves deployment behavior.
+
+Toxicity lives on the plant as one explanatory JSON document with generated, constrained ratings for cats, dogs, and people.
+Unknown remains a first-class rating and never defaults to safe.
+
 ## The care_profile, by domain
 
 **`houseplant`**: target moisture band, humidity preference, dormancy needs, species quirks, and whatever the owner said.
@@ -171,17 +201,19 @@ If the photograph fails to store the plant still exists, and the reply carries `
 It reads the last 45 days of the record: what was done, what the probes saw, what earlier photographs were found to show.
 Long enough for a season to turn and a watering rhythm to be visible, short enough that a plant's whole life is not re-read to answer "are these leaves normal".
 
-**Photographs are offered to `/ask`, not attached.** The recent ones are put where the model can open them, with a line per photo saying when it was taken, and it opens one only if seeing it would change the answer.
+**Photographs are offered to `/ask`, not attached up front.** The recent ones are put where the model can open them, with a line per photo saying when it was taken, and it opens one only if seeing it would change the answer.
 The reply carries `looked_at` so you can tell whether it did.
 Asked "when did I last water this", it answers from the log in about seven seconds and reports looking at nothing; asked what colour the leaves are, it opens the photo and takes twice as long.
-Only the CLI backend can genuinely offer: through the API an image block sent is an image block read and paid for, so that path names the photographs instead and says it has not seen them.
+Only the Claude Code CLI can genuinely offer historical photographs today because it stages them as files the model may choose to read.
+The direct Anthropic API and OpenAI-compatible paths receive their names and are required to say they have not seen them; a current photograph explicitly attached to the question still reaches any verified vision model.
 
-**A follow-up resumes rather than re-reads.** `conversation_id` is the model session's id as well as the conversation's, so the second question in a thread sends only itself: the record and every earlier turn stay where they already are.
+**A Claude CLI follow-up resumes rather than re-reading.** `conversation_id` is the CLI session id as well as the durable conversation id, so its second question can send only itself while the record and earlier turns remain in the session.
 Measured over four turns against a plant with sixty observations, billed input per turn was `3110, 3133, 3156, 3177` replaying and `3104, 10, 10, 10` resuming.
 Replaying is marginally cheaper for a two-turn exchange and breaks even at three; past that resuming is roughly half the cost per turn, and the gap widens because replaying grows with the conversation and resuming does not.
 
 Sessions live in the service's own scratch space, which does not survive a restart, so a conversation can outlive the session it was using.
 A resume that finds nothing falls back to replaying the transcript: slower, still correct, and invisible from the app.
+Backends without resumable sessions always receive the stored transcript, which is why every request carries the complete conversation even when the CLI can optimize it away.
 
 **A consultation can write, through one command and nothing else.** Told "I watered it this morning", "move it to the entryway" or "remind me to mist this twice a day", it does that rather than telling you to.
 Writes go through `planty agent`, which covers the whole service except `autopsy`, and they land with source `agent` so the record always says who claimed a thing happened.

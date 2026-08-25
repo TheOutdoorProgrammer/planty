@@ -1,5 +1,7 @@
 # Planty raster logo explorations
 
+> **Historical exploration.** These starfish concepts are superseded by the seal in `design/logo/seal/`.
+
 These concepts were generated as original raster illustrations using the built-in image-generation workflow, then assembled into comparison assets locally.
 Every concept uses the same central joke: the starfish is enormously proud while the plant is plainly having a terrible time.
 The contact sheet is ordered left to right, top to bottom from V1 through V6.

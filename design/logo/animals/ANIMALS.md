@@ -1,5 +1,7 @@
 # Planty animal comparison
 
+> **Historical exploration.** This comparison predates the final lavender seal choice documented in `design/MASCOT.md`.
+
 ## How funny it is
 
 | Rank | Animal | Verdict |

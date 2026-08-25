@@ -6,6 +6,9 @@ Planty sends scheduled notifications directly through Apple Push Notification se
 
 The iOS app asks for notification permission, registers its APNs device token with `POST /v1/push-devices`, and refreshes that registration whenever the Planty service URL changes.
 
+The API connectivity test in Settings does not test APNs registration or delivery.
+The app currently has no push diagnostics surface and does not display the error passed to `didFailToRegisterForRemoteNotificationsWithError`; that gap is tracked in [ROADMAP.md](../ROADMAP.md).
+
 The server needs an Apple Push Notification auth key from Certificates, Identifiers & Profiles:
 
 - `PLANTY_APNS_KEY_ID`
@@ -21,10 +24,11 @@ If an alert is due and APNs is not configured, has no registered device, or cann
 Away-period backup contact information is still included in relevant alert text, but `backup_notify` is legacy metadata and is not used as a delivery route. Native Planty push remains the only notification channel.
 
 The release workflow signs Planty with the production `aps-environment` entitlement. The `zone.stout.Planty` App ID must have Push Notifications enabled in the Apple Developer portal so automatic provisioning can include that entitlement.
+The workflow verifies the entitlement on the exported app signature, because the provisioning profile only proves that the app is allowed to use APNs, not that the signed executable actually requests it.
 
 ## Update person
 
-The More/Garden screen shows an **Update <person>** action for each steward who owns plants currently in Planty.
+The More screen shows an **Update owner** action for each steward who owns plants currently in Planty.
 
 The service gathers exactly the previous seven days of observations and daily verdicts for that person's active plants, adds the latest photo metadata and visual findings, and asks the configured Claude backend for an 80–180 word owner-facing summary. The response also contains a short-lived URL for the newest photo of every plant that has one.
 

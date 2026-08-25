@@ -27,13 +27,11 @@ The case for open was that the vacant, slightly-too-far-apart stare *is* the jok
 The second point is measurably true and the first turned out not to be: the intended vacancy reads as unhinged on a real screen, and an app that is supposed to be reassuring about your plants cannot open with an unhinged face.
 `design/logo/seal/SEAL.md` keeps the full original argument.
 
-## What the older design docs say
+## Historical exploration
 
-`design/UI-CONCEPT.md`, `design/DESIGN-NOTES.md` and `design/logo/README.md` all describe a pink starfish.
-They were written before the animal changed and are otherwise still accurate, so they were left alone rather than rewritten.
+The current UI and design-decision documents use the seal.
+`design/logo/`, `design/logo/raster/`, and `design/logo/animals/` preserve the earlier starfish and animal-selection work as design history rather than current brand guidance.
 `design/logo/animals/ANIMALS.md` recommends the axolotl; that was the generating agent's opinion, and Joey chose otherwise.
-
-This file is the current answer.
 
 ## Where it may and may not appear
 

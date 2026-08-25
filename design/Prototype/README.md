@@ -1,5 +1,7 @@
 # Planty SwiftUI prototype
 
+> **Historical prototype.** The production app is in `ios/`, uses four tabs, and is the source of shipped behavior.
+
 This is a local, view-only iOS 26 prototype for the four core Planty experiences: Today, Snap, Diagnosis, and a plant story.
 It contains realistic mock data but no camera integration, networking, or persistence.
 
@@ -24,5 +26,5 @@ xcodebuild \
   build
 ```
 
-The app uses the existing `../logo/planty-mark.svg` as a bundled resource.
+The app uses the historical `../logo/planty-mark.svg` starfish as a bundled resource.
 All other visuals are native SwiftUI and SF Symbols, so there are no third-party dependencies.
