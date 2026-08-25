@@ -24,6 +24,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/job"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -32,8 +33,9 @@ import (
 // configured LetPot watering pass — the same one `planty water` runs — and may
 // be nil in a process with no pump wired, where the verb refuses plainly.
 type Deps struct {
-	Store *store.Store
-	Water func(context.Context) error
+	Store     *store.Store
+	Water     func(context.Context) error
+	Actuators *job.ActuatorControl
 }
 
 // Usage is the reference handed to the model and the text help prints, so the
@@ -68,6 +70,10 @@ Reading the garden:
               is reported as unknown rather than invented as 50 percent
               planty agent health --plant <slug> [--limit N]
               example: planty agent health --plant golden-pothos
+
+  actuators   list the explicitly allowlisted plant fans and smart plugs by
+              Planty actuator id; takes no flags and never discovers or guesses
+              example: planty agent actuators
 
   reminders   what is set for one plant, and whether each is owed right now
               planty agent reminders --plant <slug>
@@ -155,6 +161,14 @@ The plants themselves:
               example: planty agent archive --plant basil --status dead
 
 Water and cold:
+
+  actuatorstart  turn on one allowlisted actuator for a bounded duration
+              planty agent actuatorstart --id <uuid> --seconds <1-3600> --key <uuid>
+              example: planty agent actuatorstart --id 2c658779-4967-4831-b579-a6ed2584769c --seconds 600 --key 6f0dd1c2-6b3a-4e0e-9d3f-2a4b8c9d0e1f
+
+  actuatorstop  idempotently turn off one allowlisted actuator
+              planty agent actuatorstop --id <uuid> --key <uuid>
+              example: planty agent actuatorstop --id 2c658779-4967-4831-b579-a6ed2584769c --key 24a1e903-4b71-4ca2-8621-f0d37a8f0401
 
   water       run the LetPot watering pass, exactly as the manual command
               does: survey the calibrated probes, pump only if something reads
@@ -269,6 +283,7 @@ var verbs = map[string]func(Deps, context.Context, io.Writer, []string) error{
 	"show":         Deps.show,
 	"observations": Deps.observations,
 	"health":       Deps.health,
+	"actuators":    Deps.actuators,
 	"reminders":    Deps.reminders,
 	"sensors":      Deps.sensors,
 	"today":        Deps.today,
@@ -291,9 +306,11 @@ var verbs = map[string]func(Deps, context.Context, io.Writer, []string) error{
 	"archive":  Deps.archive,
 	"toxicity": Deps.toxicity,
 
-	"water":     Deps.water,
-	"shelter":   Deps.shelter,
-	"unshelter": Deps.unshelter,
+	"water":         Deps.water,
+	"actuatorstart": Deps.actuatorStart,
+	"actuatorstop":  Deps.actuatorStop,
+	"shelter":       Deps.shelter,
+	"unshelter":     Deps.unshelter,
 
 	"link":      Deps.link,
 	"calibrate": Deps.calibrate,

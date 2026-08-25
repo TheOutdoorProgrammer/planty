@@ -31,6 +31,7 @@ const usage = `planty <command>
   serve    run the HTTP API
   ingest   pull current sensor values from Home Assistant
   verify-water  verify completed manual watering attempts after probes settle
+  reconcile-actuators  turn off plant actuators whose durable lease expired
   prune-photos  delete expired scratch photos and finish pending deletions
   daily    judge every plant and send the digest
   retry    rerun only the plants that failed the latest daily judgment
@@ -109,6 +110,9 @@ func run(log *slog.Logger) error {
 		return job.Ingest{Store: db, HA: homeAssistant(), Log: log}.Run(ctx)
 	case "verify-water":
 		return job.VerifyWater{Store: db, Log: log, Notifications: notifications}.Run(ctx)
+	case "reconcile-actuators":
+		_, err := actuatorControl(db, log).Reconcile(ctx, time.Now().UTC())
+		return err
 	case "prune-photos":
 		return prunePhotos(ctx, db, log)
 	case "daily":
@@ -136,7 +140,8 @@ func run(log *slog.Logger) error {
 	case "autopsy":
 		return autopsy(ctx, db, log)
 	case "agent":
-		return agent.Run(ctx, agent.Deps{Store: db, Water: func(ctx context.Context) error {
+		control := actuatorControl(db, log)
+		return agent.Run(ctx, agent.Deps{Store: db, Actuators: &control, Water: func(ctx context.Context) error {
 			return water(ctx, db, log, notifications)
 		}},
 			os.Stdout, os.Args[2:])
@@ -172,6 +177,7 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 
 	seat := judge.New().Able(acting()).Assigned(db).Instructed(db)
 	server := api.New(db, log).WithBearerToken(apiToken).WithJudge(seat).WithPush(notifications)
+	go reconcileActuators(ctx, actuatorControl(db, log), log)
 	if config, enabled := photoConfig(); enabled {
 		manager := photos.Manage(ctx, config, func(state photos.State, err error) {
 			if err != nil {
@@ -201,6 +207,33 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 		return err
 	}
 	return nil
+}
+
+func actuatorControl(db *store.Store, log *slog.Logger) job.ActuatorControl {
+	return job.ActuatorControl{Store: db, HA: homeAssistant(), Log: log}
+}
+
+func reconcileActuators(ctx context.Context, control job.ActuatorControl, log *slog.Logger) {
+	reconcile := func() {
+		stopped, err := control.Reconcile(ctx, time.Now().UTC())
+		if err != nil {
+			log.Error("actuator reconciliation failed", "error", err)
+		}
+		if stopped > 0 {
+			log.Info("stopped overdue actuators", "count", stopped)
+		}
+	}
+	reconcile()
+	ticker := time.NewTicker(15 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			reconcile()
+		}
+	}
 }
 
 func photoConfig() (photos.Config, bool) {

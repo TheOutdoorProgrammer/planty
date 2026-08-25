@@ -67,6 +67,18 @@
     "/v1/verdicts/{id}/complete": {"post": {"operationId": "completeVerdict"}},
     "/v1/choices": {"get": {"operationId": "listChoices"}},
     "/v1/home-assistant/entities": {"get": {"operationId": "listHomeAssistantEntities"}},
+    "/v1/home-assistant/actuators": {"get": {"operationId": "discoverActuators"}},
+    "/v1/actuators": {
+      "get": {"operationId": "listActuators"},
+      "post": {"operationId": "registerActuator"}
+    },
+    "/v1/actuators/{id}": {
+      "patch": {"operationId": "updateActuator"},
+      "delete": {"operationId": "deleteActuator"}
+    },
+    "/v1/actuators/{id}/events": {"get": {"operationId": "listActuatorEvents"}},
+    "/v1/actuators/{id}/start": {"post": {"operationId": "startActuator"}},
+    "/v1/actuators/{id}/stop": {"post": {"operationId": "stopActuator"}},
     "/v1/sensors": {
       "get": {"operationId": "listSensors"},
       "post": {"operationId": "linkSensor"}
@@ -116,6 +128,8 @@
       "ObservationSource": {"type": "string", "enum": ["app", "agent", "automation"]},
       "ReminderDisposition": {"type": "string", "enum": ["completed", "missed"]},
       "HealthChangeKind": {"type": "string", "enum": ["baseline", "delta"]},
+      "ActuatorKind": {"type": "string", "enum": ["fan", "switch"]},
+      "ActuatorEventAction": {"type": "string", "enum": ["start_requested", "started", "start_failed", "stop_requested", "stopped", "stop_failed", "stop_noop"]},
       "SensorRole": {"type": "string", "enum": ["soil_moisture", "ambient_temp", "ambient_humidity", "illuminance"]},
       "AIJob": {"type": "string", "enum": ["assess", "identify", "consult", "ask", "postmortem", "owner_update"]},
       "PromptInstruction": {

@@ -25,7 +25,8 @@ var manual = map[string]string{
 
 	// Joey's rule, and the reason `thirst` exists: nothing waters a plant on a
 	// timer. He is told it needs doing and turns the pump on himself.
-	"water": "moves water, so it is never scheduled",
+	"water":               "moves water, so it is never scheduled",
+	"reconcile-actuators": "serve runs the same reconciliation loop; this is an independent recovery command for operators",
 
 	"version": "answers and exits, for a binary installed from the tap",
 }

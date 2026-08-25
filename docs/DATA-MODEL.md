@@ -91,6 +91,24 @@ A plant is watched by zero or more Home Assistant entities.
 
 An uncalibrated link produces readings but must never produce an automated watering decision. Confident wrong alerts are worse than no alerts.
 
+## Plant-dedicated actuators
+
+`plant_actuators` is the explicit allowlist of Home Assistant `fan` and `switch` entities Planty may control.
+Discovery only offers those two domains for selection and never registers or actuates an entity by guessing from its name.
+Every start and stop route takes the Planty actuator UUID, never a caller-supplied Home Assistant entity ID.
+
+`plant_actuator_leases` persists the requested duration and absolute shutdown deadline before Home Assistant receives `turn_on`.
+Durations are bounded to one hour, only one unfinished lease may exist per actuator, and command idempotency keys make request retries incapable of extending or repeating a run.
+The server reconciles overdue leases independently of the initiating request, and `planty reconcile-actuators` provides the same recovery pass as a standalone job after a restart.
+A failed `turn_off` leaves the lease unfinished so later reconciliation retries it.
+
+`plant_actuator_events` is the append-only command ledger: request, successful start, failed start, requested stop, successful stop, failed stop, and already-stopped outcomes retain actor, source, lease, detail, and idempotency provenance.
+Deleting an actuator only removes it from the active allowlist; historical leases and events remain.
+An active actuator cannot be removed until it has been stopped.
+
+Planty owns bounded ad hoc runs only.
+Recurring fan schedules remain Home Assistant automations because duplicating schedule ownership would create two controllers that can disagree about whether a device should be on.
+
 ## readings
 
 Time series. Keyed on the sensor link, not the plant, because the plant a probe serves can change when it is moved.
@@ -218,6 +236,9 @@ Prompt settings cannot add model tools, expand trusted web hosts, weaken structu
 **Health reads and writes expose the ledger, not a mutable field.** `GET /v1/plants/{slug}/health` returns the nullable current event and newest-first history, so unknown is different from zero.
 `POST /v1/plants/{slug}/health-events` accepts either a baseline or a signed delta with rationale, evidence, actor, and idempotency key.
 The agent exposes the same operations through `health` and `healthchange`; neither client can bypass the store's evidence, ownership, clamping, and retry rules.
+
+**Actuator discovery and actuation are separate capabilities.** `/v1/home-assistant/actuators` returns only fan and switch candidates, while `/v1/actuators` manages the persistent allowlist.
+Start, stop, and event-history routes are nested beneath `/v1/actuators/{id}` so no actuation request accepts an arbitrary Home Assistant entity ID.
 
 **`POST /v1/identify` belongs to no plant, deliberately.** Nobody knows which plant it is yet, and it may not be one on record. It takes a `photo` multipart part or raw bytes, and answers `{candidates: [{common_name, scientific_name, confidence}], count}` with at most three, most likely first. An empty list is a valid answer and a better one than a guessed name.
 

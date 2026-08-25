@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/ha"
+	"github.com/TheOutdoorProgrammer/planty/internal/job"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
@@ -28,6 +29,7 @@ type Server struct {
 	judge         *judge.Judge
 	pushSender    *push.Sender
 	homeAssistant homeAssistantDiscoverer
+	actuatorHA    job.ActuatorHomeAssistant
 	bearerToken   string
 }
 
@@ -36,7 +38,8 @@ type Server struct {
 func New(s *store.Store, log *slog.Logger) *Server {
 	server := &Server{store: s, log: log}
 	if baseURL, token := os.Getenv("PLANTY_HA_URL"), os.Getenv("PLANTY_HA_TOKEN"); baseURL != "" && token != "" {
-		server.homeAssistant = ha.New(baseURL, token)
+		client := ha.New(baseURL, token)
+		server.homeAssistant, server.actuatorHA = client, client
 	}
 	return server
 }
@@ -141,6 +144,14 @@ func (s *Server) Handler() http.Handler {
 
 	mux.HandleFunc(routeListChoices, s.listManagedChoices)
 	mux.HandleFunc(routeListHomeAssistantEntities, s.discoverHomeAssistantEntities)
+	mux.HandleFunc(routeDiscoverActuatorsPending, s.discoverActuators)
+	mux.HandleFunc(routeListActuatorsPending, s.listActuators)
+	mux.HandleFunc(routeRegisterActuatorPending, s.registerActuator)
+	mux.HandleFunc(routeUpdateActuatorPending, s.updateActuator)
+	mux.HandleFunc(routeDeleteActuatorPending, s.deleteActuator)
+	mux.HandleFunc(routeActuatorEventsPending, s.actuatorEvents)
+	mux.HandleFunc(routeStartActuatorPending, s.startActuator)
+	mux.HandleFunc(routeStopActuatorPending, s.stopActuator)
 
 	mux.HandleFunc(routeListSensors, s.listSensors)
 	mux.HandleFunc(routeLinkSensor, s.linkSensor)

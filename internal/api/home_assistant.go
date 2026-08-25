@@ -9,6 +9,7 @@ import (
 	"unicode"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/ha"
+	"github.com/TheOutdoorProgrammer/planty/internal/job"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 )
 
@@ -18,7 +19,31 @@ type homeAssistantDiscoverer interface {
 
 func (s *Server) WithHomeAssistant(client homeAssistantDiscoverer) *Server {
 	s.homeAssistant = client
+	if actuator, ok := client.(job.ActuatorHomeAssistant); ok {
+		s.actuatorHA = actuator
+	}
 	return s
+}
+
+func filterDiscoveredActuators(entities []ha.Entity, query string) []ha.Entity {
+	query = strings.ToLower(strings.TrimSpace(query))
+	filtered := make([]ha.Entity, 0, len(entities))
+	for _, entity := range entities {
+		if entity.Domain != "fan" && entity.Domain != "switch" {
+			continue
+		}
+		if query != "" && !entityMatchesQuery(entity, query) {
+			continue
+		}
+		filtered = append(filtered, entity)
+	}
+	sort.SliceStable(filtered, func(i, j int) bool {
+		if filtered[i].Available != filtered[j].Available {
+			return filtered[i].Available
+		}
+		return strings.ToLower(filtered[i].FriendlyName) < strings.ToLower(filtered[j].FriendlyName)
+	})
+	return filtered
 }
 
 func (s *Server) discoverHomeAssistantEntities(w http.ResponseWriter, r *http.Request) {
