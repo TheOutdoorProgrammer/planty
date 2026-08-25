@@ -188,6 +188,8 @@ A phone can retry after losing a response without duplicating care history or cl
 
 `push_devices` stores APNs tokens by production or sandbox environment.
 `model_assignments` stores only jobs moved away from their environment default, so an empty table preserves deployment behavior.
+`prompt_instructions` stores only user-edited job overlays, so an empty table preserves every code-owned prompt exactly.
+An overlay may refine household context, priorities, and writing style, but it is appended inside a marked boundary and cannot replace Planty's safety, evidence, schema, or tool-authority instructions.
 
 Toxicity lives on the plant as one explanatory JSON document with generated, constrained ratings for cats, dogs, and people.
 Unknown remains a first-class rating and never defaults to safe.
@@ -207,6 +209,11 @@ Pollination is called out because indoor tomatoes do not set fruit without physi
 Both clients call the same thing. Anything the app can do by tapping, an agent can do by asking.
 
 The canonical shipped route inventory and closed wire enums live in `api/openapi.json`. `cmd/contractgen` generates the Go mux patterns and Swift client paths/enums from that contract, and CI fails if the checked-in generated output drifts. This document explains behavior and rationale instead of copying the route table into another source of truth.
+
+**Prompt settings are overlays, not replacement system prompts.** `GET /v1/prompt-instructions` returns all six model jobs in the same stable order as model assignments, with an empty `instructions` value when a job uses only its code-owned prompt.
+`PUT /v1/prompt-instructions/{job}` creates or replaces one trimmed overlay, and `DELETE` clears it.
+The service reads the current value for every model request, so a settings change takes effect without restarting a pod.
+Prompt settings cannot add model tools, expand trusted web hosts, weaken structured output validation, or alter physical-action authority because none of those boundaries live in the editable row.
 
 **Health reads and writes expose the ledger, not a mutable field.** `GET /v1/plants/{slug}/health` returns the nullable current event and newest-first history, so unknown is different from zero.
 `POST /v1/plants/{slug}/health-events` accepts either a baseline or a signed delta with rationale, evidence, actor, and idempotency key.

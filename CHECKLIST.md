@@ -13,6 +13,7 @@ Future work belongs in [ROADMAP.md](ROADMAP.md), durable trade-offs belong in [a
 - [x] Garden-wide judgment runs record expected, successful, failed, and completed counts so a partial run cannot look like an all-clear.
 - [x] Care and reminder completion writes are idempotent.
 - [x] Push device registrations and per-job model assignments are persisted.
+- [x] Per-job prompt instruction overlays are persisted without making safety, schema, evidence, or tool-authority rules editable.
 - [x] Photograph storage retries after startup, reports readiness separately, and recovers without a pod restart.
 - [x] Photograph uploads are atomic under duplicate races and compensate object storage when metadata cannot be committed.
 - [x] Archived plants can be restored without losing their story, and explicit photo deletion removes metadata and bytes through a retryable pending state.

@@ -33,7 +33,8 @@ type Judge struct {
 
 	// assigned is consulted per call, so a model chosen on the phone takes
 	// effect without restarting the service.
-	assigned Assignments
+	assigned     Assignments
+	instructions PromptInstructions
 
 	acting *Acting
 }
@@ -56,6 +57,12 @@ func (j *Judge) Assigned(a Assignments) *Judge {
 // assignment naming a model the job cannot do is refused rather than attempted,
 // because failing here names the misconfiguration instead of the symptom.
 func (j *Judge) dispatch(ctx context.Context, req Request) (Outcome, error) {
+	if j.instructions != nil {
+		if overlay, ok := j.instructions.PromptInstructionsFor(ctx, req.Job); ok {
+			req.System = withPromptInstructions(req.System, overlay)
+		}
+	}
+
 	backend, model := j.fallback, ""
 
 	if j.assigned != nil && req.Job != "" {

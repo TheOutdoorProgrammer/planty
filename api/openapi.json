@@ -87,6 +87,11 @@
       "put": {"operationId": "setModelAssignment"},
       "delete": {"operationId": "clearModelAssignment"}
     },
+    "/v1/prompt-instructions": {"get": {"operationId": "listPromptInstructions"}},
+    "/v1/prompt-instructions/{job}": {
+      "put": {"operationId": "setPromptInstruction"},
+      "delete": {"operationId": "clearPromptInstruction"}
+    },
     "/v1/away": {
       "get": {"operationId": "listAway"},
       "post": {"operationId": "createAway"}
@@ -113,6 +118,22 @@
       "HealthChangeKind": {"type": "string", "enum": ["baseline", "delta"]},
       "SensorRole": {"type": "string", "enum": ["soil_moisture", "ambient_temp", "ambient_humidity", "illuminance"]},
       "AIJob": {"type": "string", "enum": ["assess", "identify", "consult", "ask", "postmortem", "owner_update"]},
+      "PromptInstruction": {
+        "type": "object",
+        "required": ["job", "instructions"],
+        "properties": {
+          "job": {"type": "string"},
+          "instructions": {"type": "string"},
+          "updated_at": {"type": "string"}
+        }
+      },
+      "PromptInstructionUpdate": {
+        "type": "object",
+        "required": ["instructions"],
+        "properties": {
+          "instructions": {"type": "string"}
+        }
+      },
       "APIError": {
         "type": "object",
         "x-swift-name": "APIErrorBody",

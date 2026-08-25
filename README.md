@@ -57,6 +57,8 @@ Scheduled work is one command per Kubernetes CronJob:
 
 Planty chooses a model per job rather than forcing assessment, identification, consultation, postmortem, and owner-update work through one model.
 The iOS Settings screen persists those assignments, and the service rejects a model that lacks the vision, schema, or tool capabilities a job requires.
+Each model job may also carry a user-editable instruction overlay.
+The overlay can add household context, priorities, and style preferences, while safety rules, evidence requirements, response schemas, and tool authority remain immutable in code.
 
 Providers are declared with `PLANTY_PROVIDERS`.
 The configured fallback selected by `PLANTY_JUDGE` can use the Claude Code subscription or the direct Anthropic API, while declared OpenAI-compatible providers use the shared chat-completions harness.

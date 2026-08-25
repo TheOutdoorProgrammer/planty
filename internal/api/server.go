@@ -122,6 +122,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeListModelAssignments, s.listModelAssignments)
 	mux.HandleFunc(routeSetModelAssignment, s.setModelAssignment)
 	mux.HandleFunc(routeClearModelAssignment, s.clearModelAssignment)
+	mux.HandleFunc(routeListPromptInstructionsPending, s.listPromptInstructions)
+	mux.HandleFunc(routeSetPromptInstructionPending, s.setPromptInstruction)
+	mux.HandleFunc(routeClearPromptInstructionPending, s.clearPromptInstruction)
 
 	// No slug: a question about something in a shop is not a plant you own.
 	mux.HandleFunc(routeAsk, s.ask)

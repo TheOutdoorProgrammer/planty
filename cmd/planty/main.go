@@ -170,7 +170,7 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 		return errors.New("PLANTY_API_TOKEN is required when serving the API")
 	}
 
-	seat := judge.New().Able(acting()).Assigned(db)
+	seat := judge.New().Able(acting()).Assigned(db).Instructed(db)
 	server := api.New(db, log).WithBearerToken(apiToken).WithJudge(seat).WithPush(notifications)
 	if config, enabled := photoConfig(); enabled {
 		manager := photos.Manage(ctx, config, func(state photos.State, err error) {
@@ -232,7 +232,7 @@ func homeAssistant() *ha.Client {
 func daily(db *store.Store, log *slog.Logger, notifications job.Notifier) job.Daily {
 	return job.Daily{
 		Store:         db,
-		Judge:         judge.New().Assigned(db),
+		Judge:         judge.New().Assigned(db).Instructed(db),
 		Log:           log,
 		Notifications: notifications,
 	}
@@ -308,7 +308,7 @@ func autopsy(ctx context.Context, db *store.Store, log *slog.Logger) error {
 	if len(os.Args) < 3 {
 		return errors.New("usage: planty autopsy <slug>")
 	}
-	seat := judge.New().Assigned(db)
+	seat := judge.New().Assigned(db).Instructed(db)
 	if seat == nil {
 		return errors.New("an autopsy needs a model: set ANTHROPIC_API_KEY, " +
 			"or install the claude CLI and sign it in")
