@@ -58,7 +58,7 @@ func (d Daily) Run(ctx context.Context) error {
 
 	var failed int
 	for _, p := range plants {
-		result, err := d.judgeOne(ctx, p)
+		result, err := d.judgeOne(ctx, run.ID, p)
 		if err != nil {
 			// One plant failing must not silence the rest of the digest.
 			d.Log.Error("judgment failed", "plant", p.Slug, "error", err)
@@ -96,7 +96,7 @@ func (d Daily) Run(ctx context.Context) error {
 	return d.notify(ctx, digest)
 }
 
-func (d Daily) judgeOne(ctx context.Context, p plant.Plant) (judge.Result, error) {
+func (d Daily) judgeOne(ctx context.Context, runID uuid.UUID, p plant.Plant) (judge.Result, error) {
 	evidence, err := d.gather(ctx, p)
 	if err != nil {
 		return judge.Result{}, err
@@ -115,7 +115,40 @@ func (d Daily) judgeOne(ctx context.Context, p plant.Plant) (judge.Result, error
 		Confidence: result.Confidence,
 		Evidence:   plant.Evidence{SensorSummary: result.Summary, ModelVersion: result.Model},
 	})
-	return result, err
+	if err != nil {
+		return result, err
+	}
+	if err := d.recordHealth(ctx, runID, evidence, result); err != nil {
+		return result, fmt.Errorf("record health: %w", err)
+	}
+	return result, nil
+}
+
+func (d Daily) recordHealth(ctx context.Context, runID uuid.UUID, evidence judge.Evidence, result judge.Result) error {
+	if result.HealthMode == plant.HealthUnchanged {
+		return nil
+	}
+	references := plant.HealthEvidence{
+		Summary: result.HealthReasoning, ModelVersion: result.Model,
+	}
+	for _, reading := range evidence.Sensors {
+		references.ReadingIDs = append(references.ReadingIDs, reading.ReadingID)
+	}
+	for _, observation := range evidence.Recent {
+		references.ObservationIDs = append(references.ObservationIDs, observation.ID)
+	}
+	change := plant.HealthChange{
+		PlantID: evidence.Plant.ID, Rationale: result.HealthReasoning,
+		Evidence: references, Source: plant.SourceAutomation, Actor: "planty daily",
+		JudgmentRunID: &runID,
+	}
+	if result.HealthMode == plant.HealthBaseline {
+		change.Baseline = &result.HealthValue
+	} else {
+		change.Delta = &result.HealthValue
+	}
+	_, _, err := d.Store.RecordHealth(ctx, change)
+	return err
 }
 
 func judgmentResult(plantID uuid.UUID, result judge.Result, err error) store.JudgmentResultInput {
@@ -155,7 +188,7 @@ func (d Daily) RetryFailed(ctx context.Context) error {
 
 	remaining := 0
 	for _, prior := range failed {
-		result, judgeErr := d.judgeOne(ctx, prior.Plant)
+		result, judgeErr := d.judgeOne(ctx, run.ID, prior.Plant)
 		if judgeErr != nil {
 			remaining++
 			d.Log.Error("judgment retry failed", "plant", prior.Plant.Slug, "error", judgeErr)
@@ -191,6 +224,7 @@ func (d Daily) gather(ctx context.Context, p plant.Plant) (judge.Evidence, error
 		}
 
 		state := judge.SensorState{
+			ReadingID:  reading.ID,
 			Role:       link.Role,
 			Raw:        reading.Value,
 			Calibrated: link.Calibrated(),
@@ -209,6 +243,21 @@ func (d Daily) gather(ctx context.Context, p plant.Plant) (judge.Evidence, error
 	}
 	if at, err := d.Store.LastWatered(ctx, p.ID); err == nil {
 		evidence.LastWatered = &at
+	}
+	if current, err := d.Store.LatestHealth(ctx, p.ID); err == nil {
+		evidence.CurrentHealth = &current
+	} else if !errors.Is(err, store.ErrNotFound) {
+		return evidence, err
+	}
+	for _, sensor := range evidence.Sensors {
+		if evidence.CurrentHealth == nil || sensor.TakenAt.After(evidence.CurrentHealth.CreatedAt) {
+			evidence.HealthEvidenceNew = true
+		}
+	}
+	for _, observation := range evidence.Recent {
+		if evidence.CurrentHealth == nil || observation.OccurredAt.After(evidence.CurrentHealth.CreatedAt) {
+			evidence.HealthEvidenceNew = true
+		}
 	}
 	return evidence, nil
 }

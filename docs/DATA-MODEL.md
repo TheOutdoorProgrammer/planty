@@ -137,6 +137,23 @@ One row per plant per day, the output of the daily judgment run.
 
 **A missing verdict is not a calm verdict.** If the daily run fails, that must be visibly distinct from "nothing needs doing". Silence that looks like reassurance is exactly how this class of system kills things.
 
+## plant_health_events
+
+Plant health is an append-only, evidence-backed ledger rather than a mutable number on `plants`.
+The current health score is unknown until an explicit baseline is recorded; Planty never invents a neutral starting value.
+
+Each event records the resulting `score`, an optional requested and applied signed delta, a rationale, structured evidence, source, actor, optional judgment run, idempotency key, and creation time.
+A baseline supplies an absolute score, while every later event supplies an arbitrary nonzero signed delta.
+The applied delta records boundary clamping, so a request to add 30 to a score of 90 is auditable as requested `+30`, applied `+10`, resulting `100`.
+Scores are always serialized in the closed range 0 through 100.
+
+Automated changes must name typed reading, observation, or photo evidence belonging to the plant, and at least one referenced item must be newer than the current health event.
+One automated health change is permitted per plant per judgment run, making a retried daily assessment idempotent without hiding a later independent human correction.
+Manual and agent writes require their own idempotency key so a lost response can be retried without duplicating history.
+
+A score of zero means the latest evidence supports zero health; it does not archive the plant or rewrite its lifecycle status.
+Lifecycle state remains an explicit human-visible decision because a low confidence assessment must never make a plant disappear.
+
 ## harvests
 
 For the edible domains. `id`, `plant_id`, `occurred_at`, `quantity`, `unit`, `notes`, `created_at`, `updated_at`.
@@ -166,6 +183,7 @@ That aggregate is what prevents one fresh verdict from making a partial run look
 
 `care_completions` binds idempotency keys to the observations it creates.
 `reminder_completions` binds a key and exact due slot to one immutable outcome, and only the completed outcome links to an observation.
+`plant_health_events` binds manual retries to idempotency keys and daily changes to judgment runs while preserving every accepted score transition.
 A phone can retry after losing a response without duplicating care history or closing the wrong occurrence.
 
 `push_devices` stores APNs tokens by production or sandbox environment.
@@ -189,6 +207,10 @@ Pollination is called out because indoor tomatoes do not set fruit without physi
 Both clients call the same thing. Anything the app can do by tapping, an agent can do by asking.
 
 The canonical shipped route inventory and closed wire enums live in `api/openapi.json`. `cmd/contractgen` generates the Go mux patterns and Swift client paths/enums from that contract, and CI fails if the checked-in generated output drifts. This document explains behavior and rationale instead of copying the route table into another source of truth.
+
+**Health reads and writes expose the ledger, not a mutable field.** `GET /v1/plants/{slug}/health` returns the nullable current event and newest-first history, so unknown is different from zero.
+`POST /v1/plants/{slug}/health-events` accepts either a baseline or a signed delta with rationale, evidence, actor, and idempotency key.
+The agent exposes the same operations through `health` and `healthchange`; neither client can bypass the store's evidence, ownership, clamping, and retry rules.
 
 **`POST /v1/identify` belongs to no plant, deliberately.** Nobody knows which plant it is yet, and it may not be one on record. It takes a `photo` multipart part or raw bytes, and answers `{candidates: [{common_name, scientific_name, confidence}], count}` with at most three, most likely first. An empty list is a valid answer and a better one than a guessed name.
 

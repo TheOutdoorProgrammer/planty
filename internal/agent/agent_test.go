@@ -94,8 +94,8 @@ func TestNoVerbStillTeaches(t *testing.T) {
 // when no --plant was given.
 func TestSubjectVerbsDemandAPlant(t *testing.T) {
 	for _, name := range []string{
-		"show", "observations", "reminders",
-		"log", "harvest", "remind", "forget", "update", "archive", "ack",
+		"show", "observations", "health", "reminders",
+		"log", "harvest", "healthchange", "remind", "forget", "update", "archive", "ack",
 	} {
 		_, err := runVerb(t, Deps{}, name)
 		if err == nil || !strings.Contains(err.Error(), "--plant") {
@@ -148,6 +148,7 @@ func TestFlagMistakesFailPlainly(t *testing.T) {
 		{"away create missing until", []string{"away", "--from", "2026-08-20"}, "--until"},
 		{"coldwatch with no low", []string{"coldwatch"}, "--low"},
 		{"log with a junk time", []string{"log", "--plant", "a", "--kind", "watered", "--when", "yesterdayish"}, "not a time"},
+		{"health without a shape", []string{"healthchange", "--plant", "a", "--reason", "x", "--evidence", "y", "--key", "not-reached"}, "exactly one"},
 		{"a flag that does not exist", []string{"plants", "--vibe", "good"}, "vibe"},
 	} {
 		_, err := runVerb(t, Deps{}, tc.args...)

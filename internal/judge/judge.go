@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/google/uuid"
 )
 
 // DefaultModel answers any job with no assignment of its own. Plant care is
@@ -219,11 +220,15 @@ type Evidence struct {
 	AmbientTempF *float64
 	AmbientRH    *float64
 	Season       string
+
+	CurrentHealth     *plant.HealthEvent
+	HealthEvidenceNew bool
 }
 
 // SensorState is one probe's latest reading, expressed against its own
 // baselines because two probes' absolute numbers are never comparable.
 type SensorState struct {
+	ReadingID  uuid.UUID
 	Role       plant.SensorRole
 	Raw        float64
 	Fraction   *float64
@@ -237,6 +242,10 @@ type Result struct {
 	Reasoning  string       `json:"reasoning"`
 	Confidence float64      `json:"confidence"`
 	Summary    string       `json:"sensor_summary"`
+
+	HealthMode      plant.HealthMode `json:"health_mode"`
+	HealthValue     float64          `json:"health_value"`
+	HealthReasoning string           `json:"health_reasoning"`
 
 	// Model is what answered. Filled in after decoding, not by it.
 	Model string `json:"-"`
@@ -285,6 +294,13 @@ Rules that matter more than anything else you know about plants:
   be forgotten. Escalate those sooner.
 - Say "none" freely. Most days most plants need nothing, and a system that
   invents chores gets ignored, which is how plants actually die.
+- Health is an evidence-backed trend from 0 through 100, not a reward for a
+  cronjob running. Use baseline only when health is unknown and record-backed
+  evidence supports an absolute assessment. Use adjust only when evidence
+  newer than the current score demonstrates a real change, and make its value
+  an arbitrary signed delta. Otherwise use unchanged with value 0. A score of
+  100 means no known or visible health deficit; 0 means confirmed dead, but it
+  never archives or tells the system to discard the plant automatically.
 
 Answer with the single most useful action and a one-sentence reason a beginner
 can act on. No preamble, no hedging, no lists.`
@@ -311,7 +327,7 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 		return Result{}, err
 	}
 
-	out, invalid := decodeResult(outcome)
+	out, invalid := decodeResult(outcome, e)
 	if invalid == nil {
 		out.Attempts = 1
 		return out, nil
@@ -330,7 +346,7 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 			OriginalOutput: outcome.Answer, FinalError: err,
 		}
 	}
-	out, err = decodeResult(repaired)
+	out, err = decodeResult(repaired, e)
 	if err != nil {
 		return Result{}, &AssessmentError{
 			Model: repaired.Model, Attempts: 2, OriginalError: invalid.Error(),
@@ -343,19 +359,19 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 	return out, nil
 }
 
-func decodeResult(outcome Outcome) (Result, error) {
+func decodeResult(outcome Outcome, evidence Evidence) (Result, error) {
 	var out Result
 	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
 		return Result{}, fmt.Errorf("decode verdict: %w", err)
 	}
-	if err := out.valid(); err != nil {
+	if err := out.valid(evidence); err != nil {
 		return Result{}, err
 	}
 	out.Model = outcome.Model
 	return out, nil
 }
 
-func (r Result) valid() error {
+func (r Result) valid(evidence Evidence) error {
 	switch r.Action {
 	case plant.ActionNone, plant.ActionWater, plant.ActionCheck, plant.ActionUrgent, plant.ActionHarvest:
 	default:
@@ -370,14 +386,50 @@ func (r Result) valid() error {
 	if strings.TrimSpace(r.Summary) == "" {
 		return fmt.Errorf("verdict sensor summary is empty")
 	}
+	if err := r.HealthMode.Valid(); err != nil {
+		return err
+	}
+	if strings.TrimSpace(r.HealthReasoning) == "" {
+		return fmt.Errorf("health reasoning is empty")
+	}
+	switch r.HealthMode {
+	case plant.HealthUnchanged:
+		if r.HealthValue != 0 {
+			return fmt.Errorf("unchanged health must have value 0")
+		}
+	case plant.HealthBaseline:
+		if evidence.CurrentHealth != nil {
+			return fmt.Errorf("health already has a baseline")
+		}
+		if !evidenceHasReferences(evidence) {
+			return fmt.Errorf("a health baseline needs record-backed evidence")
+		}
+		if r.HealthValue < 0 || r.HealthValue > 100 {
+			return fmt.Errorf("health baseline %.3f is outside 0 through 100", r.HealthValue)
+		}
+	case plant.HealthAdjust:
+		if evidence.CurrentHealth == nil {
+			return fmt.Errorf("health needs a baseline before an adjustment")
+		}
+		if !evidence.HealthEvidenceNew {
+			return fmt.Errorf("health cannot change without newer evidence")
+		}
+		if r.HealthValue == 0 || r.HealthValue < -100 || r.HealthValue > 100 {
+			return fmt.Errorf("health delta %.3f must be non-zero and between -100 and 100", r.HealthValue)
+		}
+	}
 	return nil
+}
+
+func evidenceHasReferences(e Evidence) bool {
+	return len(e.Sensors)+len(e.Recent) > 0
 }
 
 func resultSchema() (map[string]any, error) {
 	raw := `{
 		"type": "object",
 		"additionalProperties": false,
-		"required": ["action", "reasoning", "confidence", "sensor_summary"],
+		"required": ["action", "reasoning", "confidence", "sensor_summary", "health_mode", "health_value", "health_reasoning"],
 		"properties": {
 			"action": {
 				"type": "string",
@@ -395,6 +447,19 @@ func resultSchema() (map[string]any, error) {
 			"sensor_summary": {
 				"type": "string",
 				"description": "What the readings showed, in plain words"
+			},
+			"health_mode": {
+				"type": "string",
+				"enum": ["unchanged", "baseline", "adjust"],
+				"description": "Whether to leave health alone, establish its first absolute score, or apply a signed delta"
+			},
+			"health_value": {
+				"type": "number",
+				"description": "0 for unchanged, 0 through 100 for a baseline, or a non-zero signed delta for adjust"
+			},
+			"health_reasoning": {
+				"type": "string",
+				"description": "One sentence naming the evidence for the health decision"
 			}
 		}
 	}`
@@ -488,6 +553,18 @@ func describe(e Evidence) string {
 			}
 			b.WriteString("\n")
 		}
+	}
+
+	if e.CurrentHealth == nil {
+		b.WriteString("\nHealth: unknown; no absolute baseline has been established.\n")
+	} else {
+		fmt.Fprintf(&b, "\nHealth: %.1f out of 100, assessed %s ago.\n",
+			e.CurrentHealth.Score, ago(e.CurrentHealth.CreatedAt))
+	}
+	if e.HealthEvidenceNew {
+		b.WriteString("Record-backed evidence is newer than that health assessment.\n")
+	} else {
+		b.WriteString("No record-backed evidence is newer than that health assessment; health must remain unchanged.\n")
 	}
 	return b.String()
 }

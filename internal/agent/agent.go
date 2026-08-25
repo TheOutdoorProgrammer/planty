@@ -64,6 +64,11 @@ Reading the garden:
               planty agent observations --plant <slug> [--limit N]
               example: planty agent observations --plant golden-pothos --limit 10
 
+  health      current evidence-backed health and its change history; unknown
+              is reported as unknown rather than invented as 50 percent
+              planty agent health --plant <slug> [--limit N]
+              example: planty agent health --plant golden-pothos
+
   reminders   what is set for one plant, and whether each is owed right now
               planty agent reminders --plant <slug>
               example: planty agent reminders --plant golden-pothos
@@ -96,6 +101,16 @@ Recording what happened:
   harvest     record a yield with a quantity, so seasons can be added up
               planty agent harvest --plant <slug> --quantity <n> --unit <text> [--note <text>] [--when <time>]
               example: planty agent harvest --plant cherry-tomato --quantity 6 --unit fruit
+
+  healthchange  establish the one absolute baseline, or apply an arbitrary
+              signed delta later. Both require rationale, an evidence summary,
+              at least one Planty record id, and an idempotency UUID; zero does
+              not archive or discard a plant
+              planty agent healthchange --plant <slug> (--baseline N | --delta N)
+                --reason <text> --evidence <text>
+                [--photo <uuid>] [--observation <uuid>] [--reading <uuid>]
+                --key <uuid>
+              example: planty agent healthchange --plant golden-pothos --delta -5 --reason "new leaf damage" --evidence "today's photo shows two newly yellow leaves" --photo 2c658779-4967-4831-b579-a6ed2584769c --key 6f0dd1c2-6b3a-4e0e-9d3f-2a4b8c9d0e1f
 
 Reminders:
 
@@ -253,14 +268,16 @@ var verbs = map[string]func(Deps, context.Context, io.Writer, []string) error{
 	"plants":       Deps.plants,
 	"show":         Deps.show,
 	"observations": Deps.observations,
+	"health":       Deps.health,
 	"reminders":    Deps.reminders,
 	"sensors":      Deps.sensors,
 	"today":        Deps.today,
 	"questions":    Deps.questions,
 	"coldwatch":    Deps.coldwatch,
 
-	"log":     Deps.logObservation,
-	"harvest": Deps.harvest,
+	"log":          Deps.logObservation,
+	"harvest":      Deps.harvest,
+	"healthchange": Deps.healthChange,
 
 	"notes":  Deps.notes,
 	"note":   Deps.note,

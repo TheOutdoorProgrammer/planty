@@ -26,7 +26,7 @@ func (*sequenceBackend) Name() string { return "sequence" }
 func TestAssessRepairsOneMalformedAnswerAndKeepsTheOriginal(t *testing.T) {
 	backend := &sequenceBackend{outcomes: []Outcome{
 		{Answer: `{"action":"water"`, Model: "model-a"},
-		{Answer: `{"action":"none","reasoning":"Wait today.","confidence":0.8,"sensor_summary":"Soil is still damp."}`, Model: "model-a"},
+		{Answer: `{"action":"none","reasoning":"Wait today.","confidence":0.8,"sensor_summary":"Soil is still damp.","health_mode":"unchanged","health_value":0,"health_reasoning":"No new evidence supports a change."}`, Model: "model-a"},
 	}}
 	seat := &Judge{fallback: backend}
 
@@ -64,8 +64,8 @@ func TestAssessReturnsBothFailuresWhenRepairFails(t *testing.T) {
 
 func TestDecodeResultRejectsSchemaValuesOutsideTheContract(t *testing.T) {
 	_, err := decodeResult(Outcome{
-		Answer: `{"action":"water","reasoning":"Water it.","confidence":2,"sensor_summary":"Dry."}`,
-	})
+		Answer: `{"action":"water","reasoning":"Water it.","confidence":2,"sensor_summary":"Dry.","health_mode":"unchanged","health_value":0,"health_reasoning":"No change."}`,
+	}, Evidence{})
 	if err == nil {
 		t.Fatal("confidence outside the schema was accepted")
 	}
