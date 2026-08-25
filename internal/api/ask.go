@@ -186,7 +186,7 @@ func (s *Server) photoBytes(ctx context.Context, id uuid.UUID) ([]byte, string, 
 	}
 	defer func() { _ = body.Close() }()
 
-	raw, err := io.ReadAll(io.LimitReader(body, MaxPhotoBytes))
+	raw, err := readBounded(body, MaxPhotoBytes)
 	if err != nil {
 		return nil, "", err
 	}

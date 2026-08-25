@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -131,7 +130,7 @@ func (s *Server) offerPhotos(r *http.Request, p plant.Plant) []judge.Offer {
 		}
 		defer func() { _ = body.Close() }()
 
-		raw, err := io.ReadAll(io.LimitReader(body, MaxPhotoBytes))
+		raw, err := readBounded(body, MaxPhotoBytes)
 		if err != nil {
 			return nil, "", false
 		}
