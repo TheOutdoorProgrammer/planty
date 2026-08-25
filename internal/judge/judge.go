@@ -214,7 +214,30 @@ type Result struct {
 
 	// Model is what answered. Filled in after decoding, not by it.
 	Model string `json:"-"`
+
+	// Attempts and the original malformed answer remain available to the run
+	// ledger even when the bounded repair succeeds.
+	Attempts       int    `json:"-"`
+	OriginalError  string `json:"-"`
+	OriginalOutput string `json:"-"`
 }
+
+// AssessmentError keeps the first malformed answer and the final failure
+// together. Daily persists it against the plant instead of reducing a useful
+// diagnosis to one aggregate failure count.
+type AssessmentError struct {
+	Model          string
+	Attempts       int
+	OriginalError  string
+	OriginalOutput string
+	FinalError     error
+}
+
+func (e *AssessmentError) Error() string {
+	return fmt.Sprintf("repair verdict after %s: %v", e.OriginalError, e.FinalError)
+}
+
+func (e *AssessmentError) Unwrap() error { return e.FinalError }
 
 // ErrRefused reports that safety classifiers declined the request.
 var ErrRefused = fmt.Errorf("model declined the request")
@@ -247,7 +270,7 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 		return Result{}, err
 	}
 
-	outcome, err := j.dispatch(ctx, Request{
+	req := Request{
 		Job:       JobAssess,
 		System:    system,
 		Turns:     []Turn{ask(text(describe(e)))},
@@ -256,17 +279,72 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 		// One small judgment per plant per day, run many times over: medium is
 		// where this model's quality holds without paying for depth.
 		Effort: EffortMedium,
-	})
+	}
+	outcome, err := j.dispatch(ctx, req)
 	if err != nil {
 		return Result{}, err
 	}
 
+	out, invalid := decodeResult(outcome)
+	if invalid == nil {
+		out.Attempts = 1
+		return out, nil
+	}
+
+	// One repair is enough to recover common truncation/schema mistakes without
+	// letting a scheduled job loop or silently spend an unbounded amount.
+	req.Turns = append(req.Turns,
+		answered(outcome.Answer),
+		ask(text("That answer was rejected: "+invalid.Error()+". Return one corrected JSON object matching the schema.")),
+	)
+	repaired, err := j.dispatch(ctx, req)
+	if err != nil {
+		return Result{}, &AssessmentError{
+			Model: outcome.Model, Attempts: 2, OriginalError: invalid.Error(),
+			OriginalOutput: outcome.Answer, FinalError: err,
+		}
+	}
+	out, err = decodeResult(repaired)
+	if err != nil {
+		return Result{}, &AssessmentError{
+			Model: repaired.Model, Attempts: 2, OriginalError: invalid.Error(),
+			OriginalOutput: outcome.Answer, FinalError: err,
+		}
+	}
+	out.Attempts = 2
+	out.OriginalError = invalid.Error()
+	out.OriginalOutput = outcome.Answer
+	return out, nil
+}
+
+func decodeResult(outcome Outcome) (Result, error) {
 	var out Result
 	if err := json.Unmarshal([]byte(outcome.Answer), &out); err != nil {
 		return Result{}, fmt.Errorf("decode verdict: %w", err)
 	}
+	if err := out.valid(); err != nil {
+		return Result{}, err
+	}
 	out.Model = outcome.Model
 	return out, nil
+}
+
+func (r Result) valid() error {
+	switch r.Action {
+	case plant.ActionNone, plant.ActionWater, plant.ActionCheck, plant.ActionUrgent, plant.ActionHarvest:
+	default:
+		return fmt.Errorf("invalid verdict action %q", r.Action)
+	}
+	if strings.TrimSpace(r.Reasoning) == "" {
+		return fmt.Errorf("verdict reasoning is empty")
+	}
+	if r.Confidence < 0 || r.Confidence > 1 {
+		return fmt.Errorf("verdict confidence %.3f is outside 0 through 1", r.Confidence)
+	}
+	if strings.TrimSpace(r.Summary) == "" {
+		return fmt.Errorf("verdict sensor summary is empty")
+	}
+	return nil
 }
 
 func resultSchema() (map[string]any, error) {

@@ -86,15 +86,29 @@ type Digest struct {
 
 	// Completeness belongs to the judgment run, not the current number of live
 	// plants. That keeps a partial model outage from masquerading as a full check.
-	Checked     int  `json:"checked"`
-	Expected    int  `json:"expected"`
-	Failed      int  `json:"failed"`
-	RunComplete bool `json:"run_complete"`
+	Checked     int               `json:"checked"`
+	Expected    int               `json:"expected"`
+	Failed      int               `json:"failed"`
+	RunComplete bool              `json:"run_complete"`
+	Failures    []JudgmentFailure `json:"failures,omitempty"`
 
 	// Three states a client must be able to tell apart: nothing needs doing,
 	// the data is stale, and the judgment has never run at all.
 	StaleSince *time.Time `json:"stale_since,omitempty"`
 	NeverRun   bool       `json:"never_run"`
+}
+
+// JudgmentFailure tells the operator which plant was missed and preserves the
+// provider evidence needed to diagnose or safely retry that one row.
+type JudgmentFailure struct {
+	RunID          uuid.UUID `json:"run_id"`
+	Plant          Plant     `json:"plant"`
+	Attempts       int       `json:"attempts"`
+	Model          string    `json:"model,omitempty"`
+	OriginalError  string    `json:"original_error,omitempty"`
+	OriginalOutput string    `json:"original_output,omitempty"`
+	FinalError     string    `json:"final_error,omitempty"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 // AllClear reports whether nothing needs doing and the latest garden-wide run

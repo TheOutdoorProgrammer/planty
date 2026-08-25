@@ -38,6 +38,69 @@ func TestReliableDigestRefusesPartialRunAllClear(t *testing.T) {
 	}
 }
 
+func TestFailedJudgmentCanBeDiagnosedAndRetriedWithoutTouchingSuccess(t *testing.T) {
+	s, ctx := testStore(t)
+	good := newPlant(t, s, ctx, "Judged fern")
+	bad := newPlant(t, s, ctx, "Missed fern")
+
+	run, err := s.StartJudgmentRun(ctx, 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordJudgmentPlantResult(ctx, run.ID, JudgmentResultInput{
+		PlantID: good.ID, Succeeded: true, Attempts: 1, Model: "model-a",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RecordJudgmentPlantResult(ctx, run.ID, JudgmentResultInput{
+		PlantID: bad.ID, Attempts: 2, Model: "model-b",
+		OriginalError: "invalid JSON", OriginalOutput: "{", FinalError: "repair failed",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteJudgmentRun(ctx, run.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	digest, err := s.ReliableDigest(ctx, plant.StaleAfter)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(digest.Failures) != 1 || digest.Failures[0].Plant.ID != bad.ID {
+		t.Fatalf("failed plant was not exposed: %+v", digest.Failures)
+	}
+	if digest.Failures[0].OriginalOutput != "{" || digest.Failures[0].Model != "model-b" {
+		t.Fatalf("diagnostic provenance was lost: %+v", digest.Failures[0])
+	}
+
+	reopened, failures, err := s.BeginLatestJudgmentRetry(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopened.ID != run.ID || len(failures) != 1 || failures[0].Plant.ID != bad.ID {
+		t.Fatalf("retry selected the wrong work: run=%s failures=%+v", reopened.ID, failures)
+	}
+	if err := s.RecordJudgmentPlantResult(ctx, run.ID, JudgmentResultInput{
+		PlantID: bad.ID, Succeeded: true, Attempts: 1, Model: "model-b",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.CompleteJudgmentRun(ctx, run.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.LatestJudgmentRun(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Succeeded != 2 || got.Failed != 0 {
+		t.Fatalf("retry counts = %d succeeded, %d failed", got.Succeeded, got.Failed)
+	}
+	if failures, err := s.FailedJudgments(ctx, run.ID); err != nil || len(failures) != 0 {
+		t.Fatalf("failures after repair = %+v, %v", failures, err)
+	}
+}
+
 func TestLatestUnfinishedJudgmentRunOutranksOlderCompleteRun(t *testing.T) {
 	s, ctx := testStore(t)
 

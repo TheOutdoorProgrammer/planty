@@ -101,19 +101,23 @@ struct StaleSummary: Sendable, Equatable {
     let reminders: [DueReminder]
     /// Actions Planty already knew about. Still shown; just never as calm.
     let pending: [DigestEntry]
+    /// Plants this run actually missed, rather than only an aggregate count.
+    let failures: [JudgmentFailure]
 
     init(
         since: Date,
         reason: StaleReason,
         now: Date,
         reminders: [DueReminder] = [],
-        pending: [DigestEntry]
+        pending: [DigestEntry],
+        failures: [JudgmentFailure] = []
     ) {
         self.since = since
         self.reason = reason
         self.now = now
         self.reminders = reminders
         self.pending = pending
+        self.failures = failures
     }
 
     var headline: String { "Planty needs a fresh look." }
@@ -127,6 +131,11 @@ struct StaleSummary: Sendable, Equatable {
         return pending.count == 1
             ? "1 action from the last good check is still below."
             : "\(pending.count) actions from the last good check are still below."
+    }
+
+    var failureLabel: String? {
+        guard !failures.isEmpty else { return nil }
+        return "Could not check " + failures.map(\.plant.commonName).joined(separator: ", ") + "."
     }
 }
 
@@ -179,7 +188,8 @@ extension TodayPresentation {
                     reason: reason,
                     now: inputs.now,
                     reminders: digest.sortedDueReminders,
-                    pending: digest.sortedEntries
+                    pending: digest.sortedEntries,
+                    failures: digest.failures
                 )
             )
         }

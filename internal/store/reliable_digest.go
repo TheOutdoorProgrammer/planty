@@ -38,6 +38,13 @@ func (s *Store) ReliableDigest(ctx context.Context, staleAfter time.Duration) (p
 	digest.RunComplete = run.CompletedAt != nil
 	digest.NeverRun = false
 	digest.StaleSince = nil
+	failed, err := s.FailedJudgments(ctx, run.ID)
+	if err != nil {
+		return digest, err
+	}
+	for _, result := range failed {
+		digest.Failures = append(digest.Failures, result.JudgmentFailure)
+	}
 
 	// An unfinished or failed run is incomplete, not stale. The explicit counts
 	// carry that state to clients. Staleness means the latest completed attempt

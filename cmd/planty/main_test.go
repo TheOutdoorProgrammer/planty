@@ -14,6 +14,7 @@ var manual = map[string]string{
 	"serve":   "runs as a Deployment, not a CronJob",
 	"migrate": "every command migrates on start, so it is only ever run by hand",
 	"autopsy": "takes a slug, and is asked for when a plant dies",
+	"retry":   "an operator runs it after diagnosing a partial daily check",
 
 	// Both are called by the judge, not by a schedule: `agent` is the short
 	// list of things a model may do to a plant, and `gate` is the hook that

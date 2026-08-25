@@ -12,6 +12,7 @@ struct Digest: Codable, Sendable, Hashable {
     let checked: Int
     let expected: Int
     let failed: Int
+    let failures: [JudgmentFailure]
     let runComplete: Bool
     var staleSince: Date?
 
@@ -31,6 +32,7 @@ struct Digest: Codable, Sendable, Hashable {
         case checked
         case expected
         case failed
+        case failures
         case runComplete = "run_complete"
         case staleSince = "stale_since"
         case neverRun = "never_run"
@@ -49,6 +51,7 @@ struct Digest: Codable, Sendable, Hashable {
         checked: Int,
         expected: Int? = nil,
         failed: Int = 0,
+        failures: [JudgmentFailure] = [],
         runComplete: Bool = true,
         staleSince: Date? = nil,
         neverRun: Bool = false,
@@ -61,6 +64,7 @@ struct Digest: Codable, Sendable, Hashable {
         self.checked = checked
         self.expected = expected ?? checked
         self.failed = failed
+        self.failures = failures
         self.runComplete = runComplete
         self.staleSince = staleSince
         self.neverRun = neverRun
@@ -72,6 +76,7 @@ struct Digest: Codable, Sendable, Hashable {
         checked = try container.decode(Int.self, forKey: .checked)
         expected = try container.decodeIfPresent(Int.self, forKey: .expected) ?? checked
         failed = try container.decodeIfPresent(Int.self, forKey: .failed) ?? 0
+        failures = try container.decodeIfPresent([JudgmentFailure].self, forKey: .failures) ?? []
         runComplete = try container.decodeIfPresent(Bool.self, forKey: .runComplete) ?? true
         staleSince = try container.decodeIfPresent(Date.self, forKey: .staleSince)
         neverRun = try container.decodeIfPresent(Bool.self, forKey: .neverRun) ?? false
@@ -151,6 +156,28 @@ struct Digest: Codable, Sendable, Hashable {
             }
             return lhs.plant.commonName.localizedCompare(rhs.plant.commonName) == .orderedAscending
         }
+    }
+}
+
+struct JudgmentFailure: Codable, Sendable, Hashable, Identifiable {
+    let runID: UUID
+    let plant: Plant
+    let attempts: Int
+    let model: String?
+    let originalError: String?
+    let finalError: String?
+    let updatedAt: Date
+
+    var id: UUID { plant.id }
+
+    enum CodingKeys: String, CodingKey {
+        case runID = "run_id"
+        case plant
+        case attempts
+        case model
+        case originalError = "original_error"
+        case finalError = "final_error"
+        case updatedAt = "updated_at"
     }
 }
 

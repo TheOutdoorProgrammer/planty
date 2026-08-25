@@ -64,6 +64,11 @@ struct StaleBanner: View {
                     .font(.footnote)
                     .foregroundStyle(PlantyColor.secondaryText)
             }
+            if let failureLabel = summary.failureLabel {
+                Label(failureLabel, systemImage: "exclamationmark.triangle.fill")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(PlantyColor.yellow)
+            }
             Button("Check connections", action: checkConnections)
                 .buttonStyle(PrimaryButtonStyle(color: PlantyColor.orange))
             Button("Take a photo", action: takePhoto)

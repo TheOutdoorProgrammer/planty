@@ -30,6 +30,7 @@ const usage = `planty <command>
   serve    run the HTTP API
   ingest   pull current sensor values from Home Assistant
   daily    judge every plant and send the digest
+  retry    rerun only the plants that failed the latest daily judgment
   cold     check tonight's forecast, both bringing in and putting back out
   away     pre-departure watering pass, or the briefing on return
   chase    chase verdicts nobody acknowledged, one rung up the ladder
@@ -105,6 +106,8 @@ func run(log *slog.Logger) error {
 		return job.Ingest{Store: db, HA: homeAssistant(), Log: log}.Run(ctx)
 	case "daily":
 		return daily(db, log, notifications).Run(ctx)
+	case "retry":
+		return daily(db, log, notifications).RetryFailed(ctx)
 	case "cold":
 		return coldWatch(db, log, notifications).Run(ctx)
 	case "away":

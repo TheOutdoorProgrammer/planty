@@ -58,6 +58,29 @@ struct ModelDecodingTests {
         #expect(digest.isAllClear == false)
     }
 
+    @Test("A partial digest names the plant and provider that failed")
+    func judgmentFailure() throws {
+        let failure = """
+            "failed": 1,
+            "failures": [{
+              "run_id": "8B7B4A0E-3B9C-4E2A-9A6F-0F1C2D3E4A5B",
+              "plant": \(Self.monaJSON),
+              "attempts": 2,
+              "model": "model-b",
+              "original_error": "decode verdict",
+              "final_error": "repair failed",
+              "updated_at": "2026-08-18T08:04:00Z"
+            }],
+            "checked": 7
+            """
+        let json = Self.digestJSON.replacingOccurrences(of: "\"checked\": 8", with: failure)
+        let digest = try decode(Digest.self, json)
+
+        #expect(digest.failures.count == 1)
+        #expect(digest.failures[0].plant.commonName == "Mona")
+        #expect(digest.failures[0].model == "model-b")
+    }
+
     @Test("A digest carrying stale_since is never all clear, even with no entries")
     func staleDigestIsNotAllClear() throws {
         let json = Self.digestJSON

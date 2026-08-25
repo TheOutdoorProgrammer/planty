@@ -43,6 +43,7 @@ func (s *Server) today(w http.ResponseWriter, r *http.Request) {
 		"checked":        digest.Checked,
 		"expected":       digest.Expected,
 		"failed":         digest.Failed,
+		"failures":       digest.Failures,
 		"run_complete":   digest.RunComplete,
 		"stale_since":    digest.StaleSince,
 		"never_run":      digest.NeverRun,

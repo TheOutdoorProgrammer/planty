@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
@@ -39,8 +41,10 @@ func (d Daily) Run(ctx context.Context) error {
 	// watering system. Still record that this daily check covered zero plants so
 	// Today cannot inherit a false all-clear from an older successful run.
 	if d.Judge == nil {
-		for range plants {
-			if err := d.Store.RecordJudgmentResult(ctx, run.ID, false); err != nil {
+		for _, p := range plants {
+			if err := d.Store.RecordJudgmentPlantResult(ctx, run.ID, store.JudgmentResultInput{
+				PlantID: p.ID, Attempts: 1, FinalError: "no model backend is configured",
+			}); err != nil {
 				return fmt.Errorf("record unavailable judgment: %w", err)
 			}
 		}
@@ -54,14 +58,14 @@ func (d Daily) Run(ctx context.Context) error {
 
 	var failed int
 	for _, p := range plants {
-		judged := true
-		if err := d.judgeOne(ctx, p); err != nil {
+		result, err := d.judgeOne(ctx, p)
+		if err != nil {
 			// One plant failing must not silence the rest of the digest.
 			d.Log.Error("judgment failed", "plant", p.Slug, "error", err)
 			failed++
-			judged = false
 		}
-		if err := d.Store.RecordJudgmentResult(ctx, run.ID, judged); err != nil {
+		if err := d.Store.RecordJudgmentPlantResult(ctx, run.ID,
+			judgmentResult(p.ID, result, err)); err != nil {
 			return fmt.Errorf("record judgment result for %s: %w", p.Slug, err)
 		}
 	}
@@ -92,15 +96,15 @@ func (d Daily) Run(ctx context.Context) error {
 	return d.notify(ctx, digest)
 }
 
-func (d Daily) judgeOne(ctx context.Context, p plant.Plant) error {
+func (d Daily) judgeOne(ctx context.Context, p plant.Plant) (judge.Result, error) {
 	evidence, err := d.gather(ctx, p)
 	if err != nil {
-		return err
+		return judge.Result{}, err
 	}
 
 	result, err := d.Judge.Assess(ctx, evidence)
 	if err != nil {
-		return err
+		return judge.Result{}, err
 	}
 
 	_, err = d.Store.SaveVerdict(ctx, plant.Verdict{
@@ -111,7 +115,63 @@ func (d Daily) judgeOne(ctx context.Context, p plant.Plant) error {
 		Confidence: result.Confidence,
 		Evidence:   plant.Evidence{SensorSummary: result.Summary, ModelVersion: result.Model},
 	})
-	return err
+	return result, err
+}
+
+func judgmentResult(plantID uuid.UUID, result judge.Result, err error) store.JudgmentResultInput {
+	input := store.JudgmentResultInput{
+		PlantID: plantID, Succeeded: err == nil, Attempts: result.Attempts,
+		Model: result.Model, OriginalError: result.OriginalError,
+		OriginalOutput: result.OriginalOutput,
+	}
+	if input.Attempts == 0 {
+		input.Attempts = 1
+	}
+	if err == nil {
+		return input
+	}
+	input.FinalError = err.Error()
+	var assessment *judge.AssessmentError
+	if errors.As(err, &assessment) {
+		input.Attempts = assessment.Attempts
+		input.Model = assessment.Model
+		input.OriginalError = assessment.OriginalError
+		input.OriginalOutput = assessment.OriginalOutput
+	}
+	return input
+}
+
+// RetryFailed reopens the latest partial run and judges only its failed
+// plants. Existing successful rows and verdicts are never touched.
+func (d Daily) RetryFailed(ctx context.Context) error {
+	run, failed, err := d.Store.BeginLatestJudgmentRetry(ctx)
+	if err != nil {
+		return fmt.Errorf("begin failed judgment retry: %w", err)
+	}
+	if d.Judge == nil {
+		_ = d.Store.CompleteJudgmentRun(ctx, run.ID)
+		return fmt.Errorf("retry failed judgments: no model backend is configured")
+	}
+
+	remaining := 0
+	for _, prior := range failed {
+		result, judgeErr := d.judgeOne(ctx, prior.Plant)
+		if judgeErr != nil {
+			remaining++
+			d.Log.Error("judgment retry failed", "plant", prior.Plant.Slug, "error", judgeErr)
+		}
+		if err := d.Store.RecordJudgmentPlantResult(ctx, run.ID,
+			judgmentResult(prior.Plant.ID, result, judgeErr)); err != nil {
+			return fmt.Errorf("record retry for %s: %w", prior.Plant.Slug, err)
+		}
+	}
+	if err := d.Store.CompleteJudgmentRun(ctx, run.ID); err != nil {
+		return fmt.Errorf("complete judgment retry: %w", err)
+	}
+	if remaining > 0 {
+		return fmt.Errorf("%d plants still failed judgment", remaining)
+	}
+	return nil
 }
 
 func (d Daily) gather(ctx context.Context, p plant.Plant) (judge.Evidence, error) {
