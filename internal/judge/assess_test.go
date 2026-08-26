@@ -3,9 +3,12 @@ package judge
 import (
 	"context"
 	"errors"
+	"slices"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/google/uuid"
 )
 
@@ -55,6 +58,67 @@ func TestAssessAttachesAndNamesTheExactLatestPhotograph(t *testing.T) {
 	}
 }
 
+func TestScheduledAssessmentReceivesTheCompleteAgentReferenceAndFanRules(t *testing.T) {
+	backend := &sequenceBackend{outcomes: []Outcome{{
+		Answer: `{"action":"none","reasoning":"Airflow is already handled.","confidence":0.8,"sensor_summary":"Fan control was available.","health_mode":"unchanged","health_value":0,"health_reasoning":"No new health evidence."}`,
+	}}}
+	acting := &Acting{Binary: "/planty", Usage: "COMPLETE AGENT REFERENCE"}
+	seat := (&Judge{fallback: backend}).Able(acting)
+
+	if _, err := seat.Assess(context.Background(), Evidence{Plant: plant.Plant{Slug: "shared-fern"}}); err != nil {
+		t.Fatalf("assess: %v", err)
+	}
+	request := backend.requests[0]
+	if request.Acting == nil {
+		t.Fatal("scheduled assessment was not granted the acting toolbox")
+	}
+	if request.Acting == acting {
+		t.Fatal("scheduled assessment reused the unrestricted conversation toolbox")
+	}
+	for _, want := range []string{"show", "actuators", "actuatorstart", "actuatorstop"} {
+		if !slices.Contains(request.Acting.AgentVerbs, want) {
+			t.Errorf("scheduled assessment is missing allowed verb %q: %v", want, request.Acting.AgentVerbs)
+		}
+	}
+	for _, refused := range []string{"water", "log", "update", "archive", "healthchange"} {
+		if slices.Contains(request.Acting.AgentVerbs, refused) {
+			t.Errorf("scheduled assessment was granted mutating verb %q", refused)
+		}
+	}
+	for _, want := range []string{
+		"COMPLETE AGENT REFERENCE",
+		`slug is "shared-fern"`,
+		"list its actuators",
+		"enforced command set",
+		"shortest useful bounded",
+		"automatically records airflow on every plant",
+		"Never run the water command",
+	} {
+		if !strings.Contains(request.System, want) {
+			t.Errorf("scheduled prompt is missing %q:\n%s", want, request.System)
+		}
+	}
+}
+
+func TestEveryBuiltInPromptStatesItsAuthority(t *testing.T) {
+	checks := map[string]struct {
+		prompt string
+		want   string
+	}{
+		"identify":     {identifySystem, "no authority to create one"},
+		"postmortem":   {postmortemSystem, "control devices"},
+		"owner update": {ownerUpdateSystem, "drafts a message only"},
+		"scratch":      {scratchSystem, "Do not create a plant record"},
+		"consult":      {consultSystem, "Answer the question asked"},
+		"assess":       {system, "single most useful action"},
+	}
+	for name, check := range checks {
+		if !strings.Contains(check.prompt, check.want) {
+			t.Errorf("%s prompt is missing its authority boundary %q", name, check.want)
+		}
+	}
+}
+
 func (*sequenceBackend) Name() string { return "sequence" }
 
 func TestAssessRepairsOneMalformedAnswerAndKeepsTheOriginal(t *testing.T) {
@@ -70,6 +134,9 @@ func TestAssessRepairsOneMalformedAnswerAndKeepsTheOriginal(t *testing.T) {
 	}
 	if backend.calls != 2 || result.Attempts != 2 {
 		t.Fatalf("repair calls=%d attempts=%d, want 2 and 2", backend.calls, result.Attempts)
+	}
+	if backend.requests[1].Acting != nil {
+		t.Fatal("the schema repair pass retained physical acting authority")
 	}
 	if result.OriginalOutput != `{"action":"water"` || result.OriginalError == "" {
 		t.Fatalf("original malformed answer was lost: %#v", result)

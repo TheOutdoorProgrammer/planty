@@ -176,7 +176,7 @@ func (t *toolbox) runAgent(ctx context.Context, command string) string {
 	if t.acting.Refuse == nil {
 		return "Refused: nothing may be run here."
 	}
-	if reason := t.acting.Refuse(command); reason != "" {
+	if reason := t.acting.Refuse(command, t.acting.AgentVerbs); reason != "" {
 		return "Refused: " + reason
 	}
 

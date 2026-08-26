@@ -69,7 +69,7 @@ A plant story combines:
 - Recent observations and readings.
 - Open and historical verdicts with evidence.
 - Notes, reminders, harvests, and consultations.
-- Actions for capture, care recording, editing, and contextual questions.
+- Actions for capture, care recording, bounded airflow, editing, and contextual questions.
 
 When a photograph exists, **Analyze latest photo again** runs a fresh assessment immediately using the newest photo and current record.
 It is separate from a care change follow-up, which compares a baseline with later evidence only after a real watering, move, repot, fertilizing, or pruning record.
@@ -77,6 +77,8 @@ The follow-up flow explains that its later-photo instruction is guidance for the
 
 Photograph comparison becomes available when at least two photos exist.
 Unknown toxicity is labeled “Not checked” and is never styled as safe.
+An assigned fan appears as an Airflow action on the plant story.
+The sheet offers bounded duration choices, names every other plant sharing the fan before start, shows the active countdown, and provides an explicit stop.
 
 ## Consultation
 

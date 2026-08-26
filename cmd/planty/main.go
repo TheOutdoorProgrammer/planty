@@ -76,7 +76,12 @@ func run(log *slog.Logger) error {
 	}
 
 	if os.Args[1] == "gate" {
-		os.Exit(agent.Gate(os.Stdin, os.Stderr))
+		allowed, ok := gateAgentVerbs(os.Args[2:])
+		if !ok {
+			fmt.Fprintln(os.Stderr, "planty gate: invalid agent verb boundary")
+			os.Exit(agent.Blocked)
+		}
+		os.Exit(agent.Gate(os.Stdin, os.Stderr, allowed...))
 	}
 
 	dsn := os.Getenv("PLANTY_DATABASE_URL")
@@ -293,7 +298,7 @@ func daily(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 	}
 	return job.Daily{
 		Store:         db,
-		Judge:         judge.New().Assigned(db).Instructed(db),
+		Judge:         judge.New().Able(acting()).Assigned(db).Instructed(db),
 		Log:           log,
 		Notifications: notifications,
 		Photos:        storage,
@@ -313,8 +318,28 @@ func acting() *judge.Acting {
 		Usage:   agent.Usage,
 		Trusted: agent.Trusted,
 		Sources: agent.Sources,
-		Refuse:  agent.Refuse,
+		Refuse:  agent.RefuseFor,
 	}
+}
+
+func gateAgentVerbs(args []string) ([]string, bool) {
+	if len(args) == 0 {
+		return nil, true
+	}
+	if len(args) != 1 || !strings.HasPrefix(args[0], "--agent-verbs=") {
+		return nil, false
+	}
+	raw := strings.TrimPrefix(args[0], "--agent-verbs=")
+	if raw == "" {
+		return nil, false
+	}
+	verbs := strings.Split(raw, ",")
+	for _, verb := range verbs {
+		if verb == "" || strings.ContainsAny(verb, " ") {
+			return nil, false
+		}
+	}
+	return verbs, true
 }
 
 func backendName(j *judge.Judge) string {

@@ -103,6 +103,8 @@ A shared room fan remains one actuator assigned to several plants rather than se
 Durations are bounded to one hour, only one unfinished lease may exist per actuator, and command idempotency keys make request retries incapable of extending or repeating a run.
 The server reconciles overdue leases independently of the initiating request, and `planty reconcile-actuators` provides the same recovery pass as a standalone job after a restart.
 A failed `turn_off` leaves the lease unfinished so later reconciliation retries it.
+A successful `turn_on` and its `started` audit event are committed with one `airflow` observation for every current plant assignment.
+The observation describes the requested duration as an upper bound because an explicit stop can end the run early, and an idempotent retry cannot duplicate those plant records.
 
 `plant_actuator_events` is the append-only command ledger: request, successful start, failed start, requested stop, successful stop, failed stop, and already-stopped outcomes retain actor, source, lease, detail, and idempotency provenance.
 Deleting an actuator only removes it from the active allowlist; historical leases and events remain.
@@ -123,7 +125,7 @@ Everything a human or an agent recorded. This is the write path the app and the 
 
 `id`, `plant_id`, `kind`, `body`, `occurred_at`, `source`, `actor`.
 
-`kind` is one of `watered`, `repotted`, `fertilized`, `pruned`, `harvested`, `moved`, `symptom`, `note`, `died`.
+`kind` is one of `watered`, `airflow`, `misted`, `repotted`, `fertilized`, `pruned`, `harvested`, `moved`, `symptom`, `note`, `died`.
 
 `source` is `app`, `agent`, or `automation`, and it is not cosmetic: it is how you later tell what Planty did from what you did, which is the first question asked when something went wrong.
 
@@ -314,7 +316,9 @@ Backends without resumable sessions always receive the stored transcript, which 
 **A consultation can write, through one command and nothing else.** Told "I watered it this morning", "move it to the entryway" or "remind me to mist this twice a day", it does that rather than telling you to.
 Writes go through `planty agent`, which covers the whole service except `autopsy`, and they land with source `agent` so the record always says who claimed a thing happened.
 Its reference is `planty agent help`, and the same text is handed to the model in its system prompt so it never has to explore to find a flag.
-The daily verdict, identification and autopsies stay read-only: a scheduled judgment that recorded observations would be judging evidence it wrote itself.
+The daily verdict may start or stop only an explicitly assigned, durably bounded fan when current plant evidence justifies airflow.
+It receives the same complete `planty agent` reference as a consultation, must inspect every plant sharing an actuator, and cannot use scheduled assessment authority for watering or general record maintenance.
+A successful physical start writes its own `airflow` records after Home Assistant accepts the command, while identification, postmortems, and owner updates remain read-only.
 `PLANTY_JUDGE_CAN_ACT=false` turns it off. `adr/0002` records what holds it shut and what was rejected.
 
 **Reminders are two fields because misting is not watering.** `every_days` says how often a day qualifies and `at_hours` says when on that day, so a mushroom kit is `{every_days: 1, at_hours: [8, 20]}` and a pothos is `{every_days: 10, at_hours: [8]}`.

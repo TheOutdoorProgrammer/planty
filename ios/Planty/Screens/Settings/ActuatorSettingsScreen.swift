@@ -192,7 +192,7 @@ private struct ActuatorDetailScreen: View {
 
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
-    @State private var durationSeconds = 600
+    @State private var duration = ActuatorRunDuration.tenMinutes
     @State private var name = ""
     @State private var selectedPlantIDs: Set<UUID> = []
     @State private var failure: PlantyError?
@@ -227,14 +227,12 @@ private struct ActuatorDetailScreen: View {
                     } else {
                         Text("No active lease is known.").foregroundStyle(PlantyColor.secondaryText)
                     }
-                    Picker("Bounded run time", selection: $durationSeconds) {
-                        Text("5 minutes").tag(300)
-                        Text("10 minutes").tag(600)
-                        Text("15 minutes").tag(900)
-                        Text("30 minutes").tag(1_800)
-                        Text("1 hour maximum").tag(3_600)
+                    Picker("Bounded run time", selection: $duration) {
+                        ForEach(ActuatorRunDuration.allCases) { duration in
+                            Text(duration.label).tag(duration)
+                        }
                     }
-                    Button("Start bounded run") { Task { failure = await session.actuators.start(actuator, durationSeconds: durationSeconds) } }
+                    Button("Start bounded run") { Task { failure = await session.actuators.start(actuator, durationSeconds: duration.rawValue) } }
                         .disabled(session.actuators.controlling.contains(actuator.id) || lease?.isActive == true)
                     Button("Stop now") { Task { failure = await session.actuators.stop(actuator) } }
                         .disabled(session.actuators.controlling.contains(actuator.id))

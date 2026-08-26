@@ -44,7 +44,7 @@ Scheduled work is one command per Kubernetes CronJob:
 | `planty verify-water` | Every 15 minutes | Close completed manual watering attempts after sensor evidence has settled. |
 | `planty prune-photos` | 03:30 | Finish requested deletions and expire unowned consultation photos after 30 days. |
 | `planty reconcile-actuators` | Every minute | Turn off bounded fan and smart-plug leases whose deadlines elapsed. |
-| `planty daily` | 08:00 | Judge active plants, persist the garden-wide run, sweep for postmortems, and send a digest. |
+| `planty daily` | 08:00 | Judge active plants, optionally run an evidence-justified assigned fan, persist the garden-wide run, sweep for postmortems, and send a digest. |
 | `planty away` | 08:30 | Send the pre-departure pass or return briefing. |
 | `planty thirst` | 09:00 and 18:00 | Report calibrated plants that appear dry without moving water. |
 | `planty chase` | 13:00 and 20:00 | Follow up on open care actions. |
@@ -67,7 +67,7 @@ The overlay can add household context, priorities, and style preferences, while 
 
 Providers are declared with `PLANTY_PROVIDERS`.
 The configured fallback selected by `PLANTY_JUDGE` can use the Claude Code subscription or the direct Anthropic API, while declared OpenAI-compatible providers use the shared chat-completions harness.
-The Claude Code CLI and OpenAI-compatible harness support acting jobs; the direct Anthropic API fallback is one-shot and cannot execute Planty tools.
+Daily assessment and consultation are acting jobs, so they require the Claude Code CLI or OpenAI-compatible harness; the direct Anthropic API fallback remains available only to one-shot jobs that do not execute Planty tools.
 Current photographs can reach any verified vision model, and acting providers must advertise offered-photo access before they can be assigned to consultations.
 The Claude Code CLI and OpenAI-compatible harness can selectively open offered history; the direct Anthropic API remains explicitly ineligible.
 
@@ -77,6 +77,7 @@ The Claude Code CLI and OpenAI-compatible harness can selectively open offered h
 ## Integrations and boundaries
 
 Home Assistant supplies sensor readings, a forecast, the optional LetPot watering line, and explicitly registered plant fans or smart plugs.
+Planty can run a registered actuator for at most one hour from a plant page or an evidence-driven assessment, records successful shared airflow against every assigned plant, and persists the shutdown deadline before Home Assistant receives `turn_on`.
 It is not a notification transport.
 Planty sends scheduled alerts directly to registered iOS devices through APNs and fails the job when native delivery is unavailable.
 

@@ -108,7 +108,10 @@ saying so is the useful answer.
 
 Never invent a species to fill the list. One candidate is a fine answer, and an
 empty list is better than a wrong name stated confidently, because somebody is
-going to water a plant based on this.`
+going to water a plant based on this.
+
+This job only identifies the submitted photograph. It has no plant record and
+no authority to create one, record care, control devices, or claim that it did.`
 
 func identifyPrompt(seen Sighting) string {
 	var b strings.Builder

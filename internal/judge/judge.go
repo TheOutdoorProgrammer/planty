@@ -92,9 +92,9 @@ func (j *Judge) dispatch(ctx context.Context, req Request) (Outcome, error) {
 	return backend.Judge(ctx, req)
 }
 
-// Able lets a judge write to a plant's record as well as read it. Only the
-// conversation is given this: a daily verdict that quietly recorded
-// observations would be judging evidence it had written itself.
+// Able lets an explicitly acting job use the closed Planty command surface.
+// Call sites still opt in per Request, so identification and reporting jobs do
+// not inherit physical or record-writing authority from the shared Judge.
 func (j *Judge) Able(a *Acting) *Judge {
 	if j == nil {
 		return nil
@@ -324,6 +324,46 @@ Rules that matter more than anything else you know about plants:
 Answer with the single most useful action and a one-sentence reason a beginner
 can act on. No preamble, no hedging, no lists.`
 
+const assessmentActingRules = `Rules for acting during this scheduled assessment:
+
+- This assessment is about the plant whose slug is %q. An actuator command must
+  name that plant, and may use only an actuator assigned to it.
+- The complete reference also describes features reserved for conversations.
+  This job's enforced command set is read-only garden inspection plus
+  actuatorstart and actuatorstop; every other write is unavailable here.
+- Read before writing. Use the plant record and list its actuators before any
+  physical command. Do not create, rename, archive, or otherwise maintain plant
+  records during a scheduled assessment.
+- Watering remains recommendation-only here. Never run the water command from a
+  scheduled assessment.
+- You may start or stop an assigned fan when current, plant-specific evidence
+  shows airflow is useful now. General species advice or a preventative routine
+  is not enough. Use a fresh idempotency key, choose the shortest useful bounded
+  duration, and never work around a refusal.
+- The actuator list names every plant sharing a fan. Inspect each of those plant
+  records before changing it. Do not stop an active bounded run merely because
+  the plant currently being assessed does not need another run.
+- A successful start automatically records airflow on every plant assigned to
+  the shared fan. Do not log a second airflow observation.
+- Perform any justified fan command before returning the required verdict JSON.
+  The verdict must still describe the single most useful action for the person;
+  mention completed airflow plainly so it is not presented as an undone chore.`
+
+var assessmentAgentVerbs = []string{
+	"plants", "show", "observations", "health", "actuators", "reminders",
+	"sensors", "today", "questions", "coldwatch", "notes",
+	"actuatorstart", "actuatorstop",
+}
+
+func assessmentActing(acting *Acting) *Acting {
+	if acting == nil {
+		return nil
+	}
+	scoped := *acting
+	scoped.AgentVerbs = append([]string(nil), assessmentAgentVerbs...)
+	return &scoped
+}
+
 // Assess asks for one plant's verdict.
 func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 	schema, err := resultSchema()
@@ -337,9 +377,10 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 	}
 	req := Request{
 		Job:       JobAssess,
-		System:    system,
+		System:    j.withActing(system, fmt.Sprintf(assessmentActingRules, e.Plant.Slug)),
 		Turns:     []Turn{ask(parts...)},
 		Schema:    schema,
+		Acting:    assessmentActing(j.acting),
 		MaxTokens: 2048,
 		// One small judgment per plant per day, run many times over: medium is
 		// where this model's quality holds without paying for depth.
@@ -358,6 +399,13 @@ func (j *Judge) Assess(ctx context.Context, e Evidence) (Result, error) {
 
 	// One repair is enough to recover common truncation/schema mistakes without
 	// letting a scheduled job loop or silently spend an unbounded amount.
+	// Physical work already happened, if it was justified, so the repair pass is
+	// deliberately schema-only and cannot start a second actuator command.
+	req.Acting = nil
+	req.System = system + `
+
+This is a schema repair pass only. Do not act or claim a new action; return the
+corrected verdict JSON for the assessment that already ran.`
 	req.Turns = append(req.Turns,
 		answered(outcome.Answer),
 		ask(text("That answer was rejected: "+invalid.Error()+". Return one corrected JSON object matching the schema.")),

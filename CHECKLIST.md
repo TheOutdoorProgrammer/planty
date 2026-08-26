@@ -18,6 +18,7 @@ Future work belongs in [ROADMAP.md](ROADMAP.md), durable trade-offs belong in [a
 - [x] Rechecks and household experiments share a durable evidence-window lifecycle with bounded review dates and audited Do-Not-Disturb overrides.
 - [x] Garden incidents correlate inspectable shared factors without replacing any plant's individual action or claiming causation.
 - [x] Plant fans and smart plugs require explicit plant assignments and bounded durable shutdown leases.
+- [x] Successful actuator starts record airflow once on every assigned plant without duplicating on retries.
 - [x] Photograph storage retries after startup, reports readiness separately, and recovers without a pod restart.
 - [x] Photograph uploads are atomic under duplicate races and compensate object storage when metadata cannot be committed.
 - [x] Archived plants can be restored without losing their story, and explicit photo deletion removes metadata and bytes through a retryable pending state.
@@ -29,7 +30,7 @@ Future work belongs in [ROADMAP.md](ROADMAP.md), durable trade-offs belong in [a
 
 - [x] `ingest` imports Home Assistant sensor readings every 20 minutes.
 - [x] `thirst` reports dry calibrated plants twice daily without moving water.
-- [x] `daily` judges every active plant, records the run outcome, sweeps for postmortems, and sends one digest.
+- [x] `daily` judges every active plant, can run an evidence-justified assigned fan through the bounded controller, records the run outcome, sweeps for postmortems, and sends one digest.
 - [x] `chase` follows up on unacknowledged care actions twice daily.
 - [x] `away` sends departure and return care briefings.
 - [x] `cold` compares the forecast against each plant's minimum temperature and tracks shelter state in Planty.
@@ -44,6 +45,7 @@ Future work belongs in [ROADMAP.md](ROADMAP.md), durable trade-offs belong in [a
 - [x] Today distinguishes calm, stale, incomplete, unconfigured, loading, and actionable states.
 - [x] Capture supports camera and photo-library input, plant identification, plant creation, timeline upload, and quick observations.
 - [x] Plant stories merge photographs, findings, sensor evidence, observations, notes, reminders, and harvest history.
+- [x] A plant story can start an assigned shared fan for a chosen bounded duration, show its countdown, and stop it explicitly.
 - [x] Consultations can use current and historical photographs and can write through the constrained `planty agent` interface.
 - [x] More contains away mode, cold shelter state, owner questions, harvest history, postmortem lessons, owner updates, and settings.
 - [x] Settings tests API reachability and allows a compatible model to be selected independently for each model job.

@@ -9,6 +9,7 @@ struct PlantStoryScreen: View {
     @State private var isEditing = false
     @State private var isEditingToxicity = false
     @State private var isLoggingCare = false
+    @State private var isManagingAirflow = false
     @State private var isHarvesting = false
     @State private var isConfirmingDeath = false
     @State private var isConfirmingArchive = false
@@ -152,6 +153,12 @@ struct PlantStoryScreen: View {
             }
             .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $isManagingAirflow) {
+            AirflowControlSheet(plant: store.plant) {
+                await store.load()
+            }
+            .presentationDetents([.medium, .large])
+        }
         .sheet(isPresented: $isHarvesting) {
             HarvestSheet(plantName: store.plant.commonName) { quantity, unit, notes in
                 await store.logHarvest(quantity: quantity, unit: unit, notes: notes)
@@ -228,7 +235,8 @@ struct PlantStoryScreen: View {
     private func refresh() async {
         async let story: Void = store.load()
         async let health: Void = session.health.load(store.plant)
-        _ = await (story, health)
+        async let actuators: Void = session.actuators.load()
+        _ = await (story, health, actuators)
     }
 
     private var header: some View {
@@ -328,6 +336,20 @@ struct PlantStoryScreen: View {
                 .buttonStyle(SecondaryButtonStyle())
                 .accessibilityLabel("Log care for \(store.plant.commonName)")
 
+                if !plantActuators.isEmpty {
+                    Button {
+                        isManagingAirflow = true
+                    } label: {
+                        ActionFace(
+                            activePlantActuator == nil ? "Airflow" : "Fan running",
+                            icon: "fan.fill",
+                            detail: activePlantActuator == nil ? "Choose a time" : "Tap to view or stop"
+                        )
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityLabel("Control airflow for \(store.plant.commonName)")
+                }
+
                 NavigationLink {
                     RemindersScreen(store: session.remindersStore(for: store.plant))
                 } label: {
@@ -353,6 +375,14 @@ struct PlantStoryScreen: View {
                 }
             }
         }
+    }
+
+    private var plantActuators: [Actuator] {
+        session.actuators.registered.assigned(to: store.plant.id)
+    }
+
+    private var activePlantActuator: Actuator? {
+        plantActuators.first { session.actuators.leases[$0.id]?.isActive == true }
     }
 
     private var referenceActions: some View {

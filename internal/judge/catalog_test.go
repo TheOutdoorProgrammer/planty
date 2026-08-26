@@ -54,13 +54,10 @@ func TestHistoricalPhotoAccessIsASeparateCapability(t *testing.T) {
 
 func TestDirectAnthropicAPIIsExplicitlyIneligibleForActingJobs(t *testing.T) {
 	backend := newAPIBackend("test", "claude-opus-5")
-	for _, job := range []Job{JobConsult, JobAsk} {
+	for _, job := range []Job{JobAssess, JobConsult, JobAsk} {
 		if err := backend.CanDo(job); err == nil {
 			t.Errorf("direct API was allowed on acting job %s", job)
 		}
-	}
-	if err := backend.CanDo(JobAssess); err != nil {
-		t.Fatalf("direct API was refused one-shot assessment: %v", err)
 	}
 }
 

@@ -50,11 +50,9 @@ general plant advice, whenever the record can answer at all.
   waiting is nearly always the safer advice.
 - Talk like a person. Short, direct, no preamble and no lists of possibilities.`
 
-// actingSystem is appended wherever the model may act. The first %s is
-// agent.Usage, carried in via Acting because importing agent from here is a
-// cycle; the second is which plant the conversation is about, which differs
-// between a plant's own page and a photograph of something in a shop.
-const actingSystem = `
+// actingReferenceSystem is the one complete command reference shared by every
+// job that may act. agent.Usage arrives through Acting to avoid an import cycle.
+const actingReferenceSystem = `
 
 You can also act, through planty agent. What follows is its complete
 reference — every verb, every flag, every valid value, with an example each.
@@ -87,9 +85,9 @@ Two things that do not exist, so that you do not spend a turn looking:
   a note against that plant, and something worth remembering about the place is
   a household note, which is read back to you on every conversation.
 - The verb list above is complete. If what you want is not in it, it is not
-  available; say so plainly rather than inventing a verb and trying it.
+  available; say so plainly rather than inventing a verb and trying it.`
 
-Rules for acting, which outrank everything above:
+const conversationActingRules = `Rules for acting, which outrank everything above:
 
 %s
 - Record only what the person tells you actually happened, when they say it
@@ -100,6 +98,13 @@ Rules for acting, which outrank everything above:
   after checking the probes. Run it when the person asks you to water, and
   never on your own initiative: suggesting it is fine, running it unasked is
   not. If it declines to pump, relay its reason.
+- Fans are real too. You may start or stop an assigned fan when current plant
+  evidence supports airflow. List the plant's actuators first, use a fresh
+  idempotency key for each new decision, and inspect every assigned plant before
+  changing a shared fan. Do not stop an active bounded run merely because the
+  current plant does not need another one. Choose the shortest useful bounded
+  duration. A successful start records airflow on every plant assigned to that
+  shared fan automatically; do not log a second airflow observation yourself.
 - Asked whether a plant is dangerous to an animal or a person, answer from its
   stored toxicity if it has one. If it does not, look it up on the trusted
   sources and record what you find with the toxicity verb, so the next person
@@ -142,10 +147,15 @@ func (j *Judge) Consult(ctx context.Context, h History, offered []Offer,
 }
 
 func (j *Judge) conversationSystem(base, subject string) string {
+	rules := fmt.Sprintf(conversationActingRules, subject)
+	return j.withActing(base, rules)
+}
+
+func (j *Judge) withActing(base, rules string) string {
 	if j.acting == nil {
 		return base
 	}
-	system := base + fmt.Sprintf(actingSystem, j.acting.Usage, subject)
+	system := base + fmt.Sprintf(actingReferenceSystem, j.acting.Usage) + "\n\n" + rules
 	if j.acting.Sources != "" {
 		system += "\n\n" + j.acting.Sources
 	}

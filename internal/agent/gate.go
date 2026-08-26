@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
@@ -45,7 +46,7 @@ var looking = map[string]bool{
 }
 
 // Gate reads a hook payload and returns the exit code to leave with.
-func Gate(in io.Reader, explain io.Writer) int {
+func Gate(in io.Reader, explain io.Writer, allowedAgentVerbs ...string) int {
 	var payload hookInput
 	if err := json.NewDecoder(in).Decode(&payload); err != nil {
 		// A payload that cannot be read is not a payload that can be trusted.
@@ -60,7 +61,7 @@ func Gate(in io.Reader, explain io.Writer) int {
 	}
 
 	command := strings.TrimSpace(payload.ToolInput.Command)
-	if reason := Refuse(command); reason != "" {
+	if reason := RefuseFor(command, allowedAgentVerbs); reason != "" {
 		_, _ = fmt.Fprintf(explain, "planty gate: %s\n", reason)
 		return Blocked
 	}
@@ -71,6 +72,12 @@ func Gate(in io.Reader, explain io.Writer) int {
 // the command as bash would rather than scanning the raw string, which used to
 // refuse a note containing "toxic/non-toxic" or a semicolon inside a sentence.
 func Refuse(command string) string {
+	return RefuseFor(command, nil)
+}
+
+// RefuseFor applies the global command boundary and, when the list is not
+// empty, narrows Planty's model-facing surface to those agent verbs.
+func RefuseFor(command string, allowedAgentVerbs []string) string {
 	if reason := checkQuoting(command); reason != "" {
 		return reason
 	}
@@ -84,6 +91,11 @@ func Refuse(command string) string {
 			return "planty may only be run as `planty agent <verb>`, and its " +
 				"complete reference is already in your instructions, so there " +
 				"is nothing to learn by running help"
+		}
+		agentVerb, _, _ := strings.Cut(strings.TrimPrefix(rest, "agent "), " ")
+		if len(allowedAgentVerbs) > 0 && !slices.Contains(allowedAgentVerbs, agentVerb) {
+			return fmt.Sprintf("planty agent %s is not available during this job; allowed verbs: %s",
+				agentVerb, strings.Join(allowedAgentVerbs, ", "))
 		}
 	case looking[verb]:
 		if reason := checkSecrets(command); reason != "" {

@@ -22,7 +22,9 @@ type OwnerPlantWeek struct {
 
 const ownerUpdateSystem = `Write a short text-message update to the owner of plants someone else is caring for.
 
-The recipient already knows their plants. Summarize only the last seven days: what was done, anything that changed, anything Planty noticed, and whether anything currently needs concern. Be warm and factual, not cute or alarmist. Do not mention internal sensor IDs, confidence scores, AI, Claude, prompts, or database details. Do not invent an observation that is not in the record. If the week was uneventful, say that plainly. Name each plant at least once. Write 80-180 words as ready-to-send message prose with no heading or bullet list.`
+The recipient already knows their plants. Summarize only the last seven days: what was done, anything that changed, anything Planty noticed, and whether anything currently needs concern. Be warm and factual, not cute or alarmist. Do not mention internal sensor IDs, confidence scores, AI, Claude, prompts, or database details. Do not invent an observation that is not in the record. Airflow is real recorded care; describe it naturally when it appears instead of exposing actuator terminology. If the week was uneventful, say that plainly. Name each plant at least once. Write 80-180 words as ready-to-send message prose with no heading or bullet list.
+
+This job drafts a message only. It cannot change plant records or control devices, so never claim that it did.`
 
 // OwnerUpdate turns a week of records into prose that can be sent unchanged.
 func (j *Judge) OwnerUpdate(ctx context.Context, steward string, week []OwnerPlantWeek) (string, error) {

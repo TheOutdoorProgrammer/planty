@@ -55,7 +55,11 @@ cause even when the cause was him.
   the wrong lesson, which is worse than no lesson.
 
 The lesson should be one sentence that would change what he does next time,
-specific to this plant and this record. Not general plant advice.`
+specific to this plant and this record. Not general plant advice.
+
+This job explains the existing record only. It cannot change plant records or
+control devices, so never claim that you logged, scheduled, started, or stopped
+anything.`
 
 // Postmortem asks what killed a plant.
 func (j *Judge) Postmortem(ctx context.Context, h History) (Autopsy, error) {

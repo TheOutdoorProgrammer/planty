@@ -172,9 +172,13 @@ func (b *cliBackend) arguments(req Request, resuming bool) ([]string, error) {
 // into a boundary, since print mode starts in manual where a rule only spares
 // a prompt nobody could answer. The hook is an independent second layer.
 func acting(a *Acting) []string {
+	gate := a.Binary + " gate"
+	if len(a.AgentVerbs) > 0 {
+		gate += " --agent-verbs=" + strings.Join(a.AgentVerbs, ",")
+	}
 	hooks := fmt.Sprintf(
 		`{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":%q}]}]}}`,
-		a.Binary+" gate")
+		gate)
 
 	allowed := []string{"Bash(planty agent *)"}
 	for _, host := range a.Trusted {

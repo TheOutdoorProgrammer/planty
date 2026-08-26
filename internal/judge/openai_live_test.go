@@ -133,7 +133,7 @@ func TestLiveTheModelCallsPlantyAndUsesTheResult(t *testing.T) {
 		Schema: probeSchema,
 		Acting: &Acting{
 			Binary: "/bin/echo",
-			Refuse: func(string) string { return "" },
+			Refuse: func(string, []string) string { return "" },
 		},
 		MaxTokens: 1024,
 	})

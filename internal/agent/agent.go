@@ -10,8 +10,8 @@
 // the model can never pump into a pot a calibrated probe calls wet.
 //
 // Two layers hold it shut, per adr/0002: the Bash allowlist and the gate in
-// this package. Neither knows about individual verbs, which is why Run refuses
-// anything unlisted by name instead of falling through to the rest of the CLI.
+// this package. Run still refuses anything unlisted by name, while scheduled
+// jobs can narrow the same surface to a smaller verb allowlist.
 package agent
 
 import (
@@ -72,8 +72,10 @@ Reading the garden:
               example: planty agent health --plant golden-pothos
 
   actuators   list the explicitly allowlisted plant fans and smart plugs by
-              Planty actuator id; takes no flags and never discovers or guesses
-              example: planty agent actuators
+              Planty actuator id, optionally only those assigned to one plant;
+              never discovers or guesses
+              planty agent actuators [--plant <slug>]
+              example: planty agent actuators --plant golden-pothos
 
   reminders   what is set for one plant, and whether each is owed right now
               planty agent reminders --plant <slug>
@@ -100,8 +102,9 @@ Recording what happened:
   log         record something done to or seen on a plant; --when says when it
               happened and omitting it means now
               planty agent log --plant <slug> --kind <kind> [--note <text>] [--when <time>]
-              kinds: watered, misted, fertilized, pruned, repotted, moved,
+              kinds: watered, airflow, misted, fertilized, pruned, repotted, moved,
               harvested, symptom, note, died
+              airflow is written automatically by actuatorstart; do not log it again
               example: planty agent log --plant golden-pothos --kind watered --note "about a cup"
 
   harvest     record a yield with a quantity, so seasons can be added up
@@ -160,15 +163,16 @@ The plants themselves:
               planty agent archive --plant <slug> [--status dead|gone]
               example: planty agent archive --plant basil --status dead
 
-Water and cold:
+Physical controls and cold:
 
-  actuatorstart  turn on one allowlisted actuator for a bounded duration
-              planty agent actuatorstart --id <uuid> --seconds <1-3600> --key <uuid>
-              example: planty agent actuatorstart --id 2c658779-4967-4831-b579-a6ed2584769c --seconds 600 --key 6f0dd1c2-6b3a-4e0e-9d3f-2a4b8c9d0e1f
+  actuatorstart  turn on an actuator assigned to the named plant for a bounded
+              duration; one airflow record is written to every plant sharing it
+              planty agent actuatorstart --plant <slug> --id <uuid> --seconds <1-3600> --key <uuid>
+              example: planty agent actuatorstart --plant golden-pothos --id 2c658779-4967-4831-b579-a6ed2584769c --seconds 600 --key 6f0dd1c2-6b3a-4e0e-9d3f-2a4b8c9d0e1f
 
-  actuatorstop  idempotently turn off one allowlisted actuator
-              planty agent actuatorstop --id <uuid> --key <uuid>
-              example: planty agent actuatorstop --id 2c658779-4967-4831-b579-a6ed2584769c --key 24a1e903-4b71-4ca2-8621-f0d37a8f0401
+  actuatorstop  idempotently turn off an actuator assigned to the named plant
+              planty agent actuatorstop --plant <slug> --id <uuid> --key <uuid>
+              example: planty agent actuatorstop --plant golden-pothos --id 2c658779-4967-4831-b579-a6ed2584769c --key 24a1e903-4b71-4ca2-8621-f0d37a8f0401
 
   water       run the LetPot watering pass, exactly as the manual command
               does: survey the calibrated probes, pump only if something reads

@@ -37,7 +37,7 @@ extension AIJob {
 
     var explanation: String {
         switch self {
-        case .assess: "Runs once a day for every plant, so this is nearly all the usage."
+        case .assess: "Runs once a day for every plant, can control an assigned fan when the evidence supports it, and accounts for nearly all usage."
         case .identify: "Reads a photograph and names the plant. A wrong name here gets a plant watered wrongly."
         case .consult: "Answers questions about one plant, and can look things up and record what it finds."
         case .ask: "Answers questions about a plant you do not own yet, and can look things up."
@@ -116,6 +116,7 @@ extension ObservationKind {
     var label: String {
         switch self {
         case .watered: "Watered"
+        case .airflow: "Airflow"
         case .misted: "Misted"
         case .repotted: "Repotted"
         case .fertilized: "Fed"
@@ -132,6 +133,7 @@ extension ObservationKind {
     var symbol: String {
         switch self {
         case .watered: "drop.fill"
+        case .airflow: "fan.fill"
         case .misted: "humidity.fill"
         case .repotted: "shippingbox.fill"
         case .fertilized: "sparkles"
@@ -148,6 +150,7 @@ extension ObservationKind {
     var careActionNoun: String {
         switch self {
         case .watered: "watering"
+        case .airflow: "airflow"
         case .misted: "misting"
         case .repotted: "repotting"
         case .fertilized: "feeding"

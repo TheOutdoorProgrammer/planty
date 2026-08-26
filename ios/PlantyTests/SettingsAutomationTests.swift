@@ -158,6 +158,29 @@ struct SettingsAutomationTests {
         #expect(event.leaseID == leaseID)
     }
 
+    @Test("A shared fan is available from every assigned plant")
+    func sharedFanAssignments() {
+        let firstPlant = UUID()
+        let secondPlant = UUID()
+        let unrelatedPlant = UUID()
+        let fan = Actuator(
+            id: actuatorID,
+            entityID: "fan.grow_room",
+            name: "Grow room fan",
+            kind: .fan,
+            plantIDs: [firstPlant, secondPlant],
+            createdAt: .now,
+            updatedAt: .now,
+            activeLease: nil
+        )
+
+        #expect([fan].assigned(to: firstPlant) == [fan])
+        #expect([fan].assigned(to: secondPlant) == [fan])
+        #expect([fan].assigned(to: unrelatedPlant).isEmpty)
+        #expect(ActuatorRunDuration.allCases.map(\.rawValue) == [300, 600, 900, 1_800, 3_600])
+        #expect(ObservationKind.airflow.label == "Airflow")
+    }
+
     private var actuatorJSON: String {
         """
         {"id":"\(actuatorID.uuidString)","entity_id":"switch.grow_tent","name":"Grow tent exhaust",

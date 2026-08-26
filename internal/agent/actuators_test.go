@@ -29,23 +29,31 @@ func TestAgentActuatorVerbsUsePlantyIDAndIdempotency(t *testing.T) {
 	ha := &agentActuatorHA{}
 	control := &job.ActuatorControl{Store: deps.Store, HA: ha}
 	deps.Actuators = control
+	listed, err := runVerbCtx(t, ctx, deps, "actuators", "--plant", grown.Slug)
+	if err != nil || !strings.Contains(listed, "plants="+grown.Slug) {
+		t.Fatalf("plant-scoped actuators = %q err=%v", listed, err)
+	}
 	key := uuid.NewString()
-	if _, err := runVerbCtx(t, ctx, deps, "actuatorstart", "--id", actuator.ID.String(), "--seconds", "60", "--key", key); err != nil {
+	if _, err := runVerbCtx(t, ctx, deps, "actuatorstart", "--plant", grown.Slug, "--id", actuator.ID.String(), "--seconds", "60", "--key", key); err != nil {
 		t.Fatal(err)
 	}
-	replay, err := runVerbCtx(t, ctx, deps, "actuatorstart", "--id", actuator.ID.String(), "--seconds", "60", "--key", key)
+	replay, err := runVerbCtx(t, ctx, deps, "actuatorstart", "--plant", grown.Slug, "--id", actuator.ID.String(), "--seconds", "60", "--key", key)
 	if err != nil || !strings.Contains(replay, "already accepted") || len(ha.calls) != 1 {
 		t.Fatalf("replay=%q calls=%#v err=%v", replay, ha.calls, err)
 	}
 	stopKey := uuid.NewString()
-	if _, err := runVerbCtx(t, ctx, deps, "actuatorstop", "--id", actuator.ID.String(), "--key", stopKey); err != nil {
+	if _, err := runVerbCtx(t, ctx, deps, "actuatorstop", "--plant", grown.Slug, "--id", actuator.ID.String(), "--key", stopKey); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runVerbCtx(t, ctx, deps, "actuatorstop", "--id", actuator.ID.String(), "--key", stopKey); err != nil {
+	if _, err := runVerbCtx(t, ctx, deps, "actuatorstop", "--plant", grown.Slug, "--id", actuator.ID.String(), "--key", stopKey); err != nil {
 		t.Fatal(err)
 	}
 	if len(ha.calls) != 3 || ha.calls[1] != "switch/turn_off:switch.agent_fan" ||
 		ha.calls[2] != "switch/turn_off:switch.agent_fan" {
 		t.Fatalf("calls = %#v", ha.calls)
+	}
+	observations, err := deps.Store.Observations(ctx, grown.ID, 10)
+	if err != nil || len(observations) != 1 || observations[0].Kind != plant.ObservedAirflow {
+		t.Fatalf("airflow observations = %#v err=%v", observations, err)
 	}
 }

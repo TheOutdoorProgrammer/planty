@@ -389,6 +389,26 @@ func TestActingIsGatedTwice(t *testing.T) {
 	}
 }
 
+func TestAJobVerbBoundaryReachesTheHook(t *testing.T) {
+	backend := newCLIBackend("claude", "claude-opus-5")
+	args, err := backend.arguments(Request{
+		Turns: []Turn{ask(text("inspect the plant"))},
+		Acting: &Acting{
+			Binary:     "/planty",
+			Usage:      "planty agent ...",
+			AgentVerbs: []string{"show", "actuators", "actuatorstart", "actuatorstop"},
+		},
+	}, false)
+	if err != nil {
+		t.Fatalf("arguments: %v", err)
+	}
+
+	hooks := valueOf(args, "--settings")
+	if !strings.Contains(hooks, "/planty gate --agent-verbs=show,actuators,actuatorstart,actuatorstop") {
+		t.Errorf("the scoped verb boundary is missing from the hook: %s", hooks)
+	}
+}
+
 // safe-mode leaves ambient permission rules in force and silently disables
 // hooks, which would quietly remove one of the two layers above.
 func TestIsolationDoesNotRelyOnSafeMode(t *testing.T) {

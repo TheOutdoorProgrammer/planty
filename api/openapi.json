@@ -150,7 +150,7 @@
       "PlantAccessibility": {"type": "string", "enum": ["easy", "awkward", "hard"]},
       "LightExposure": {"type": "string", "enum": ["direct", "bright_indirect", "medium", "low"]},
       "VerdictAction": {"type": "string", "enum": ["none", "water", "check", "urgent", "harvest"]},
-      "ObservationKind": {"type": "string", "enum": ["watered", "misted", "repotted", "fertilized", "pruned", "harvested", "moved", "symptom", "note", "died"]},
+      "ObservationKind": {"type": "string", "enum": ["watered", "airflow", "misted", "repotted", "fertilized", "pruned", "harvested", "moved", "symptom", "note", "died"]},
       "ObservationSource": {"type": "string", "enum": ["app", "agent", "automation"]},
       "ReminderDisposition": {"type": "string", "enum": ["completed", "missed"]},
       "HealthChangeKind": {"type": "string", "enum": ["baseline", "delta"]},

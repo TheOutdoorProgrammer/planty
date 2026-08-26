@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -134,7 +135,7 @@ func TestTheLoopRunsAToolAndFeedsTheResultBack(t *testing.T) {
 		Turns: []Turn{ask(text("what needs doing?"))},
 		Acting: &Acting{
 			Binary: "/bin/echo",
-			Refuse: func(string) string { return "" },
+			Refuse: func(string, []string) string { return "" },
 		},
 	})
 	if err != nil {
@@ -217,6 +218,25 @@ func TestAnUngatedToolboxRunsNothing(t *testing.T) {
 	}
 }
 
+func TestTheOpenAIToolboxPassesTheJobVerbBoundaryToTheGate(t *testing.T) {
+	var got []string
+	box := newToolbox(&Acting{
+		Binary:     "/bin/echo",
+		AgentVerbs: []string{"show", "actuatorstart", "actuatorstop"},
+		Refuse: func(_ string, allowed []string) string {
+			got = append([]string(nil), allowed...)
+			return "job boundary test"
+		},
+	})
+	result := box.runAgent(context.Background(), "planty agent water")
+	if !strings.HasPrefix(result, "Refused") {
+		t.Fatalf("out-of-scope command was not refused: %q", result)
+	}
+	if !slices.Equal(got, []string{"show", "actuatorstart", "actuatorstop"}) {
+		t.Errorf("gate received %v", got)
+	}
+}
+
 func TestOnlyTrustedHostsAreFetched(t *testing.T) {
 	box := newToolbox(&Acting{Trusted: []string{"www.aspca.org"}})
 
@@ -229,7 +249,7 @@ func TestOnlyTrustedHostsAreFetched(t *testing.T) {
 }
 
 func TestWebFetchIsNotOfferedWithNoTrustedSites(t *testing.T) {
-	box := newToolbox(&Acting{Binary: "/bin/echo", Refuse: func(string) string { return "" }})
+	box := newToolbox(&Acting{Binary: "/bin/echo", Refuse: func(string, []string) string { return "" }})
 	for _, def := range box.definitions() {
 		if def.Function.Name == "web_fetch" {
 			t.Error("web_fetch was offered with an empty allowlist")

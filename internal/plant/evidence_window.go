@@ -395,7 +395,7 @@ func (w EvidenceWindow) CanConclude(outcome EvidenceWindowOutcome, conclusion st
 
 func validObservationKind(kind ObservationKind) error {
 	switch kind {
-	case ObservedWatered, ObservedMisted, ObservedRepotted, ObservedFertilized,
+	case ObservedWatered, ObservedAirflow, ObservedMisted, ObservedRepotted, ObservedFertilized,
 		ObservedPruned, ObservedHarvested, ObservedMoved, ObservedSymptom,
 		ObservedNote, ObservedDied:
 		return nil

@@ -22,6 +22,32 @@ struct Actuator: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+extension Sequence where Element == Actuator {
+    func assigned(to plantID: UUID) -> [Actuator] {
+        filter { $0.plantIDs.contains(plantID) }
+    }
+}
+
+enum ActuatorRunDuration: Int, CaseIterable, Identifiable {
+    case fiveMinutes = 300
+    case tenMinutes = 600
+    case fifteenMinutes = 900
+    case thirtyMinutes = 1_800
+    case oneHour = 3_600
+
+    var id: Int { rawValue }
+
+    var label: String {
+        switch self {
+        case .fiveMinutes: "5 minutes"
+        case .tenMinutes: "10 minutes"
+        case .fifteenMinutes: "15 minutes"
+        case .thirtyMinutes: "30 minutes"
+        case .oneHour: "1 hour"
+        }
+    }
+}
+
 struct ActuatorLease: Codable, Sendable, Hashable, Identifiable {
     let id: UUID
     let actuatorID: UUID

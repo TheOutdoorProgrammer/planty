@@ -101,7 +101,7 @@ func (s *Store) IncidentCareSignals(ctx context.Context, run JudgmentRun, plantI
 	}
 	rows, err := s.pool.Query(ctx, `SELECT id, plant_id, kind, occurred_at FROM observations
 		WHERE plant_id = ANY($1) AND occurred_at >= $2::timestamptz - interval '24 hours' AND occurred_at <= $3
-		  AND kind IN ('watered','misted','repotted','fertilized','pruned','moved')
+		  AND kind IN ('watered','airflow','misted','repotted','fertilized','pruned','moved')
 		ORDER BY occurred_at`, plantIDs, run.StartedAt, *run.CompletedAt)
 	if err != nil {
 		return nil, err

@@ -23,13 +23,30 @@ type ActuatorControl struct {
 }
 
 func (c ActuatorControl) Start(ctx context.Context, actuatorID uuid.UUID, seconds int, actor string, source plant.Source, key uuid.UUID) (plant.ActuatorLease, bool, error) {
+	return c.start(ctx, actuatorID, uuid.Nil, seconds, actor, source, key)
+}
+
+func (c ActuatorControl) StartForPlant(ctx context.Context, actuatorID, plantID uuid.UUID, seconds int, actor string, source plant.Source, key uuid.UUID) (plant.ActuatorLease, bool, error) {
+	return c.start(ctx, actuatorID, plantID, seconds, actor, source, key)
+}
+
+func (c ActuatorControl) start(ctx context.Context, actuatorID, plantID uuid.UUID, seconds int, actor string, source plant.Source, key uuid.UUID) (plant.ActuatorLease, bool, error) {
 	if c.HA == nil {
 		return plant.ActuatorLease{}, false, errors.New("Home Assistant actuation is not configured")
 	}
-	actuator, lease, created, err := c.Store.BeginActuatorLease(ctx, plant.ActuatorLease{
+	request := plant.ActuatorLease{
 		ActuatorID: actuatorID, RequestedSeconds: seconds, Actor: actor,
 		Source: source, IdempotencyKey: key,
-	})
+	}
+	var actuator plant.Actuator
+	var lease plant.ActuatorLease
+	var created bool
+	var err error
+	if plantID == uuid.Nil {
+		actuator, lease, created, err = c.Store.BeginActuatorLease(ctx, request)
+	} else {
+		actuator, lease, created, err = c.Store.BeginActuatorLeaseForPlant(ctx, request, plantID)
+	}
 	if err != nil || !created {
 		return lease, created, err
 	}

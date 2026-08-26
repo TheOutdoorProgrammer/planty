@@ -14,6 +14,7 @@ type ObservationKind string
 
 const (
 	ObservedWatered    ObservationKind = "watered"
+	ObservedAirflow    ObservationKind = "airflow"
 	ObservedMisted     ObservationKind = "misted"
 	ObservedRepotted   ObservationKind = "repotted"
 	ObservedFertilized ObservationKind = "fertilized"
@@ -55,7 +56,7 @@ func (o Observation) Verifiable() bool { return o.Kind == ObservedWatered }
 // Valid reports whether this observation can be stored.
 func (o Observation) Valid() error {
 	switch o.Kind {
-	case ObservedWatered, ObservedMisted, ObservedRepotted, ObservedFertilized,
+	case ObservedWatered, ObservedAirflow, ObservedMisted, ObservedRepotted, ObservedFertilized,
 		ObservedPruned, ObservedHarvested, ObservedMoved, ObservedSymptom,
 		ObservedNote, ObservedDied:
 	default:

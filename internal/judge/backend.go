@@ -86,9 +86,9 @@ type Request struct {
 	Live bool
 }
 
-// Acting lets the model record what it is told, rather than only answering.
-// Off everywhere except a consultation: a daily verdict that quietly wrote
-// observations would be judging its own evidence.
+// Acting lets the model use the explicitly granted Planty commands rather
+// than only answering. Conversations receive the full agent surface; a
+// scheduled assessment receives a narrower verb allowlist.
 type Acting struct {
 	// Binary is what the model may run, and the only thing it may run.
 	Binary string
@@ -107,10 +107,14 @@ type Acting struct {
 	// verbs reaches the store, and the store reaches back here.
 	Usage string
 
+	// AgentVerbs narrows `planty agent` to these verbs. Empty grants the full
+	// agent surface after Refuse applies its global safety checks.
+	AgentVerbs []string
+
 	// Refuse says why a command may not run, or nothing when it may. Passed in
 	// for the same reason Usage is. A nil Refuse refuses everything, so a
 	// backend that runs commands itself cannot do so ungated by omission.
-	Refuse func(command string) string
+	Refuse func(command string, allowedAgentVerbs []string) string
 }
 
 // Session lets a backend continue a conversation instead of re-reading it.

@@ -46,6 +46,36 @@ func TestTheAgentVerbsAreAllowed(t *testing.T) {
 	}
 }
 
+func TestAJobCanNarrowTheAgentVerbs(t *testing.T) {
+	allowed := []string{"show", "actuators", "actuatorstart", "actuatorstop"}
+	for _, command := range []string{
+		"planty agent show --plant golden-pothos",
+		"planty agent actuatorstart --plant golden-pothos --id fan --seconds 300 --key key",
+		"planty agent actuatorstop --plant golden-pothos --id fan --key key",
+	} {
+		if reason := RefuseFor(command, allowed); reason != "" {
+			t.Errorf("refused a scoped command %q: %s", command, reason)
+		}
+	}
+
+	for _, command := range []string{
+		"planty agent water",
+		"planty agent log --plant golden-pothos --kind watered",
+		"planty agent archive --plant golden-pothos",
+	} {
+		if reason := RefuseFor(command, allowed); reason == "" {
+			t.Errorf("allowed an out-of-scope scheduled command: %s", command)
+		}
+	}
+}
+
+func TestTheHookEnforcesAJobVerbBoundary(t *testing.T) {
+	payload := `{"tool_name":"Bash","tool_input":{"command":"planty agent water"}}`
+	if code := Gate(strings.NewReader(payload), io.Discard, "show", "actuatorstart", "actuatorstop"); code != Blocked {
+		t.Error("the hook let a scheduled assessment water")
+	}
+}
+
 // The binary the model is being handed can also run a pump and migrate a
 // schema. Prefix-matching on "planty" alone would give it both.
 func TestThePlantyCLIIsNotItselfTheAllowlist(t *testing.T) {

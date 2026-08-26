@@ -189,6 +189,19 @@ func (s *Store) DeleteActuator(ctx context.Context, id uuid.UUID) error {
 // A crash after this returns therefore leaves reconciliation enough state to
 // issue turn_off even when nobody knows whether turn_on reached the device.
 func (s *Store) BeginActuatorLease(ctx context.Context, lease plant.ActuatorLease) (plant.Actuator, plant.ActuatorLease, bool, error) {
+	return s.beginActuatorLease(ctx, lease, uuid.Nil)
+}
+
+// BeginActuatorLeaseForPlant applies the same durable lease path while proving
+// the caller's plant is currently assigned to the actuator under the actuator lock.
+func (s *Store) BeginActuatorLeaseForPlant(ctx context.Context, lease plant.ActuatorLease, plantID uuid.UUID) (plant.Actuator, plant.ActuatorLease, bool, error) {
+	if plantID == uuid.Nil {
+		return plant.Actuator{}, plant.ActuatorLease{}, false, fmt.Errorf("%w: plant id is required", plant.ErrInvalid)
+	}
+	return s.beginActuatorLease(ctx, lease, plantID)
+}
+
+func (s *Store) beginActuatorLease(ctx context.Context, lease plant.ActuatorLease, plantID uuid.UUID) (plant.Actuator, plant.ActuatorLease, bool, error) {
 	if err := lease.Valid(); err != nil {
 		return plant.Actuator{}, plant.ActuatorLease{}, false, err
 	}
@@ -206,7 +219,6 @@ func (s *Store) BeginActuatorLease(ctx context.Context, lease plant.ActuatorLeas
 	if err != nil {
 		return plant.Actuator{}, plant.ActuatorLease{}, false, err
 	}
-
 	existing, err := scanActuatorLease(tx.QueryRow(ctx, `SELECT `+actuatorLeaseColumns+`
 		FROM plant_actuator_leases WHERE idempotency_key = $1`, lease.IdempotencyKey))
 	if err == nil {
@@ -217,6 +229,17 @@ func (s *Store) BeginActuatorLease(ctx context.Context, lease plant.ActuatorLeas
 	}
 	if !errors.Is(err, pgx.ErrNoRows) {
 		return plant.Actuator{}, plant.ActuatorLease{}, false, err
+	}
+	if plantID != uuid.Nil {
+		var assigned bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (
+			SELECT 1 FROM plant_actuator_plants WHERE actuator_id = $1 AND plant_id = $2
+		)`, actuator.ID, plantID).Scan(&assigned); err != nil {
+			return plant.Actuator{}, plant.ActuatorLease{}, false, err
+		}
+		if !assigned {
+			return plant.Actuator{}, plant.ActuatorLease{}, false, fmt.Errorf("%w: actuator is not assigned to that plant", plant.ErrInvalid)
+		}
 	}
 
 	var active uuid.UUID
@@ -253,8 +276,17 @@ func (s *Store) MarkActuatorStarted(ctx context.Context, lease plant.ActuatorLea
 		return err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if _, err := tx.Exec(ctx, `UPDATE plant_actuator_leases SET started_at = coalesce(started_at, now())
-		WHERE id = $1 AND stopped_at IS NULL`, lease.ID); err != nil {
+	var actuatorName string
+	if err := tx.QueryRow(ctx, `SELECT name FROM plant_actuators
+		WHERE id = $1 AND deleted_at IS NULL FOR SHARE`, lease.ActuatorID).Scan(&actuatorName); err != nil {
+		return classify(err)
+	}
+	var startedAt time.Time
+	if err := tx.QueryRow(ctx, `UPDATE plant_actuator_leases SET started_at = now()
+		WHERE id = $1 AND stopped_at IS NULL AND started_at IS NULL
+		RETURNING started_at`, lease.ID).Scan(&startedAt); errors.Is(err, pgx.ErrNoRows) {
+		return tx.Commit(ctx)
+	} else if err != nil {
 		return err
 	}
 	if err := insertActuatorEvent(ctx, tx, plant.ActuatorEvent{
@@ -263,7 +295,58 @@ func (s *Store) MarkActuatorStarted(ctx context.Context, lease plant.ActuatorLea
 	}); err != nil {
 		return err
 	}
+	rows, err := tx.Query(ctx, `SELECT plant_id FROM plant_actuator_plants
+		WHERE actuator_id = $1 ORDER BY plant_id`, lease.ActuatorID)
+	if err != nil {
+		return err
+	}
+	var plantIDs []uuid.UUID
+	for rows.Next() {
+		var plantID uuid.UUID
+		if err := rows.Scan(&plantID); err != nil {
+			rows.Close()
+			return err
+		}
+		plantIDs = append(plantIDs, plantID)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return err
+	}
+	rows.Close()
+	if len(plantIDs) == 0 {
+		return fmt.Errorf("%w: actuator has no plant assignments", plant.ErrInvalid)
+	}
+	body := fmt.Sprintf("%s started for up to %s.", actuatorName, airflowDuration(lease.RequestedSeconds))
+	for _, plantID := range plantIDs {
+		if _, err := tx.Exec(ctx, `INSERT INTO observations
+			(plant_id, kind, body, occurred_at, source, actor)
+			VALUES ($1,$2,$3,$4,$5,nullif($6,''))`, plantID, plant.ObservedAirflow,
+			body, startedAt, lease.Source, lease.Actor); err != nil {
+			return classify(err)
+		}
+	}
 	return tx.Commit(ctx)
+}
+
+func airflowDuration(seconds int) string {
+	duration := time.Duration(seconds) * time.Second
+	if duration%time.Hour == 0 {
+		hours := int(duration / time.Hour)
+		return fmt.Sprintf("%d %s", hours, plural(hours, "hour"))
+	}
+	if duration%time.Minute == 0 {
+		minutes := int(duration / time.Minute)
+		return fmt.Sprintf("%d %s", minutes, plural(minutes, "minute"))
+	}
+	return fmt.Sprintf("%d %s", seconds, plural(seconds, "second"))
+}
+
+func plural(value int, unit string) string {
+	if value == 1 {
+		return unit
+	}
+	return unit + "s"
 }
 
 func (s *Store) ActiveActuatorLease(ctx context.Context, actuatorID uuid.UUID) (plant.ActuatorLease, error) {

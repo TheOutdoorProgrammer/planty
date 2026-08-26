@@ -247,6 +247,7 @@ enum LightExposure: String, FallbackDecodable, CaseIterable {
 
 enum ObservationKind: String, FallbackDecodable, CaseIterable {
     case watered
+    case airflow
     case misted
     case repotted
     case fertilized

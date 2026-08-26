@@ -93,6 +93,24 @@ func TestPumpDurationDefaultsOnlyWhenOmitted(t *testing.T) {
 	}
 }
 
+func TestGateAgentVerbs(t *testing.T) {
+	verbs, ok := gateAgentVerbs([]string{"--agent-verbs=show,actuators,actuatorstart"})
+	if !ok || len(verbs) != 3 || verbs[2] != "actuatorstart" {
+		t.Fatalf("parsed (%v, %t), want three allowed verbs", verbs, ok)
+	}
+
+	for _, args := range [][]string{
+		{"--agent-verbs="},
+		{"--agent-verbs=show,water me"},
+		{"--other=show"},
+		{"--agent-verbs=show", "extra"},
+	} {
+		if _, ok := gateAgentVerbs(args); ok {
+			t.Errorf("accepted invalid gate arguments: %v", args)
+		}
+	}
+}
+
 // commandsInUsage reads the names out of the usage text, which is the list a
 // person is told about and so the one that has to be true.
 func commandsInUsage(t *testing.T) []string {
