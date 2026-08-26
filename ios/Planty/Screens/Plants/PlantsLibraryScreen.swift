@@ -204,7 +204,7 @@ struct PlantLibraryRow: View {
     @Environment(AppSession.self) private var session
 
     var body: some View {
-        HStack(spacing: 12) {
+        ZStack(alignment: .trailing) {
             NavigationLink(value: plant) {
                 HStack(spacing: 12) {
                     PlantPhotoView(plant: plant, height: 72, opensFullScreen: false)
@@ -223,6 +223,10 @@ struct PlantLibraryRow: View {
                     }
                     Spacer(minLength: 2)
                 }
+                .padding(.trailing, 56)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .plantyCard(padding: 12)
             }
             .buttonStyle(.plain)
 
@@ -235,8 +239,8 @@ struct PlantLibraryRow: View {
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Take a photo of \(plant.commonName)")
+            .padding(.trailing, 12)
         }
-        .plantyCard(padding: 12)
     }
 
     private var metadata: String {

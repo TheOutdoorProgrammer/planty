@@ -201,20 +201,6 @@ struct PlantStoryScreen: View {
         } message: {
             Text("The image will be removed from Planty and object storage. This cannot be undone.")
         }
-        .safeAreaInset(edge: .bottom) {
-            if !store.plant.status.isRetired {
-                Button {
-                    session.beginCapture(for: store.plant)
-                } label: {
-                    Label("Take a photo", systemImage: "camera.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(PrimaryButtonStyle(color: PlantyColor.pink))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.ultraThinMaterial)
-            }
-        }
     }
 
     private func recordDeath() async {
@@ -321,6 +307,14 @@ struct PlantStoryScreen: View {
         VStack(alignment: .leading, spacing: 12) {
             SectionHeading("Actions")
             LazyVGrid(columns: actionColumns, spacing: 10) {
+                Button {
+                    session.beginCapture(for: store.plant)
+                } label: {
+                    ActionFace("Take photo", icon: "camera.fill")
+                }
+                .buttonStyle(SecondaryButtonStyle())
+                .accessibilityLabel("Take a photo of \(store.plant.commonName)")
+
                 NavigationLink {
                     PlantChatsScreen(store: session.chatsStore(for: store.plant))
                 } label: {
