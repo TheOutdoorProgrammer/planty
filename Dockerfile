@@ -41,7 +41,23 @@ RUN apk add --no-cache ca-certificates libgcc libstdc++ bash \
 # TARGETARCH for each platform, and GoReleaser includes the Go architecture
 # variant in its per-target dist directory (for example amd64_v1 or arm64_v8.0).
 ARG TARGETARCH
+ARG VERSION
+ARG COMMIT
 COPY dist/planty_linux_${TARGETARCH}_*/planty /usr/local/bin/planty
+
+# A snapshot dist directory can otherwise survive in BuildKit's cache while
+# the image receives the new release tag and labels.
+RUN set -eu; \
+    if [ -n "$VERSION" ]; then \
+      output="$(/usr/local/bin/planty version)"; \
+      details="${output#* }"; \
+      actual_version="${details%% *}"; \
+      actual_commit="${details#* }"; \
+      actual_commit="${actual_commit#(}"; \
+      actual_commit="${actual_commit%)}"; \
+      test "$actual_version" = "${VERSION#v}"; \
+      test "$actual_commit" = "$(printf '%.7s' "$COMMIT")"; \
+    fi
 
 # On PATH because the model runs `planty agent ...` by name, and symlinked at
 # the old absolute path so existing manifests and runbooks keep working.
