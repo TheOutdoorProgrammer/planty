@@ -46,6 +46,13 @@ func TestActuatorRegistryLeaseAndAuditAreDurableAndIdempotent(t *testing.T) {
 	if err != nil || created || replay.ID != lease.ID {
 		t.Fatalf("replay = %#v created=%v err=%v", replay, created, err)
 	}
+	if err := s.MarkActuatorStarted(ctx, lease); err != nil {
+		t.Fatalf("mark started: %v", err)
+	}
+	observations, err := s.Observations(ctx, grown.ID, 10)
+	if err != nil || len(observations) != 1 || observations[0].Kind != plant.ObservedAirflow {
+		t.Fatalf("airflow observations = %#v err=%v", observations, err)
+	}
 	if err := s.DeleteActuator(ctx, actuator.ID); !errors.Is(err, plant.ErrInvalid) {
 		t.Fatalf("deleted active actuator: %v", err)
 	}
@@ -62,7 +69,8 @@ func TestActuatorRegistryLeaseAndAuditAreDurableAndIdempotent(t *testing.T) {
 		t.Fatalf("repeated finish stopped=%v err=%v", stopped, err)
 	}
 	events, err := s.ActuatorEvents(ctx, actuator.ID, 20)
-	if err != nil || len(events) != 2 || events[0].Action != "stopped" || events[1].Action != "start_requested" {
+	if err != nil || len(events) != 3 || events[0].Action != "stopped" ||
+		events[1].Action != "started" || events[2].Action != "start_requested" {
 		t.Fatalf("events = %#v err=%v", events, err)
 	}
 }
