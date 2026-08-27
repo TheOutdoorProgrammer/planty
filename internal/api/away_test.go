@@ -63,7 +63,7 @@ func TestAwayPeriodHTTPManagement(t *testing.T) {
 		t.Fatalf("delete got %d: %s", deleted.Code, deleted.Body.String())
 	}
 
-	listed, listBody = do(t, h, http.MethodGet, "/v1/away", nil)
+	_, listBody = do(t, h, http.MethodGet, "/v1/away", nil)
 	periods, _ = listBody["away_periods"].([]any)
 	for _, raw := range periods {
 		period, _ := raw.(map[string]any)

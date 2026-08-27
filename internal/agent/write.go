@@ -637,47 +637,6 @@ func (d Deps) answer(ctx context.Context, out io.Writer, args []string) error {
 	return nil
 }
 
-func (d Deps) away(ctx context.Context, out io.Writer, args []string) error {
-	set := newFlags("away")
-	from := set.String("from", "", "when the period starts")
-	until := set.String("until", "", "when it ends")
-	contact := set.String("contact", "", "who can act meanwhile")
-	notify := set.String("notify", "", "how to reach them, a notify service")
-	note := set.String("note", "", "anything worth remembering")
-	if err := parse(set, args); err != nil {
-		return err
-	}
-	if *from == "" || *until == "" {
-		return errors.New("an away period needs --from and --until")
-	}
-	starts, err := parseWhen(*from)
-	if err != nil {
-		return err
-	}
-	ends, err := parseWhen(*until)
-	if err != nil {
-		return err
-	}
-
-	saved, err := d.Store.GoAway(ctx, plant.AwayPeriod{
-		StartsAt:      starts,
-		EndsAt:        ends,
-		BackupContact: *contact,
-		BackupNotify:  *notify,
-		Note:          *note,
-	})
-	if err != nil {
-		return err
-	}
-	line := fmt.Sprintf("recorded away from %s until %s",
-		saved.StartsAt.Format("2006-01-02"), saved.EndsAt.Format("2006-01-02"))
-	if saved.BackupContact != "" {
-		line += ", with " + saved.BackupContact + " as backup"
-	}
-	_, _ = fmt.Fprintln(out, line)
-	return nil
-}
-
 // lightExposure checks the one enum plant.Valid leaves to the database, whose
 // cast failure is not a sentence anyone can relay.
 func lightExposure(raw string) (plant.LightExposure, error) {
