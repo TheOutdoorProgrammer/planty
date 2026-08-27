@@ -72,6 +72,8 @@
     "/v1/plants/{slug}/conversations": {"get": {"operationId": "listPlantConversations"}},
     "/v1/plants/{slug}/conversations/{id}": {"get": {"operationId": "getPlantConversation"}},
     "/v1/plants/{slug}/conversations/{id}/messages": {"post": {"operationId": "enqueuePlantMessage"}},
+    "/v1/conversations/{id}": {"get": {"operationId": "getScratchConversation"}},
+    "/v1/conversations/{id}/messages": {"post": {"operationId": "enqueueScratchMessage"}},
     "/v1/plants/{slug}/reminders": {
       "get": {"operationId": "listReminders"},
       "put": {"operationId": "setReminder"}
@@ -81,6 +83,10 @@
     "/v1/reminders/{id}/resolve": {"post": {"operationId": "resolveReminder"}},
     "/v1/ask": {"post": {"operationId": "ask"}},
     "/v1/identify": {"post": {"operationId": "identify"}},
+    "/v1/identifications/{id}": {
+      "get": {"operationId": "getIdentification"},
+      "post": {"operationId": "enqueueIdentification"}
+    },
     "/v1/postmortems": {"get": {"operationId": "listPostmortems"}},
     "/v1/plants/{slug}/postmortem": {"post": {"operationId": "createPostmortem"}},
     "/v1/today": {"get": {"operationId": "today"}},

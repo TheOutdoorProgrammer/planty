@@ -4,7 +4,9 @@ Date: 2026-08-26
 
 ## Status
 
-Accepted.
+Superseded by [ADR-0023](0023-process-every-ios-model-operation-as-durable-leased-work.md).
+
+The durable lease and compatibility reasoning still stands; the replacement broadens it beyond plant conversations.
 
 ## Context and Problem Statement
 

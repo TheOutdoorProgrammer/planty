@@ -11,6 +11,22 @@ protocol PlantIdentifying: Sendable {
         imageData: Data,
         metadata: CaptureMetadata
     ) async throws -> [IdentificationCandidate]
+
+    func identify(
+        requestID: UUID,
+        imageData: Data,
+        metadata: CaptureMetadata
+    ) async throws -> [IdentificationCandidate]
+}
+
+extension PlantIdentifying {
+    func identify(
+        requestID: UUID,
+        imageData: Data,
+        metadata: CaptureMetadata
+    ) async throws -> [IdentificationCandidate] {
+        try await identify(imageData: imageData, metadata: metadata)
+    }
 }
 
 /// Planty's own service answers, so the credential stays server side: a
@@ -25,7 +41,30 @@ struct RemotePlantIdentifier: PlantIdentifying {
         imageData: Data,
         metadata: CaptureMetadata
     ) async throws -> [IdentificationCandidate] {
-        try await api.identify(jpeg: imageData, metadata: metadata)
+        try await identify(requestID: UUID(), imageData: imageData, metadata: metadata)
+    }
+
+    func identify(
+        requestID: UUID,
+        imageData: Data,
+        metadata: CaptureMetadata
+    ) async throws -> [IdentificationCandidate] {
+        var work = try await api.enqueueIdentification(
+            id: requestID,
+            jpeg: imageData,
+            metadata: metadata
+        )
+        while work.status == .pending || work.status == .processing {
+            try await Task.sleep(for: .seconds(1))
+            work = try await api.identification(id: requestID)
+        }
+        if work.status == .failed {
+            throw PlantyError.server(
+                status: 502,
+                message: work.failure ?? "Planty could not identify this photograph."
+            )
+        }
+        return work.candidates
     }
 }
 

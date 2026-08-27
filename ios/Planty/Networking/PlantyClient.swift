@@ -105,6 +105,21 @@ struct PlantyClient: PlantyAPI {
         )
     }
 
+    func scratchConversation(id: UUID) async throws -> PlantConversation {
+        try await get(APIPath.getScratchConversation(id: id.uuidString))
+    }
+
+    func enqueueScratchMessage(
+        conversationID: UUID,
+        message: ConversationMessage
+    ) async throws -> PlantConversationTurn {
+        try await send(
+            "POST",
+            APIPath.enqueueScratchMessage(id: conversationID.uuidString),
+            body: message
+        )
+    }
+
     func ask(_ question: ScratchQuestion) async throws -> PlantAnswer {
         try await send("POST", APIPath.ask, body: question, patience: Patience.model)
     }
@@ -306,6 +321,36 @@ struct PlantyClient: PlantyAPI {
             IdentifyResponse.self, from: try await perform(request, patient: true)
         )
         return response.candidates
+    }
+
+    func enqueueIdentification(
+        id: UUID,
+        jpeg: Data,
+        metadata: CaptureMetadata
+    ) async throws -> IdentificationWork {
+        var query: [URLQueryItem] = []
+        if let capturedAt = metadata.capturedAt {
+            query.append(URLQueryItem(name: "taken_at", value: PlantyDateFormat.string(from: capturedAt)))
+        }
+        if let latitude = metadata.latitude, let longitude = metadata.longitude {
+            query.append(URLQueryItem(name: "lat", value: String(latitude)))
+            query.append(URLQueryItem(name: "lon", value: String(longitude)))
+        }
+
+        var body = MultipartBody()
+        body.appendFile(name: "photo", filename: "subject.jpg", contentType: "image/jpeg", data: jpeg)
+        var request = try makeRequest(
+            "POST",
+            APIPath.enqueueIdentification(id: id.uuidString),
+            query: query
+        )
+        request.setValue(body.contentType, forHTTPHeaderField: "Content-Type")
+        request.httpBody = body.finished()
+        return try decode(IdentificationWork.self, from: try await perform(request))
+    }
+
+    func identification(id: UUID) async throws -> IdentificationWork {
+        try await get(APIPath.getIdentification(id: id.uuidString))
     }
 
     func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo {

@@ -12,7 +12,11 @@ struct IdentificationPipeline: Sendable {
     /// Injected so tests do not depend on the clock.
     var now: @Sendable () -> Date = { Date() }
 
-    func identify(pickedData: Data, assetID: String?) async -> IdentificationOutcome {
+    func identify(
+        pickedData: Data,
+        assetID: String?,
+        requestID: UUID = UUID()
+    ) async -> IdentificationOutcome {
         if let assetID,
            let cached = await cache.result(for: assetID),
            cached.backend == identifier.backendID {
@@ -37,6 +41,7 @@ struct IdentificationPipeline: Sendable {
 
         do {
             let candidates = try await identifier.identify(
+                requestID: requestID,
                 imageData: toClassify,
                 metadata: photo.metadata
             )

@@ -106,6 +106,25 @@ struct IdentifyResponse: Decodable, Sendable {
     let candidates: [IdentificationCandidate]
 }
 
+struct IdentificationWork: Decodable, Sendable, Equatable {
+    let id: UUID
+    let status: ConversationTurnStatus
+    let candidates: [IdentificationCandidate]
+    let failure: String?
+
+    enum CodingKeys: String, CodingKey {
+        case id, status, candidates, failure
+    }
+
+    init(from decoder: Decoder) throws {
+        let box = try decoder.container(keyedBy: CodingKeys.self)
+        id = try box.decode(UUID.self, forKey: .id)
+        status = try box.decode(ConversationTurnStatus.self, forKey: .status)
+        candidates = try box.decodeIfPresent([IdentificationCandidate].self, forKey: .candidates) ?? []
+        failure = try box.decodeIfPresent(String.self, forKey: .failure)
+    }
+}
+
 /// How far the pipeline got. Each case is a real outcome somebody has to be
 /// told about, not an error to swallow.
 enum IdentificationOutcome: Sendable, Equatable {

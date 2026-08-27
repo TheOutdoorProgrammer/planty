@@ -26,6 +26,7 @@ final class PlantChatsStore {
         do {
             conversations = try await api.conversations(slug: plant.slug)
         } catch {
+            if PlantyError.isCancellation(error) { return }
             self.error = PlantyError.from(error)
         }
     }
@@ -43,6 +44,7 @@ final class PlantChatsStore {
             return .success(ConsultStore(api: api, plant: plant, conversation: conversation))
         } catch {
             let failure = PlantyError.from(error)
+            if PlantyError.isCancellation(failure) { return .failure(.cancelled) }
             self.error = failure
             return .failure(failure)
         }

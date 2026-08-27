@@ -266,6 +266,45 @@ func TestDurableConversationLeaseRejectsAStaleWorker(t *testing.T) {
 	}
 }
 
+func TestDurableIdentificationUsesTheSharedModelLease(t *testing.T) {
+	s, ctx := testStore(t)
+	shot, err := s.SavePhoto(ctx, plant.Photo{
+		StorageKey:  "test/identification.jpg",
+		TakenAt:     time.Now().UTC(),
+		ContentHash: uuid.NewString(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := uuid.New()
+	queued, err := s.QueueIdentification(ctx, IdentificationJob{
+		ID: id, PhotoID: shot.ID, Sighting: judge.Sighting{TakenAt: &shot.TakenAt},
+	})
+	if err != nil || queued.Status != ConsultPending {
+		t.Fatalf("queued identification = %#v, %v", queued, err)
+	}
+	idempotent, err := s.QueueIdentification(ctx, IdentificationJob{
+		ID: id, PhotoID: shot.ID, Sighting: judge.Sighting{TakenAt: &shot.TakenAt},
+	})
+	if err != nil || idempotent.ID != id {
+		t.Fatalf("idempotent identification = %#v, %v", idempotent, err)
+	}
+
+	work, ok, err := s.ClaimModelWork(ctx, time.Minute)
+	if err != nil || !ok || work.Identification == nil || work.ID != id {
+		t.Fatalf("claimed work = %#v, %v, %v", work, ok, err)
+	}
+	want := []judge.Candidate{{CommonName: "Monstera", Confidence: 0.9}}
+	completed, err := s.CompleteIdentification(ctx, work.ID, work.LeaseID, want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed.Status != ConsultComplete || len(completed.Candidates) != 1 ||
+		completed.Candidates[0].CommonName != want[0].CommonName {
+		t.Fatalf("completed identification = %#v", completed)
+	}
+}
+
 // The constraint exists so bad data cannot enter through the app or an agent.
 func TestDatabaseRejectsDripperOnHandWateredPlant(t *testing.T) {
 	s, ctx := testStore(t)

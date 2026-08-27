@@ -190,15 +190,15 @@ struct ConsultStoreTests {
 
         await store.send("anything")
 
-        #expect(store.error == nil)
+        #expect(store.error == .cancelled)
         #expect(store.messages.count == 1)
         #expect(store.composer.isEmpty)
-        #expect(store.isThinking)
+        #expect(!store.isThinking)
         #expect(store.failed?.id == store.messages.first?.id)
         #expect(store.canResumePendingReply)
     }
 
-    @Test("A cancelled scratch chat restores its draft because there is no durable reply")
+    @Test("A cancelled scratch chat preserves its durable retry")
     @MainActor
     func scratchCancellationRestoresDraft() async {
         let photo = Data([0xff, 0xd8, 0xff])
@@ -209,12 +209,13 @@ struct ConsultStoreTests {
 
         await store.send()
 
-        #expect(store.error == nil)
-        #expect(store.messages.isEmpty)
-        #expect(store.composer == "What is this?")
-        #expect(store.attachment == photo)
+        #expect(store.error == .cancelled)
+        #expect(store.messages.count == 1)
+        #expect(store.composer.isEmpty)
+        #expect(store.attachment == nil)
         #expect(!store.isThinking)
-        #expect(!store.canResumePendingReply)
+        #expect(store.failed?.id == store.messages.first?.id)
+        #expect(store.canResumePendingReply)
     }
 
     @Test("A polling failure can resume the already accepted reply")

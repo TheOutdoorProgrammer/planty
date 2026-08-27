@@ -83,6 +83,50 @@ func (s *Server) enqueuePlantMessage(w http.ResponseWriter, r *http.Request) {
 	s.ok(w, http.StatusAccepted, conversationTurnResponse(queued))
 }
 
+func (s *Server) enqueueScratchMessage(w http.ResponseWriter, r *http.Request) {
+	if s.judge == nil {
+		s.fail(w, http.StatusServiceUnavailable,
+			errors.New("asking about a plant needs a judge, and none is configured"))
+		return
+	}
+	conversationID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	var request enqueuePlantMessageRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, MaxPhotoBytes*2)).Decode(&request); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	if request.ID == uuid.Nil || (strings.TrimSpace(request.Message) == "" && request.Photo == "") {
+		s.fail(w, http.StatusBadRequest,
+			errors.New("message id and a question or photograph are required"))
+		return
+	}
+
+	_, attached, err := s.attach(r.Context(), conversationID, request.Photo, nil)
+	if err != nil {
+		s.fail(w, statusForPhoto(err), err)
+		return
+	}
+	queued, err := s.store.QueueConsultTurn(r.Context(), store.ConsultTurn{
+		ID: request.ID, ConversationID: conversationID,
+		Asked: strings.TrimSpace(request.Message), PhotoID: attached,
+	})
+	if errors.Is(err, store.ErrTurnConflict) || errors.Is(err, store.ErrConversationOwner) {
+		s.fail(w, http.StatusConflict, err)
+		return
+	}
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	response := conversationTurnResponse(queued)
+	response["asked"] = queued.Asked
+	s.ok(w, http.StatusAccepted, response)
+}
+
 func (s *Server) listPlantConversations(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
@@ -137,6 +181,26 @@ func (s *Server) getPlantConversation(w http.ResponseWriter, r *http.Request) {
 	s.ok(w, http.StatusOK, map[string]any{
 		"id": id, "turns": transcript,
 	})
+}
+
+func (s *Server) getScratchConversation(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	turns, err := s.store.Consultation(r.Context(), id, uuid.Nil)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	transcript := make([]map[string]any, 0, len(turns))
+	for _, turn := range turns {
+		entry := conversationTurnResponse(turn)
+		entry["asked"] = turn.Asked
+		transcript = append(transcript, entry)
+	}
+	s.ok(w, http.StatusOK, map[string]any{"id": id, "turns": transcript})
 }
 
 func conversationTurnResponse(turn store.ConsultTurn) map[string]any {

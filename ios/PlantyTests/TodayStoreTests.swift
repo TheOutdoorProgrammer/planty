@@ -291,6 +291,39 @@ final class FakeAPI: PlantyAPI, ReminderResolving, @unchecked Sendable {
         }
     }
 
+    func scratchConversation(id: UUID) async throws -> PlantConversation {
+        try await conversation(slug: "", id: id)
+    }
+
+    func enqueueScratchMessage(
+        conversationID: UUID,
+        message: ConversationMessage
+    ) async throws -> PlantConversationTurn {
+        try check()
+        return lock.withLock {
+            _enqueuedMessageIDs.append(message.id)
+            _scratchAsks.append(ScratchQuestion(
+                message: message.message.isEmpty ? nil : message.message,
+                photo: message.photo,
+                conversationID: conversationID
+            ))
+            let complete = _enqueuedStatus == .complete
+            return PlantConversationTurn(
+                id: message.id,
+                conversationID: conversationID,
+                asked: message.message,
+                reply: complete ? _answer.reply : nil,
+                confidence: complete ? _answer.confidence : 0,
+                lookedAt: complete ? _answer.lookedAt : nil,
+                suggestedFollowUps: complete ? _answer.suggestedFollowUps : [],
+                steps: complete ? _answer.steps : [],
+                photoID: nil,
+                status: _enqueuedStatus,
+                createdAt: Date()
+            )
+        }
+    }
+
     func ask(_ question: ScratchQuestion) async throws -> PlantAnswer {
         try check()
         lock.withLock { _scratchAsks.append(question) }
@@ -306,8 +339,6 @@ final class FakeAPI: PlantyAPI, ReminderResolving, @unchecked Sendable {
         try check()
         return noteList
     }
-
-
     func answerQuestion(id: UUID, answer: String) async throws {
         try check()
         lock.withLock {

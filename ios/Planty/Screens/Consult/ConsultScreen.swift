@@ -85,7 +85,10 @@ struct ConsultScreen: View {
                 Label("Older photos are unavailable to this model", systemImage: "photo.badge.exclamationmark")
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(PlantyColor.yellow)
-                Text("It can use the written record and a photo attached to this message, but it cannot inspect the timeline on demand.")
+                Text(
+                    "It can use the written record and a photo attached to this message, "
+                        + "but it cannot inspect the timeline on demand."
+                )
                     .font(.footnote)
                     .foregroundStyle(PlantyColor.secondaryText)
                 Button("Choose another model") { session.isShowingSettings = true }
@@ -187,7 +190,12 @@ struct ConsultScreen: View {
             icon: "exclamationmark.triangle.fill"
         ) {
             VStack(spacing: 8) {
-                if let attempt = store.failed {
+                if store.canResumePendingReply {
+                    Button("Check for reply") {
+                        Task { await store.resumePendingReply() }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                } else if let attempt = store.failed {
                     if attempt.photo != nil {
                         Text("Your photo is still here. It was not sent anywhere.")
                             .font(.footnote)
@@ -202,11 +210,6 @@ struct ConsultScreen: View {
                         store.recoverDraft()
                     }
                     .buttonStyle(SecondaryButtonStyle())
-                } else if store.canResumePendingReply {
-                    Button("Check for reply") {
-                        Task { await store.resumePendingReply() }
-                    }
-                    .buttonStyle(PrimaryButtonStyle())
                 } else {
                     Button("Dismiss") { store.clearError() }
                         .buttonStyle(SecondaryButtonStyle())

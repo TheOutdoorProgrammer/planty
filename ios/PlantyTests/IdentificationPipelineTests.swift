@@ -257,4 +257,24 @@ struct IdentificationPipelineTests {
 
         #expect(delayed.outcome?.identification?.best?.commonName == "Second photo")
     }
+
+    @Test("Leaving the screen does not cancel accepted identification work")
+    @MainActor
+    func callerCancellationDoesNotCancelIdentification() async {
+        let store = IdentificationStore(pipeline: IdentificationPipeline(
+            intake: PickerOnlyIntake(),
+            analyzer: FakeAnalyzer(),
+            identifier: DelayedIdentifier(),
+            cache: MemoryIdentificationCache()
+        ))
+        let request = Task { @MainActor in
+            await store.identify(jpeg: Data([1]), assetID: nil)
+        }
+
+        await Task.yield()
+        request.cancel()
+        await request.value
+
+        #expect(store.outcome?.identification?.best?.commonName == "First photo")
+    }
 }

@@ -10,17 +10,20 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
-// There is one kind of conversation now. The column stays because rows written
-// by the separate photograph diagnosis still carry "diagnosis", and rewriting
-// history to tidy a discriminator would be worse than keeping it.
-const kindConsult = "consult"
+// The discriminator keeps durable consults and identifications in one leased
+// work table without confusing either with historical photograph diagnoses.
+const (
+	kindConsult  = "consult"
+	kindIdentify = "identify"
+)
 
-const turnColumns = `id, plant_id, conversation_id, asked, reply, photo_id, created_at,
+const turnColumns = `kind, id, plant_id, conversation_id, asked, reply, photo_id, created_at,
 	status, coalesce(failure, ''), attempts, lease_id, lease_expires_at, updated_at`
 
 // turn is one exchange with its reply still encoded, so the two conversation
 // types share all the storage and differ only in what they decode into.
 type turn struct {
+	Kind           string
 	ID             uuid.UUID
 	PlantID        uuid.UUID
 	ConversationID uuid.UUID
@@ -45,6 +48,7 @@ func (s *Store) queueTurn(ctx context.Context, kind string, t turn) (turn, error
 }
 
 func (s *Store) insertTurn(ctx context.Context, kind string, t turn, status ConsultStatus) (turn, error) {
+	t.Kind = kind
 	if t.ID == uuid.Nil {
 		t.ID = uuid.New()
 	}
@@ -111,7 +115,7 @@ func (s *Store) insertTurn(ctx context.Context, kind string, t turn, status Cons
 }
 
 func sameTurn(saved, requested turn) bool {
-	if saved.ID != requested.ID || saved.PlantID != requested.PlantID ||
+	if saved.Kind != requested.Kind || saved.ID != requested.ID || saved.PlantID != requested.PlantID ||
 		saved.ConversationID != requested.ConversationID || saved.Asked != requested.Asked {
 		return false
 	}
@@ -123,6 +127,12 @@ func sameTurn(saved, requested turn) bool {
 
 func (s *Store) turn(ctx context.Context, id uuid.UUID) (turn, error) {
 	row := s.pool.QueryRow(ctx, `SELECT `+turnColumns+` FROM diagnosis_turns WHERE id = $1`, id)
+	return scanTurn(row)
+}
+
+func (s *Store) turnOfKind(ctx context.Context, id uuid.UUID, kind string) (turn, error) {
+	row := s.pool.QueryRow(ctx, `SELECT `+turnColumns+`
+		FROM diagnosis_turns WHERE id = $1 AND kind = $2`, id, kind)
 	return scanTurn(row)
 }
 
@@ -164,7 +174,7 @@ func scanTurn(row interface{ Scan(dest ...any) error }) (turn, error) {
 	var owner *uuid.UUID
 	var leaseID *uuid.UUID
 
-	if err := row.Scan(&t.ID, &owner, &t.ConversationID, &t.Asked,
+	if err := row.Scan(&t.Kind, &t.ID, &owner, &t.ConversationID, &t.Asked,
 		&reply, &t.PhotoID, &t.CreatedAt, &t.Status, &t.Failure, &t.Attempts,
 		&leaseID, &t.LeaseExpiresAt, &t.UpdatedAt); err != nil {
 		return turn{}, err
@@ -179,13 +189,13 @@ func scanTurn(row interface{ Scan(dest ...any) error }) (turn, error) {
 	return t, nil
 }
 
-func (s *Store) claimConsultTurn(ctx context.Context, lease time.Duration) (turn, bool, error) {
+func (s *Store) claimTurn(ctx context.Context, kinds []string, lease time.Duration) (turn, bool, error) {
 	leaseID := uuid.New()
 	row := s.pool.QueryRow(ctx, `
 		WITH candidate AS (
 			SELECT queued.id
 			FROM diagnosis_turns queued
-			WHERE queued.kind = $1
+			WHERE queued.kind = ANY($1::text[])
 			  AND ((queued.status = $2 AND (
 				queued.lease_expires_at IS NULL OR queued.lease_expires_at < now()
 			  )) OR (
@@ -211,7 +221,7 @@ func (s *Store) claimConsultTurn(ctx context.Context, lease time.Duration) (turn
 		    updated_at = now()
 		WHERE work.id = (SELECT id FROM candidate)
 		RETURNING `+turnColumns,
-		kindConsult, ConsultPending, ConsultProcessing, lease.Seconds(), leaseID)
+		kinds, ConsultPending, ConsultProcessing, lease.Seconds(), leaseID)
 	claimed, err := scanTurn(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return turn{}, false, nil
@@ -219,7 +229,7 @@ func (s *Store) claimConsultTurn(ctx context.Context, lease time.Duration) (turn
 	return claimed, err == nil, err
 }
 
-func (s *Store) completeConsultTurn(ctx context.Context, id, leaseID uuid.UUID, reply []byte) (turn, error) {
+func (s *Store) completeTurn(ctx context.Context, id, leaseID uuid.UUID, reply []byte) (turn, error) {
 	row := s.pool.QueryRow(ctx, `
 		UPDATE diagnosis_turns
 		SET reply = $3, status = $4, failure = NULL,
@@ -229,7 +239,7 @@ func (s *Store) completeConsultTurn(ctx context.Context, id, leaseID uuid.UUID, 
 	return scanTurn(row)
 }
 
-func (s *Store) failConsultTurn(ctx context.Context, id, leaseID uuid.UUID, failure string) (turn, error) {
+func (s *Store) failTurn(ctx context.Context, id, leaseID uuid.UUID, failure string) (turn, error) {
 	row := s.pool.QueryRow(ctx, `
 		UPDATE diagnosis_turns
 		SET status = $3, failure = $4,
@@ -239,7 +249,7 @@ func (s *Store) failConsultTurn(ctx context.Context, id, leaseID uuid.UUID, fail
 	return scanTurn(row)
 }
 
-func (s *Store) retryConsultTurn(ctx context.Context, id, leaseID uuid.UUID, after time.Duration) (turn, error) {
+func (s *Store) retryTurn(ctx context.Context, id, leaseID uuid.UUID, after time.Duration) (turn, error) {
 	row := s.pool.QueryRow(ctx, `
 		UPDATE diagnosis_turns
 		SET status = $3, failure = NULL, lease_id = NULL,
@@ -250,7 +260,7 @@ func (s *Store) retryConsultTurn(ctx context.Context, id, leaseID uuid.UUID, aft
 	return scanTurn(row)
 }
 
-func (s *Store) renewConsultTurn(ctx context.Context, id, leaseID uuid.UUID, lease time.Duration) error {
+func (s *Store) renewTurn(ctx context.Context, id, leaseID uuid.UUID, lease time.Duration) error {
 	result, err := s.pool.Exec(ctx, `
 		UPDATE diagnosis_turns
 		SET lease_expires_at = now() + make_interval(secs => $2),

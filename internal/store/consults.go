@@ -92,7 +92,7 @@ func (s *Store) QueueConsultTurn(ctx context.Context, t ConsultTurn) (ConsultTur
 }
 
 func (s *Store) ClaimConsultTurn(ctx context.Context, lease time.Duration) (ConsultTurn, bool, error) {
-	claimed, ok, err := s.claimConsultTurn(ctx, lease)
+	claimed, ok, err := s.claimTurn(ctx, []string{kindConsult}, lease)
 	if err != nil || !ok {
 		return ConsultTurn{}, ok, err
 	}
@@ -106,7 +106,7 @@ func (s *Store) CompleteConsultTurn(ctx context.Context, id, leaseID uuid.UUID,
 	if err != nil {
 		return ConsultTurn{}, err
 	}
-	completed, err := s.completeConsultTurn(ctx, id, leaseID, raw)
+	completed, err := s.completeTurn(ctx, id, leaseID, raw)
 	if err != nil {
 		return ConsultTurn{}, err
 	}
@@ -115,7 +115,7 @@ func (s *Store) CompleteConsultTurn(ctx context.Context, id, leaseID uuid.UUID,
 
 func (s *Store) FailConsultTurn(ctx context.Context, id, leaseID uuid.UUID,
 	failure string) (ConsultTurn, error) {
-	failed, err := s.failConsultTurn(ctx, id, leaseID, failure)
+	failed, err := s.failTurn(ctx, id, leaseID, failure)
 	if err != nil {
 		return ConsultTurn{}, err
 	}
@@ -124,7 +124,7 @@ func (s *Store) FailConsultTurn(ctx context.Context, id, leaseID uuid.UUID,
 
 func (s *Store) RetryConsultTurn(ctx context.Context, id, leaseID uuid.UUID,
 	after time.Duration) (ConsultTurn, error) {
-	retried, err := s.retryConsultTurn(ctx, id, leaseID, after)
+	retried, err := s.retryTurn(ctx, id, leaseID, after)
 	if err != nil {
 		return ConsultTurn{}, err
 	}
@@ -132,7 +132,7 @@ func (s *Store) RetryConsultTurn(ctx context.Context, id, leaseID uuid.UUID,
 }
 
 func (s *Store) RenewConsultTurn(ctx context.Context, id, leaseID uuid.UUID, lease time.Duration) error {
-	return s.renewConsultTurn(ctx, id, leaseID, lease)
+	return s.renewTurn(ctx, id, leaseID, lease)
 }
 
 // Consultation returns a conversation's turns, oldest first.

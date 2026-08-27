@@ -224,8 +224,9 @@ Records can be corrected or deleted, and the service aggregates by plant, unit, 
 
 ## Conversations, notes, reminders, and questions
 
-`diagnosis_turns` stores both plant consultations and scratch conversations, distinguished by kind and conversation id.
-A turn may refer to a plant and a photograph, but both can be absent for a question about something not yet in the garden.
+`diagnosis_turns` stores plant consultations, scratch conversations, and identification jobs, distinguished by kind and conversation id.
+A turn may refer to a plant and a photograph, but either can be absent for work about something not yet in the garden.
+Pending and processing turns carry leases, so accepted model work survives the HTTP request and a stale worker cannot overwrite a newer claim.
 
 `notes` stores editable human prose either against one plant or against the household.
 Household notes are included in every consultation because facts such as “there is a cat here” affect advice without belonging to one pot.
@@ -282,11 +283,11 @@ The agent exposes the same operations through `health` and `healthchange`; neith
 **Actuator discovery and actuation are separate capabilities.** `/v1/home-assistant/actuators` returns only fan and switch candidates, while `/v1/actuators` manages the persistent allowlist.
 Start, stop, and event-history routes are nested beneath `/v1/actuators/{id}` so no actuation request accepts an arbitrary Home Assistant entity ID.
 
-**`POST /v1/identify` belongs to no plant, deliberately.** Nobody knows which plant it is yet, and it may not be one on record. It takes a `photo` multipart part or raw bytes, and answers `{candidates: [{common_name, scientific_name, confidence}], count}` with at most three, most likely first. An empty list is a valid answer and a better one than a guessed name.
+**Identification belongs to no plant, deliberately.** Nobody knows which plant it is yet, and it may not be one on record. The synchronous `POST /v1/identify` route remains for compatibility. The iOS app posts raw bytes or a multipart `photo` to `/v1/identifications/{id}`, receives an accepted status, and polls that same stable id until the durable job completes. Both return at most three candidates, most likely first. An empty list is a valid answer and a better one than a guessed name.
 
 The app sends a Vision cutout rather than the raw frame, and only after its own on-device classifier agrees the subject is a plant, so this is never spent on a photo of a dog. With no judge configured it answers 503 and the app falls back to showing those on-device labels.
 
-**`POST /v1/plants/from-photo` is the same identification, kept.** `/v1/identify` answers a question and throws the photograph away; this one names the plant, creates it, and keeps the photograph as the first frame of its timeline, which is the whole point of a timeline starting on day one.
+**`POST /v1/plants/from-photo` is the same identification, owned.** Identification keeps its source photograph outside every plant timeline so a worker can finish after the client leaves. This route names the plant, creates it, and keeps the photograph as the first owned frame of its timeline, which is the whole point of a timeline starting on day one.
 
 It takes the image the same two ways upload does, and any of `common_name`, `botanical_name`, `location`, `steward` and `domain` as query overrides.
 A given `common_name` wins outright, because somebody holding the plant knows better than a model holding a picture of it.

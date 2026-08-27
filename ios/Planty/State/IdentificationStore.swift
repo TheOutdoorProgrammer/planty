@@ -27,7 +27,10 @@ final class IdentificationStore {
         let request = UUID()
         activeRequest = request
         stage = .working
-        let outcome = await pipeline.identify(pickedData: jpeg, assetID: assetID)
+        let work = Task {
+            await pipeline.identify(pickedData: jpeg, assetID: assetID, requestID: request)
+        }
+        let outcome = await work.value
         guard activeRequest == request else { return }
         stage = .done(outcome)
     }

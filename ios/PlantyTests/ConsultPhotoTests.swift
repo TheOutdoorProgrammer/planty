@@ -189,16 +189,15 @@ struct ScratchConsultTests {
     @Test("A scratch follow-up stays in the same conversation")
     @MainActor
     func followUpsStayInTheSameConversation() async {
-        let conversation = UUID()
         let api = FakeAPI()
-        api.answer = .fixture(conversationID: conversation)
         let store = ConsultStore(api: api, plant: nil)
 
         await store.send("what is this?")
         await store.send("is it safe for cats?")
 
-        #expect(api.scratchAsks.first?.conversationID == nil, "the first question resumed something")
-        #expect(api.scratchAsks.last?.conversationID == conversation)
+        let first = api.scratchAsks.first?.conversationID
+        #expect(first != nil)
+        #expect(api.scratchAsks.last?.conversationID == first)
     }
 
     /// Same response shape as a plant consultation, so the follow-ups a chat

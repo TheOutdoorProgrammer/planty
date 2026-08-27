@@ -2,11 +2,14 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
+	"syscall"
 
 	"github.com/google/uuid"
 
@@ -124,6 +127,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeListPlantConversations, s.listPlantConversations)
 	mux.HandleFunc(routeGetPlantConversation, s.getPlantConversation)
 	mux.HandleFunc(routeEnqueuePlantMessage, s.enqueuePlantMessage)
+	mux.HandleFunc(routeGetScratchConversation, s.getScratchConversation)
+	mux.HandleFunc(routeEnqueueScratchMessage, s.enqueueScratchMessage)
 
 	mux.HandleFunc(routeListReminders, s.listReminders)
 	mux.HandleFunc(routeSetReminder, s.setReminder)
@@ -151,6 +156,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeAsk, s.ask)
 
 	mux.HandleFunc(routeIdentify, s.identify)
+	mux.HandleFunc(routeGetIdentification, s.getIdentification)
+	mux.HandleFunc(routeEnqueueIdentification, s.enqueueIdentification)
 	mux.HandleFunc(routeCreatePlantFromPhoto, s.plantFromPhoto)
 
 	mux.HandleFunc(routeListPostmortems, s.listPostmortems)
@@ -252,7 +259,11 @@ func (s *Server) ok(w http.ResponseWriter, code int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
 	if err := json.NewEncoder(w).Encode(body); err != nil {
-		s.log.Error("encode response", "error", err)
+		if isClientDisconnect(err) {
+			s.log.Debug("client left before response completed")
+		} else {
+			s.log.Error("encode response", "error", err)
+		}
 	}
 }
 
@@ -261,6 +272,10 @@ func (s *Server) ok(w http.ResponseWriter, code int, body any) {
 // 5xx errors expose only a stable code and request id while the wrapped error
 // remains in structured logs.
 func (s *Server) fail(w http.ResponseWriter, code int, err error) {
+	if isClientDisconnect(err) {
+		s.log.Debug("request canceled by client")
+		return
+	}
 	switch {
 	case errors.Is(err, store.ErrNotFound):
 		code = http.StatusNotFound
@@ -293,6 +308,11 @@ func (s *Server) fail(w http.ResponseWriter, code int, err error) {
 		"code":       publicErrorCode(code),
 		"request_id": requestID,
 	})
+}
+
+func isClientDisconnect(err error) bool {
+	return errors.Is(err, context.Canceled) || errors.Is(err, net.ErrClosed) ||
+		errors.Is(err, syscall.EPIPE) || errors.Is(err, syscall.ECONNRESET)
 }
 
 func publicServerError(code int) string {

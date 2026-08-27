@@ -70,12 +70,23 @@ protocol PlantyAPI: Sendable {
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink
     func shelter(slugs: [String], indoors: Bool) async throws -> Int
     func identify(jpeg: Data, metadata: CaptureMetadata) async throws -> [IdentificationCandidate]
+    func enqueueIdentification(
+        id: UUID,
+        jpeg: Data,
+        metadata: CaptureMetadata
+    ) async throws -> IdentificationWork
+    func identification(id: UUID) async throws -> IdentificationWork
     func ask(slug: String, question: PlantQuestion) async throws -> PlantAnswer
     func assess(slug: String) async throws -> Verdict
     func conversations(slug: String) async throws -> [PlantConversationSummary]
     func conversation(slug: String, id: UUID) async throws -> PlantConversation
     func enqueueMessage(
         slug: String,
+        conversationID: UUID,
+        message: ConversationMessage
+    ) async throws -> PlantConversationTurn
+    func scratchConversation(id: UUID) async throws -> PlantConversation
+    func enqueueScratchMessage(
         conversationID: UUID,
         message: ConversationMessage
     ) async throws -> PlantConversationTurn
@@ -132,28 +143,72 @@ extension PlantyAPI {
         )
     }
 
+    func scratchConversation(id: UUID) async throws -> PlantConversation {
+        throw PlantyError.server(status: 503, message: "Durable scratch chat is unavailable from this client.")
+    }
+
+    func enqueueScratchMessage(
+        conversationID: UUID,
+        message: ConversationMessage
+    ) async throws -> PlantConversationTurn {
+        throw PlantyError.server(status: 503, message: "Durable scratch chat is unavailable from this client.")
+    }
+
+    func enqueueIdentification(
+        id: UUID,
+        jpeg: Data,
+        metadata: CaptureMetadata
+    ) async throws -> IdentificationWork {
+        throw PlantyError.server(status: 503, message: "Durable identification is unavailable from this client.")
+    }
+
+    func identification(id: UUID) async throws -> IdentificationWork {
+        throw PlantyError.server(status: 503, message: "Durable identification is unavailable from this client.")
+    }
+
     func scheduledJobs() async throws -> [ScheduledJob] { [] }
 
     func runScheduledJob(_ job: ScheduledJobID) async throws -> ScheduledJobRun {
         throw PlantyError.server(status: 503, message: "Scheduled job control is unavailable from this client.")
     }
 
-    func proposeRecheck(slug: String, proposal: RecheckProposal) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func proposeRecheck(
+        slug: String,
+        proposal: RecheckProposal
+    ) async throws -> EvidenceWindow { throw PlantyError.notFound }
     func rechecks(slug: String) async throws -> [EvidenceWindow] { [] }
     func evidenceWindow(id: UUID) async throws -> EvidenceWindow { throw PlantyError.notFound }
-    func startEvidenceWindow(id: UUID, request: EvidenceWindowStart) async throws -> EvidenceWindow { throw PlantyError.notFound }
-    func reviewEvidenceWindow(id: UUID, request: EvidenceWindowReview) async throws -> EvidenceWindow { throw PlantyError.notFound }
-    func concludeEvidenceWindow(id: UUID, request: EvidenceWindowConclusion) async throws -> EvidenceWindow { throw PlantyError.notFound }
-    func cancelEvidenceWindow(id: UUID, request: EvidenceWindowCancellation) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func startEvidenceWindow(
+        id: UUID,
+        request: EvidenceWindowStart
+    ) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func reviewEvidenceWindow(
+        id: UUID,
+        request: EvidenceWindowReview
+    ) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func concludeEvidenceWindow(
+        id: UUID,
+        request: EvidenceWindowConclusion
+    ) async throws -> EvidenceWindow { throw PlantyError.notFound }
+    func cancelEvidenceWindow(
+        id: UUID,
+        request: EvidenceWindowCancellation
+    ) async throws -> EvidenceWindow { throw PlantyError.notFound }
     func guardrails(slug: String) async throws -> [EvidenceWindow] { [] }
-    func overrideGuardrail(id: UUID, request: GuardrailOverrideRequest) async throws -> GuardrailOverride { throw PlantyError.notFound }
+    func overrideGuardrail(
+        id: UUID,
+        request: GuardrailOverrideRequest
+    ) async throws -> GuardrailOverride { throw PlantyError.notFound }
     func experiments() async throws -> [EvidenceWindow] { [] }
     func experiment(id: UUID) async throws -> EvidenceWindow { throw PlantyError.notFound }
     func proposeExperiment(_ proposal: ExperimentProposal) async throws -> EvidenceWindow { throw PlantyError.notFound }
     func incidentList(status: IncidentStatus?) async throws -> [GardenIncident] { [] }
     func incident(id: UUID) async throws -> GardenIncident { throw PlantyError.notFound }
     func acknowledgeIncident(id: UUID, actor: String) async throws -> GardenIncident { throw PlantyError.notFound }
-    func resolveIncident(id: UUID, request: IncidentResolutionRequest) async throws -> GardenIncident { throw PlantyError.notFound }
+    func resolveIncident(
+        id: UUID,
+        request: IncidentResolutionRequest
+    ) async throws -> GardenIncident { throw PlantyError.notFound }
     func evidenceCoverage() async throws -> [EvidenceCoverage] { [] }
 
     func promptInstructions() async throws -> [PromptInstructionSetting] { [] }

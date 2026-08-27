@@ -119,29 +119,9 @@ func (s *Server) attach(ctx context.Context, conversation uuid.UUID, encoded str
 		return nil, nil, ErrPhotoSize
 	}
 
-	// Keyed by conversation rather than by plant, since there is no plant. The
-	// pictures of one question stay together and can be swept as a unit.
-	taken := time.Now().UTC()
-	key := photos.Key("scratch/"+conversation.String(), taken, ext)
-	if s.photos == nil {
-		return nil, nil, errors.New("keeping a photograph needs object storage, and none is configured")
-	}
-	if _, err := s.photos.Put(ctx, key, media,
-		bytes.NewReader(raw), int64(len(raw))); err != nil {
-		return nil, nil, err
-	}
-
-	saved, inserted, err := s.store.SavePhotoOnce(ctx, plant.Photo{
-		StorageKey: key, TakenAt: taken,
-		ContentHash: fmt.Sprintf("%x", sha256.Sum256(raw)),
-	})
+	saved, err := s.keepUnownedPhoto(ctx, "scratch/"+conversation.String(), raw, media, ext)
 	if err != nil {
-		return nil, nil, s.compensatePhoto(ctx, key, err)
-	}
-	if !inserted && saved.StorageKey != key {
-		if err := s.photos.Delete(ctx, key); err != nil {
-			return nil, nil, fmt.Errorf("discard duplicate object: %w", err)
-		}
+		return nil, nil, err
 	}
 
 	// The id travels with it, because attaching it to a plant later is a
@@ -151,6 +131,33 @@ func (s *Server) attach(ctx context.Context, conversation uuid.UUID, encoded str
 		Media: media, Bytes: raw,
 	})
 	return shown, &saved.ID, nil
+}
+
+func (s *Server) keepUnownedPhoto(ctx context.Context, owner string, raw []byte,
+	media, ext string) (plant.Photo, error) {
+	taken := time.Now().UTC()
+	key := photos.Key(owner, taken, ext)
+	if s.photos == nil {
+		return plant.Photo{}, errors.New("keeping a photograph needs object storage, and none is configured")
+	}
+	if _, err := s.photos.Put(ctx, key, media,
+		bytes.NewReader(raw), int64(len(raw))); err != nil {
+		return plant.Photo{}, err
+	}
+
+	saved, inserted, err := s.store.SavePhotoOnce(ctx, plant.Photo{
+		StorageKey: key, TakenAt: taken,
+		ContentHash: fmt.Sprintf("%x", sha256.Sum256(raw)),
+	})
+	if err != nil {
+		return plant.Photo{}, s.compensatePhoto(ctx, key, err)
+	}
+	if !inserted && saved.StorageKey != key {
+		if err := s.photos.Delete(ctx, key); err != nil {
+			return plant.Photo{}, fmt.Errorf("discard duplicate object: %w", err)
+		}
+	}
+	return saved, nil
 }
 
 // keepAnswerPhoto files a photograph sent mid-conversation against its plant,

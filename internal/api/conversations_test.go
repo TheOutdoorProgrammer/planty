@@ -1,11 +1,13 @@
 package api_test
 
 import (
+	"bytes"
 	"encoding/base64"
 	"errors"
 	"io"
 	"log/slog"
 	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/google/uuid"
@@ -100,6 +102,64 @@ func TestPlantMessageIsAcceptedBeforeTheModelRuns(t *testing.T) {
 	}
 	if _, err := db.Consultation(ctx, conversationID, uuid.Nil); !errors.Is(err, store.ErrConversationOwner) {
 		t.Fatalf("plant conversation lost its owner: %v", err)
+	}
+}
+
+func TestScratchMessageIsAcceptedAndResumable(t *testing.T) {
+	_, db, ctx := newServer(t)
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := api.New(db, quiet).WithJudge(&judge.Judge{}).Handler()
+	conversationID := uuid.New()
+	turnID := uuid.New()
+
+	accepted, body := do(t, h, http.MethodPost,
+		"/v1/conversations/"+conversationID.String()+"/messages",
+		map[string]any{"id": turnID, "message": "Keep answering after I leave."})
+	if accepted.Code != http.StatusAccepted || body["id"] != turnID.String() {
+		t.Fatalf("enqueue = %d %#v", accepted.Code, body)
+	}
+
+	resumed, transcript := do(t, h, http.MethodGet,
+		"/v1/conversations/"+conversationID.String(), nil)
+	if resumed.Code != http.StatusOK {
+		t.Fatalf("resume status = %d, body %s", resumed.Code, resumed.Body.String())
+	}
+	turns, ok := transcript["turns"].([]any)
+	if !ok || len(turns) != 1 {
+		t.Fatalf("turns = %#v", transcript["turns"])
+	}
+	stored := turns[0].(map[string]any)
+	if stored["status"] != string(store.ConsultPending) || stored["asked"] != "Keep answering after I leave." {
+		t.Fatalf("stored turn = %#v", stored)
+	}
+	if _, err := db.Consultation(ctx, conversationID, uuid.Nil); err != nil {
+		t.Fatalf("scratch conversation = %v", err)
+	}
+}
+
+func TestIdentificationIsAcceptedBeforeTheModelRuns(t *testing.T) {
+	_, db, _ := newServer(t)
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storage := &readinessPhotos{state: photos.StateReady}
+	h := api.New(db, quiet).WithPhotos(storage, &judge.Judge{}).Handler()
+	id := uuid.New()
+	path := "/v1/identifications/" + id.String()
+	jpeg := []byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43}
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		req := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(jpeg))
+		req.Header.Set("Content-Type", "image/jpeg")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != http.StatusAccepted {
+			t.Fatalf("attempt %d = %d, body %s", attempt, rec.Code, rec.Body.String())
+		}
+	}
+
+	resumed, body := do(t, h, http.MethodGet, path, nil)
+	if resumed.Code != http.StatusOK || body["id"] != id.String() ||
+		body["status"] != string(store.ConsultPending) {
+		t.Fatalf("identification = %d %#v", resumed.Code, body)
 	}
 }
 

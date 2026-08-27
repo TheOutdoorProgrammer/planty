@@ -35,14 +35,18 @@ enum APIPath {
     static func deletePhoto(id: String) -> String { "/v1/photos/\(id)" }
     static func deleteReminder(slug: String, kind: String) -> String { "/v1/plants/\(slug)/reminders/\(kind)" }
     static let discoverActuators = "/v1/home-assistant/actuators"
+    static func enqueueIdentification(id: String) -> String { "/v1/identifications/\(id)" }
     static func enqueuePlantMessage(slug: String, id: String) -> String { "/v1/plants/\(slug)/conversations/\(id)/messages" }
+    static func enqueueScratchMessage(id: String) -> String { "/v1/conversations/\(id)/messages" }
     static let getEvidenceCoverage = "/v1/evidence-coverage"
     static func getEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)" }
     static func getExperiment(id: String) -> String { "/v1/experiments/\(id)" }
+    static func getIdentification(id: String) -> String { "/v1/identifications/\(id)" }
     static func getIncident(id: String) -> String { "/v1/incidents/\(id)" }
     static func getPlant(slug: String) -> String { "/v1/plants/\(slug)" }
     static func getPlantConversation(slug: String, id: String) -> String { "/v1/plants/\(slug)/conversations/\(id)" }
     static func getPlantHealth(slug: String) -> String { "/v1/plants/\(slug)/health" }
+    static func getScratchConversation(id: String) -> String { "/v1/conversations/\(id)" }
     static func getTimeline(slug: String) -> String { "/v1/plants/\(slug)/timeline" }
     static let harvestSummary = "/v1/harvests/summary"
     static let health = "/healthz"

@@ -155,8 +155,8 @@ final class ConsultStore {
     /// Hanging off the next message, not yet sent anywhere.
     private(set) var attachment: Data?
 
-    /// Nil is the scratch chat: it asks /v1/ask, which names no plant, creates
-    /// none, and writes to no timeline.
+    /// Nil is the scratch chat: it names no plant, creates none, and writes to
+    /// no timeline.
     let plant: Plant?
     var composer = ""
 
@@ -316,7 +316,6 @@ final class ConsultStore {
 
     private func ask(_ attempt: ConsultAttempt) async {
         guard !attempt.isEmpty else { return }
-        let priorConversationID = conversationID
         let optimistic = ConsultMessage(
             id: attempt.id, speaker: .user, text: attempt.text, photo: attempt.photo
         )
@@ -358,7 +357,7 @@ final class ConsultStore {
             }
         } catch {
             if PlantyError.isCancellation(error) {
-                handleCancellation(attempt, optimisticID: optimistic.id, priorConversationID: priorConversationID)
+                handleCancellation(attempt, optimisticID: optimistic.id)
                 return
             }
 
@@ -373,19 +372,12 @@ final class ConsultStore {
 
     private func handleCancellation(
         _ attempt: ConsultAttempt,
-        optimisticID: UUID,
-        priorConversationID: UUID?
+        optimisticID: UUID
     ) {
-        guard plant != nil else {
-            if messages.last?.id == optimisticID { messages.removeLast() }
-            conversationID = priorConversationID
-            composer = attempt.text
-            attachment = attempt.photo
-            isThinking = false
-            return
-        }
         pendingTurnID = optimisticID
         failed = attempt
+        error = .cancelled
+        isThinking = false
     }
 
     private func submit(
@@ -395,24 +387,13 @@ final class ConsultStore {
         isNewConversation: Bool
     ) async throws -> PlantConversationTurn {
         guard let plant else {
-            let answer = try await api.ask(
-                ScratchQuestion(
-                    message: attempt.text.isEmpty ? nil : attempt.text,
-                    photo: attempt.photo,
-                    conversationID: isNewConversation ? nil : conversationID
+            return try await api.enqueueScratchMessage(
+                conversationID: conversationID,
+                message: ConversationMessage(
+                    id: id,
+                    message: attempt.text,
+                    photo: attempt.photo
                 )
-            )
-            return PlantConversationTurn(
-                id: answer.id,
-                conversationID: answer.conversationID,
-                asked: attempt.text,
-                reply: answer.reply,
-                confidence: answer.confidence,
-                lookedAt: answer.lookedAt,
-                suggestedFollowUps: answer.suggestedFollowUps,
-                steps: answer.steps,
-                photoID: nil,
-                createdAt: Date()
             )
         }
 
@@ -427,15 +408,20 @@ final class ConsultStore {
     }
 
     private func pollPendingTurn() async {
-        guard let plant, let conversationID, pendingTurnID != nil else { return }
+        guard let conversationID, pendingTurnID != nil else { return }
         isThinking = true
 
         while !Task.isCancelled {
             do {
-                let conversation = try await api.conversation(
-                    slug: plant.slug,
-                    id: conversationID
-                )
+                let conversation: PlantConversation
+                if let plant {
+                    conversation = try await api.conversation(
+                        slug: plant.slug,
+                        id: conversationID
+                    )
+                } else {
+                    conversation = try await api.scratchConversation(id: conversationID)
+                }
                 restore(conversation)
                 if pendingTurnID == nil { return }
                 try await Task.sleep(for: pollInterval)
@@ -451,6 +437,12 @@ final class ConsultStore {
     func resumePendingReply() async {
         guard pendingTurnID != nil else { return }
         error = nil
+        if let attempt = failed {
+            failed = nil
+            if messages.last?.id == attempt.id { messages.removeLast() }
+            await ask(attempt)
+            return
+        }
         await pollPendingTurn()
     }
 
