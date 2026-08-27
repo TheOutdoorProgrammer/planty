@@ -10,6 +10,8 @@ ALTER TABLE diagnosis_turns
     ADD COLUMN lease_expires_at timestamptz,
     ADD COLUMN updated_at timestamptz NOT NULL DEFAULT now();
 
+UPDATE diagnosis_turns SET updated_at = created_at;
+
 CREATE INDEX conversation_work
     ON diagnosis_turns (created_at)
     WHERE kind = 'consult' AND status IN ('pending', 'processing');
