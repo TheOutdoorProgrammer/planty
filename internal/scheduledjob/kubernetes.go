@@ -250,7 +250,7 @@ func (k *Kubernetes) request(ctx context.Context, method, endpoint string, body,
 	if err != nil {
 		return fmt.Errorf("call Kubernetes: %w", err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	limited := io.LimitReader(response.Body, maximumResponseBytes)
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
 		var status statusResponse
