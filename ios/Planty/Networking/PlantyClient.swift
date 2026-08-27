@@ -90,6 +90,21 @@ struct PlantyClient: PlantyAPI {
         ))
     }
 
+    func enqueueMessage(
+        slug: String,
+        conversationID: UUID,
+        message: ConversationMessage
+    ) async throws -> PlantConversationTurn {
+        try await send(
+            "POST",
+            APIPath.enqueuePlantMessage(
+                slug: escaped(slug),
+                id: conversationID.uuidString
+            ),
+            body: message
+        )
+    }
+
     func ask(_ question: ScratchQuestion) async throws -> PlantAnswer {
         try await send("POST", APIPath.ask, body: question, patience: Patience.model)
     }

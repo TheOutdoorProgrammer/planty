@@ -1,20 +1,86 @@
 package api
 
 import (
+	"encoding/json"
+	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
 type plantConversationSummary struct {
-	ID          uuid.UUID `json:"id"`
-	FirstAsked  string    `json:"first_asked"`
-	LatestReply string    `json:"latest_reply"`
-	TurnCount   int       `json:"turn_count"`
-	StartedAt   time.Time `json:"started_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          uuid.UUID           `json:"id"`
+	FirstAsked  string              `json:"first_asked"`
+	LatestReply string              `json:"latest_reply"`
+	TurnCount   int                 `json:"turn_count"`
+	Status      store.ConsultStatus `json:"status"`
+	StartedAt   time.Time           `json:"started_at"`
+	UpdatedAt   time.Time           `json:"updated_at"`
+}
+
+type enqueuePlantMessageRequest struct {
+	ID      uuid.UUID `json:"id"`
+	Message string    `json:"message"`
+	Photo   string    `json:"photo,omitempty"`
+}
+
+func (s *Server) enqueuePlantMessage(w http.ResponseWriter, r *http.Request) {
+	if s.judge == nil {
+		s.fail(w, http.StatusServiceUnavailable,
+			errors.New("asking about a plant needs a judge, and none is configured"))
+		return
+	}
+
+	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	conversationID, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+
+	var request enqueuePlantMessageRequest
+	if err := json.NewDecoder(io.LimitReader(r.Body, MaxPhotoBytes*2)).Decode(&request); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	if request.ID == uuid.Nil || strings.TrimSpace(request.Message) == "" {
+		s.fail(w, http.StatusBadRequest, errors.New("message id and text are required"))
+		return
+	}
+
+	var attached *uuid.UUID
+	if request.Photo != "" {
+		shot, _, _, err := s.keepAnswerPhoto(r.Context(), p, request.Photo)
+		if err != nil {
+			s.fail(w, statusForPhoto(err), err)
+			return
+		}
+		attached = &shot.ID
+	}
+
+	queued, err := s.store.QueueConsultTurn(r.Context(), store.ConsultTurn{
+		ID: request.ID, PlantID: p.ID, ConversationID: conversationID,
+		Asked: request.Message, PhotoID: attached,
+	})
+	if errors.Is(err, store.ErrTurnConflict) || errors.Is(err, store.ErrConversationOwner) {
+		s.fail(w, http.StatusConflict, err)
+		return
+	}
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+
+	s.ok(w, http.StatusAccepted, conversationTurnResponse(queued))
 }
 
 func (s *Server) listPlantConversations(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +105,7 @@ func (s *Server) listPlantConversations(w http.ResponseWriter, r *http.Request) 
 			FirstAsked:  visibleQuestion(conversation.Turns[0].Asked),
 			LatestReply: conversation.Turns[len(conversation.Turns)-1].Reply.Reply,
 			TurnCount:   len(conversation.Turns),
+			Status:      conversation.Turns[len(conversation.Turns)-1].Status,
 			StartedAt:   conversation.StartedAt,
 			UpdatedAt:   conversation.UpdatedAt,
 		})
@@ -65,15 +132,20 @@ func (s *Server) getPlantConversation(w http.ResponseWriter, r *http.Request) {
 
 	transcript := make([]map[string]any, 0, len(turns))
 	for _, turn := range turns {
-		entry := conversationResponse(turn)
-		entry["asked"] = visibleQuestion(turn.Asked)
-		entry["photo_id"] = turn.PhotoID
-		entry["created_at"] = turn.CreatedAt
-		transcript = append(transcript, entry)
+		transcript = append(transcript, conversationTurnResponse(turn))
 	}
 	s.ok(w, http.StatusOK, map[string]any{
 		"id": id, "turns": transcript,
 	})
+}
+
+func conversationTurnResponse(turn store.ConsultTurn) map[string]any {
+	entry := conversationResponse(turn)
+	entry["asked"] = visibleQuestion(turn.Asked)
+	entry["photo_id"] = turn.PhotoID
+	entry["created_at"] = turn.CreatedAt
+	entry["updated_at"] = turn.UpdatedAt
+	return entry
 }
 
 func visibleQuestion(asked string) string {

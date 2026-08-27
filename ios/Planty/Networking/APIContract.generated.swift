@@ -35,6 +35,7 @@ enum APIPath {
     static func deletePhoto(id: String) -> String { "/v1/photos/\(id)" }
     static func deleteReminder(slug: String, kind: String) -> String { "/v1/plants/\(slug)/reminders/\(kind)" }
     static let discoverActuators = "/v1/home-assistant/actuators"
+    static func enqueuePlantMessage(slug: String, id: String) -> String { "/v1/plants/\(slug)/conversations/\(id)/messages" }
     static let getEvidenceCoverage = "/v1/evidence-coverage"
     static func getEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)" }
     static func getExperiment(id: String) -> String { "/v1/experiments/\(id)" }

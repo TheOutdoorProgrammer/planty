@@ -89,11 +89,8 @@ struct PlantChatsScreen: View {
                             .foregroundStyle(PlantyColor.secondaryText)
                     }
                 }
-                Text(conversation.latestReply)
-                    .font(.subheadline)
-                    .foregroundStyle(PlantyColor.secondaryText)
-                    .lineLimit(2)
-                Text("\(conversation.turnCount) \(conversation.turnCount == 1 ? "exchange" : "exchanges") · \(conversation.updatedAt.formatted(date: .abbreviated, time: .shortened))")
+                latestState(conversation)
+                Text(conversationDetail(conversation))
                     .font(.caption)
                     .foregroundStyle(PlantyColor.cyan)
             }
@@ -103,6 +100,31 @@ struct PlantChatsScreen: View {
         .buttonStyle(.plain)
         .disabled(store.loadingConversationID != nil)
         .accessibilityHint("Opens this conversation and continues it")
+    }
+
+    @ViewBuilder
+    private func latestState(_ conversation: PlantConversationSummary) -> some View {
+        switch conversation.status {
+        case .pending, .processing:
+            Label("Planty is answering in the background", systemImage: "ellipsis.bubble.fill")
+                .foregroundStyle(PlantyColor.cyan)
+        case .failed:
+            Label(
+                "Planty could not answer the last message",
+                systemImage: "exclamationmark.bubble.fill"
+            )
+                .foregroundStyle(PlantyColor.orange)
+        case .complete:
+            Text(conversation.latestReply)
+                .foregroundStyle(PlantyColor.secondaryText)
+                .lineLimit(2)
+        }
+    }
+
+    private func conversationDetail(_ conversation: PlantConversationSummary) -> String {
+        let unit = conversation.turnCount == 1 ? "exchange" : "exchanges"
+        let updated = conversation.updatedAt.formatted(date: .abbreviated, time: .shortened)
+        return "\(conversation.turnCount) \(unit) · \(updated)"
     }
 }
 

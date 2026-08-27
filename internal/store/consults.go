@@ -12,7 +12,19 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 )
 
-var ErrConversationOwner = errors.New("conversation belongs to a different subject")
+var (
+	ErrConversationOwner = errors.New("conversation belongs to a different subject")
+	ErrTurnConflict      = errors.New("conversation turn id belongs to different content")
+)
+
+type ConsultStatus string
+
+const (
+	ConsultPending    ConsultStatus = "pending"
+	ConsultProcessing ConsultStatus = "processing"
+	ConsultComplete   ConsultStatus = "complete"
+	ConsultFailed     ConsultStatus = "failed"
+)
 
 // ConsultTurn is one exchange in a conversation, whether about a plant's
 // record, a photograph of it, or something nobody owns.
@@ -26,8 +38,13 @@ type ConsultTurn struct {
 	// Set when the person attached a photograph to this turn, which is how a
 	// conversation survives losing its model session: the pictures can be
 	// handed over again rather than being gone.
-	PhotoID   *uuid.UUID `json:"photo_id,omitempty"`
-	CreatedAt time.Time  `json:"created_at"`
+	PhotoID   *uuid.UUID    `json:"photo_id,omitempty"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
+	Status    ConsultStatus `json:"status"`
+	Failure   string        `json:"failure,omitempty"`
+	Attempts  int           `json:"-"`
+	LeaseID   uuid.UUID     `json:"-"`
 }
 
 // ConsultConversation is the stored transcript and the small amount of
@@ -47,6 +64,7 @@ func (s *Store) SaveConsultTurn(ctx context.Context, t ConsultTurn) (ConsultTurn
 	}
 
 	saved, err := s.saveTurn(ctx, kindConsult, turn{
+		ID:             t.ID,
 		PlantID:        t.PlantID,
 		ConversationID: t.ConversationID,
 		Asked:          t.Asked,
@@ -57,6 +75,64 @@ func (s *Store) SaveConsultTurn(ctx context.Context, t ConsultTurn) (ConsultTurn
 		return ConsultTurn{}, err
 	}
 	return asConsult(saved)
+}
+
+func (s *Store) QueueConsultTurn(ctx context.Context, t ConsultTurn) (ConsultTurn, error) {
+	saved, err := s.queueTurn(ctx, kindConsult, turn{
+		ID:             t.ID,
+		PlantID:        t.PlantID,
+		ConversationID: t.ConversationID,
+		Asked:          t.Asked,
+		PhotoID:        t.PhotoID,
+	})
+	if err != nil {
+		return ConsultTurn{}, err
+	}
+	return asConsult(saved)
+}
+
+func (s *Store) ClaimConsultTurn(ctx context.Context, lease time.Duration) (ConsultTurn, bool, error) {
+	claimed, ok, err := s.claimConsultTurn(ctx, lease)
+	if err != nil || !ok {
+		return ConsultTurn{}, ok, err
+	}
+	turn, err := asConsult(claimed)
+	return turn, err == nil, err
+}
+
+func (s *Store) CompleteConsultTurn(ctx context.Context, id, leaseID uuid.UUID,
+	reply judge.Answer) (ConsultTurn, error) {
+	raw, err := json.Marshal(reply)
+	if err != nil {
+		return ConsultTurn{}, err
+	}
+	completed, err := s.completeConsultTurn(ctx, id, leaseID, raw)
+	if err != nil {
+		return ConsultTurn{}, err
+	}
+	return asConsult(completed)
+}
+
+func (s *Store) FailConsultTurn(ctx context.Context, id, leaseID uuid.UUID,
+	failure string) (ConsultTurn, error) {
+	failed, err := s.failConsultTurn(ctx, id, leaseID, failure)
+	if err != nil {
+		return ConsultTurn{}, err
+	}
+	return asConsult(failed)
+}
+
+func (s *Store) RetryConsultTurn(ctx context.Context, id, leaseID uuid.UUID,
+	after time.Duration) (ConsultTurn, error) {
+	retried, err := s.retryConsultTurn(ctx, id, leaseID, after)
+	if err != nil {
+		return ConsultTurn{}, err
+	}
+	return asConsult(retried)
+}
+
+func (s *Store) RenewConsultTurn(ctx context.Context, id, leaseID uuid.UUID, lease time.Duration) error {
+	return s.renewConsultTurn(ctx, id, leaseID, lease)
 }
 
 // Consultation returns a conversation's turns, oldest first.
@@ -110,7 +186,7 @@ func (s *Store) Consultations(ctx context.Context, plantID uuid.UUID) ([]Consult
 			})
 		}
 		out[index].Turns = append(out[index].Turns, turn)
-		out[index].UpdatedAt = turn.CreatedAt
+		out[index].UpdatedAt = turn.UpdatedAt
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -125,6 +201,8 @@ func asConsult(t turn) (ConsultTurn, error) {
 	out := ConsultTurn{
 		ID: t.ID, PlantID: t.PlantID, ConversationID: t.ConversationID,
 		Asked: t.Asked, PhotoID: t.PhotoID, CreatedAt: t.CreatedAt,
+		UpdatedAt: t.UpdatedAt, Status: t.Status, Failure: t.Failure,
+		Attempts: t.Attempts, LeaseID: t.LeaseID,
 	}
 	if len(t.Reply) > 0 {
 		if err := json.Unmarshal(t.Reply, &out.Reply); err != nil {

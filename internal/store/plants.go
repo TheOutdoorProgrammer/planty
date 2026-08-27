@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
@@ -153,6 +154,15 @@ func insertPlant(ctx context.Context, db plantInserter, p plant.Plant, profile, 
 // GetPlant returns one plant by slug, archived or not.
 func (s *Store) GetPlant(ctx context.Context, slug string) (plant.Plant, error) {
 	row := s.pool.QueryRow(ctx, `SELECT `+plantColumns+` FROM plants WHERE slug = $1`, slug)
+	p, err := scanPlant(row)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plant.Plant{}, ErrNotFound
+	}
+	return p, err
+}
+
+func (s *Store) GetPlantByID(ctx context.Context, id uuid.UUID) (plant.Plant, error) {
+	row := s.pool.QueryRow(ctx, `SELECT `+plantColumns+` FROM plants WHERE id = $1`, id)
 	p, err := scanPlant(row)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return plant.Plant{}, ErrNotFound

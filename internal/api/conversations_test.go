@@ -1,11 +1,15 @@
 package api_test
 
 import (
+	"errors"
+	"io"
+	"log/slog"
 	"net/http"
 	"testing"
 
 	"github.com/google/uuid"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/api"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
@@ -58,6 +62,42 @@ func TestPlantConversationHistoryCanBeListedAndResumed(t *testing.T) {
 	visible := turns[0].(map[string]any)
 	if visible["id"] != first.ID.String() || visible["asked"] != "Can this wait?" {
 		t.Fatalf("first turn = %#v", visible)
+	}
+}
+
+func TestPlantMessageIsAcceptedBeforeTheModelRuns(t *testing.T) {
+	_, db, ctx := newServer(t)
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	h := api.New(db, quiet).WithJudge(&judge.Judge{}).Handler()
+	slug := createPlant(t, h, map[string]any{"common_name": unique("Durable chat")})
+	conversationID := uuid.New()
+	turnID := uuid.New()
+
+	accepted, body := do(t, h, http.MethodPost,
+		"/v1/plants/"+slug+"/conversations/"+conversationID.String()+"/messages",
+		map[string]any{"id": turnID, "message": "Keep answering after I leave."})
+	if accepted.Code != http.StatusAccepted {
+		t.Fatalf("enqueue status = %d, body %s", accepted.Code, accepted.Body.String())
+	}
+	if body["id"] != turnID.String() || body["status"] != string(store.ConsultPending) {
+		t.Fatalf("accepted turn = %#v", body)
+	}
+
+	resumed, transcript := do(t, h, http.MethodGet,
+		"/v1/plants/"+slug+"/conversations/"+conversationID.String(), nil)
+	if resumed.Code != http.StatusOK {
+		t.Fatalf("resume status = %d, body %s", resumed.Code, resumed.Body.String())
+	}
+	turns, ok := transcript["turns"].([]any)
+	if !ok || len(turns) != 1 {
+		t.Fatalf("turns = %#v", transcript["turns"])
+	}
+	stored := turns[0].(map[string]any)
+	if stored["status"] != string(store.ConsultPending) || stored["reply"] != nil {
+		t.Fatalf("stored turn = %#v", stored)
+	}
+	if _, err := db.Consultation(ctx, conversationID, uuid.Nil); !errors.Is(err, store.ErrConversationOwner) {
+		t.Fatalf("plant conversation lost its owner: %v", err)
 	}
 }
 

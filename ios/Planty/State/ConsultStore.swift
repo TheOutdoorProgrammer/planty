@@ -140,6 +140,8 @@ final class ConsultStore {
     private let api: any PlantyAPI
     private let origin: ConsultOrigin?
     private var conversationID: UUID?
+    private var pendingTurnID: UUID?
+    private let pollInterval: Duration
 
     /// Asked the moment the screen opens, for entry points that already know
     /// the question. The toxicity card's "is this dangerous" is the one caller.
@@ -151,30 +153,18 @@ final class ConsultStore {
         attachment: Data? = nil,
         pending: String? = nil,
         origin: ConsultOrigin? = nil,
-        conversation: PlantConversation? = nil
+        conversation: PlantConversation? = nil,
+        pollInterval: Duration = .seconds(1)
     ) {
         self.api = api
         self.plant = plant
         self.attachment = attachment
         self.pending = pending
         self.origin = origin
+        self.pollInterval = pollInterval
 
         if let conversation {
-            conversationID = conversation.id
-            messages = conversation.turns.flatMap { turn in
-                [
-                    ConsultMessage(
-                        speaker: .user,
-                        text: turn.asked,
-                        photoID: turn.photoID
-                    ),
-                    ConsultMessage(
-                        speaker: .planty,
-                        text: turn.reply,
-                        answer: turn.answer
-                    )
-                ]
-            }
+            restore(conversation)
         }
     }
 
@@ -247,9 +237,12 @@ final class ConsultStore {
 
     /// Fires the question this store was opened with, once.
     func begin() async {
-        guard let question = pending, messages.isEmpty else { return }
-        pending = nil
-        await send(question)
+        if let question = pending, messages.isEmpty {
+            pending = nil
+            await send(question)
+            return
+        }
+        await pollPendingTurn()
     }
 
     func send() async {
@@ -306,28 +299,42 @@ final class ConsultStore {
         messages.append(optimistic)
         isThinking = true
         error = nil
-        defer { isThinking = false }
 
         do {
-            let reply = try await answer(to: attempt)
-            conversationID = reply.conversationID
-            failed = nil
-            messages.append(
-                ConsultMessage(speaker: .planty, text: reply.reply, answer: reply)
+            let isNewConversation = conversationID == nil
+            let conversation = conversationID ?? UUID()
+            conversationID = conversation
+            let turn = try await submit(
+                attempt,
+                id: optimistic.id,
+                conversationID: conversation,
+                isNewConversation: isNewConversation
             )
+            conversationID = turn.conversationID
+            failed = nil
+            switch turn.status {
+            case .complete:
+                guard let answer = turn.answer else {
+                    throw PlantyError.transport("Planty returned a completed message with no reply.")
+                }
+                messages.append(
+                    ConsultMessage(speaker: .planty, text: answer.reply, answer: answer)
+                )
+                isThinking = false
+            case .pending, .processing:
+                pendingTurnID = turn.id
+                await pollPendingTurn()
+            case .failed:
+                isThinking = false
+                self.error = .server(
+                    status: 502,
+                    message: turn.failure ?? "Planty could not answer this message."
+                )
+                failed = attempt
+            }
         } catch {
             if PlantyError.isCancellation(error) {
-                // A cancellation has no answer coming. Remove only this
-                // optimistic bubble and hand the unsent payload back instead of
-                // leaving an unrecoverable question in the transcript.
-                messages.removeAll { $0.id == optimistic.id }
-                if composer.isEmpty, attachment == nil {
-                    composer = attempt.text
-                    attachment = attempt.photo
-                    failed = nil
-                } else {
-                    failed = attempt
-                }
+                pendingTurnID = optimistic.id
                 return
             }
 
@@ -336,33 +343,100 @@ final class ConsultStore {
             // the exact payload remains retryable.
             self.error = PlantyError.from(error)
             failed = attempt
+            isThinking = false
         }
     }
 
-    /// Both endpoints answer in the same shape; which one gets asked is the
-    /// only difference between a consultation and a scratch chat.
-    private func answer(to attempt: ConsultAttempt) async throws -> PlantAnswer {
+    private func submit(
+        _ attempt: ConsultAttempt,
+        id: UUID,
+        conversationID: UUID,
+        isNewConversation: Bool
+    ) async throws -> PlantConversationTurn {
         guard let plant else {
-            return try await api.ask(
+            let answer = try await api.ask(
                 ScratchQuestion(
                     message: attempt.text.isEmpty ? nil : attempt.text,
                     photo: attempt.photo,
-                    conversationID: conversationID
+                    conversationID: isNewConversation ? nil : conversationID
                 )
+            )
+            return PlantConversationTurn(
+                id: answer.id,
+                conversationID: answer.conversationID,
+                asked: attempt.text,
+                reply: answer.reply,
+                confidence: answer.confidence,
+                lookedAt: answer.lookedAt,
+                suggestedFollowUps: answer.suggestedFollowUps,
+                steps: answer.steps,
+                photoID: nil,
+                createdAt: Date()
             )
         }
 
-        let message = conversationID == nil
+        let message = isNewConversation
             ? origin?.contextualizing(attempt.text) ?? attempt.text
             : attempt.text
-        return try await api.ask(
+        return try await api.enqueueMessage(
             slug: plant.slug,
-            question: PlantQuestion(
-                message: message,
-                photo: attempt.photo,
-                conversationID: conversationID
-            )
+            conversationID: conversationID,
+            message: ConversationMessage(id: id, message: message, photo: attempt.photo)
         )
+    }
+
+    private func pollPendingTurn() async {
+        guard let plant, let conversationID, pendingTurnID != nil else { return }
+        isThinking = true
+
+        while !Task.isCancelled {
+            do {
+                let conversation = try await api.conversation(
+                    slug: plant.slug,
+                    id: conversationID
+                )
+                restore(conversation)
+                if pendingTurnID == nil { return }
+                try await Task.sleep(for: pollInterval)
+            } catch {
+                if PlantyError.isCancellation(error) { return }
+                self.error = PlantyError.from(error)
+                isThinking = false
+                return
+            }
+        }
+    }
+
+    private func restore(_ conversation: PlantConversation) {
+        conversationID = conversation.id
+        messages = conversation.turns.flatMap { turn in
+            var restored = [ConsultMessage(
+                speaker: .user,
+                text: turn.asked,
+                photoID: turn.photoID
+            )]
+            if let answer = turn.answer {
+                restored.append(
+                    ConsultMessage(speaker: .planty, text: answer.reply, answer: answer)
+                )
+            }
+            return restored
+        }
+
+        pendingTurnID = conversation.turns.first {
+            $0.status == .pending || $0.status == .processing
+        }?.id
+        isThinking = pendingTurnID != nil
+        error = nil
+        failed = nil
+
+        if let last = conversation.turns.last, last.status == .failed {
+            error = .server(
+                status: 502,
+                message: last.failure ?? "Planty could not answer this message."
+            )
+            failed = ConsultAttempt(text: last.asked, photo: nil)
+        }
     }
 
     func clearError() { error = nil }

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/pgtest"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/google/uuid"
@@ -175,6 +176,60 @@ func TestConversationCannotMoveBetweenSubjects(t *testing.T) {
 	}
 	if _, err := s.Consultation(ctx, started.ConversationID, uuid.Nil); !errors.Is(err, ErrConversationOwner) {
 		t.Fatalf("scratch access returned %v, want ErrConversationOwner", err)
+	}
+}
+
+func TestDurableConversationLeaseRejectsAStaleWorker(t *testing.T) {
+	s, ctx := testStore(t)
+	p := newPlant(t, s, ctx, "Durable conversation")
+	requested := ConsultTurn{
+		ID: uuid.New(), PlantID: p.ID, ConversationID: uuid.New(),
+		Asked: "Can I close the app now?",
+	}
+
+	queued, err := s.QueueConsultTurn(ctx, requested)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queued.Status != ConsultPending || queued.ID != requested.ID {
+		t.Fatalf("queued turn = %#v", queued)
+	}
+	idempotent, err := s.QueueConsultTurn(ctx, requested)
+	if err != nil || idempotent.ID != requested.ID {
+		t.Fatalf("idempotent retry = %#v, %v", idempotent, err)
+	}
+	conflict := requested
+	conflict.Asked = "Different content under the same turn ID"
+	if _, err := s.QueueConsultTurn(ctx, conflict); !errors.Is(err, ErrTurnConflict) {
+		t.Fatalf("conflicting retry returned %v, want ErrTurnConflict", err)
+	}
+
+	first, ok, err := s.ClaimConsultTurn(ctx, time.Minute)
+	if err != nil || !ok || first.LeaseID == uuid.Nil || first.Attempts != 1 {
+		t.Fatalf("first claim = %#v, %v, %v", first, ok, err)
+	}
+	if _, ok, err := s.ClaimConsultTurn(ctx, time.Minute); err != nil || ok {
+		t.Fatalf("active lease was claimed again: %v, %v", ok, err)
+	}
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE diagnosis_turns SET lease_expires_at = now() - interval '1 second'
+		WHERE id = $1`, first.ID); err != nil {
+		t.Fatal(err)
+	}
+	second, ok, err := s.ClaimConsultTurn(ctx, time.Minute)
+	if err != nil || !ok || second.LeaseID == first.LeaseID || second.Attempts != 2 {
+		t.Fatalf("reclaimed turn = %#v, %v, %v", second, ok, err)
+	}
+	answer := judge.Answer{Reply: "Yes. The backend owns the work now."}
+	if _, err := s.CompleteConsultTurn(ctx, first.ID, first.LeaseID, answer); err == nil {
+		t.Fatal("the expired worker completed work after another worker claimed it")
+	}
+	completed, err := s.CompleteConsultTurn(ctx, second.ID, second.LeaseID, answer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if completed.Status != ConsultComplete || completed.Reply.Reply != answer.Reply {
+		t.Fatalf("completed turn = %#v", completed)
 	}
 }
 

@@ -7,7 +7,7 @@ import Testing
 /// diagnosis refuses without one, and most questions are not about a picture.
 @Suite("Asking about a plant")
 struct ConsultStoreTests {
-    @Test("A question goes out with no photo and no conversation")
+    @Test("A question goes out with no photo and a durable conversation ID")
     @MainActor
     func firstQuestionOpensAConversation() async {
         let api = FakeAPI()
@@ -18,7 +18,7 @@ struct ConsultStoreTests {
 
         #expect(api.asked.count == 1)
         #expect(api.asked.first?.1.message == "does this need water?")
-        #expect(api.asked.first?.1.conversationID == nil, "the first question resumed something")
+        #expect(api.asked.first?.1.conversationID != nil)
         #expect(store.messages.count == 2, "the question and its answer should both be on screen")
     }
 
@@ -27,16 +27,14 @@ struct ConsultStoreTests {
     @Test("A follow-up carries the conversation it belongs to")
     @MainActor
     func followUpsStayInTheSameConversation() async {
-        let conversation = UUID()
         let api = FakeAPI()
-        api.answer = .fixture(conversationID: conversation)
         let store = ConsultStore(api: api, plant: .fixture())
 
         await store.send("first")
         await store.send("second")
 
         #expect(api.asked.count == 2)
-        #expect(api.asked.last?.1.conversationID == conversation)
+        #expect(api.asked.last?.1.conversationID == api.asked.first?.1.conversationID)
     }
 
     @Test("A saved conversation reopens with its transcript and continues")
@@ -71,6 +69,57 @@ struct ConsultStoreTests {
 
         #expect(api.asked.last?.1.conversationID == conversationID)
         #expect(store.messages.count == 4)
+    }
+
+    @Test("A pending conversation finishes after the app reopens")
+    @MainActor
+    func pendingConversationResumes() async {
+        let conversationID = UUID()
+        let turnID = UUID()
+        let api = FakeAPI()
+        let pending = PlantConversationTurn(
+            id: turnID,
+            conversationID: conversationID,
+            asked: "How is it doing?",
+            reply: nil,
+            confidence: 0,
+            lookedAt: nil,
+            suggestedFollowUps: [],
+            steps: [],
+            photoID: nil,
+            status: .processing,
+            createdAt: .reference
+        )
+        let completed = PlantConversationTurn(
+            id: turnID,
+            conversationID: conversationID,
+            asked: pending.asked,
+            reply: "It is healthy and does not need attention today.",
+            confidence: 0.9,
+            lookedAt: nil,
+            suggestedFollowUps: [],
+            steps: [],
+            photoID: nil,
+            createdAt: .reference
+        )
+        api.conversationResponses = [
+            PlantConversation(id: conversationID, turns: [completed])
+        ]
+        let store = ConsultStore(
+            api: api,
+            plant: .fixture(),
+            conversation: PlantConversation(id: conversationID, turns: [pending]),
+            pollInterval: .milliseconds(1)
+        )
+
+        #expect(store.isThinking)
+        #expect(store.messages.map(\.text) == [pending.asked])
+
+        await store.begin()
+
+        #expect(api.conversationReads == 1)
+        #expect(!store.isThinking)
+        #expect(store.messages.map(\.text) == [pending.asked, completed.reply])
     }
 
     @Test("An empty question is not sent")
@@ -132,7 +181,7 @@ struct ConsultStoreTests {
         #expect(!store.isThinking)
     }
 
-    @Test("A cancelled question returns to the composer instead of dangling")
+    @Test("A cancelled request leaves its durable question ready to resume")
     @MainActor
     func cancellationRestoresDraft() async {
         let api = FakeAPI()
@@ -142,8 +191,9 @@ struct ConsultStoreTests {
         await store.send("anything")
 
         #expect(store.error == nil)
-        #expect(store.messages.isEmpty, "a cancelled optimistic bubble was left with no answer")
-        #expect(store.composer == "anything", "the cancelled question was not recoverable")
+        #expect(store.messages.count == 1)
+        #expect(store.composer.isEmpty)
+        #expect(store.isThinking)
         #expect(store.failed == nil)
     }
 
@@ -175,9 +225,7 @@ struct ConsultStoreTests {
     @Test("A Today finding is not repeated after the conversation starts")
     @MainActor
     func todayFindingContextIsOnlySentOnce() async {
-        let conversation = UUID()
         let api = FakeAPI()
-        api.answer = .fixture(conversationID: conversation)
         let plant = Plant.fixture()
         let store = ConsultStore(
             api: api,
@@ -191,7 +239,7 @@ struct ConsultStoreTests {
         #expect(api.asked.count == 2)
         #expect(api.asked.first?.1.message.contains("<today_finding>") == true)
         #expect(api.asked.last?.1.message == "What should I watch for next?")
-        #expect(api.asked.last?.1.conversationID == conversation)
+        #expect(api.asked.last?.1.conversationID == api.asked.first?.1.conversationID)
     }
 }
 

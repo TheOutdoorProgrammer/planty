@@ -123,6 +123,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeAssessPlant, s.assessPlant)
 	mux.HandleFunc(routeListPlantConversations, s.listPlantConversations)
 	mux.HandleFunc(routeGetPlantConversation, s.getPlantConversation)
+	mux.HandleFunc(routeEnqueuePlantMessage, s.enqueuePlantMessage)
 
 	mux.HandleFunc(routeListReminders, s.listReminders)
 	mux.HandleFunc(routeSetReminder, s.setReminder)

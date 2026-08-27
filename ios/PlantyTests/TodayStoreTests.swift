@@ -40,6 +40,9 @@ final class FakeAPI: PlantyAPI, ReminderResolving, @unchecked Sendable {
 
     private var _answer: PlantAnswer = .fixture()
     private var _asked: [(String, PlantQuestion)] = []
+    private var _enqueuedStatus: ConversationTurnStatus = .complete
+    private var _conversationResponses: [PlantConversation] = []
+    private var _conversationReads = 0
     private var _reminders: [Reminder] = []
     private var _notes: [PlantNote] = []
     private var _detailVerdict: Verdict?
@@ -63,6 +66,17 @@ final class FakeAPI: PlantyAPI, ReminderResolving, @unchecked Sendable {
 
     var asked: [(String, PlantQuestion)] { lock.withLock { _asked } }
     var scratchAsks: [ScratchQuestion] { lock.withLock { _scratchAsks } }
+    var conversationReads: Int { lock.withLock { _conversationReads } }
+
+    var enqueuedStatus: ConversationTurnStatus {
+        get { lock.withLock { _enqueuedStatus } }
+        set { lock.withLock { _enqueuedStatus = newValue } }
+    }
+
+    var conversationResponses: [PlantConversation] {
+        get { lock.withLock { _conversationResponses } }
+        set { lock.withLock { _conversationResponses = newValue } }
+    }
 
     /// Every way a plant or a photo can come into existence, so a chat that
     /// promises to create nothing can be held to it.
@@ -231,6 +245,47 @@ final class FakeAPI: PlantyAPI, ReminderResolving, @unchecked Sendable {
         try check()
         lock.withLock { _asked.append((slug, question)) }
         return lock.withLock { _answer }
+    }
+
+    func enqueueMessage(
+        slug: String,
+        conversationID: UUID,
+        message: ConversationMessage
+    ) async throws -> PlantConversationTurn {
+        try check()
+        return lock.withLock {
+            _asked.append((
+                slug,
+                PlantQuestion(
+                    message: message.message,
+                    photo: message.photo,
+                    conversationID: conversationID
+                )
+            ))
+            let complete = _enqueuedStatus == .complete
+            return PlantConversationTurn(
+                id: message.id,
+                conversationID: conversationID,
+                asked: message.message,
+                reply: complete ? _answer.reply : nil,
+                confidence: complete ? _answer.confidence : 0,
+                lookedAt: complete ? _answer.lookedAt : nil,
+                suggestedFollowUps: complete ? _answer.suggestedFollowUps : [],
+                steps: complete ? _answer.steps : [],
+                photoID: nil,
+                status: _enqueuedStatus,
+                createdAt: Date()
+            )
+        }
+    }
+
+    func conversation(slug: String, id: UUID) async throws -> PlantConversation {
+        try check()
+        return try lock.withLock {
+            _conversationReads += 1
+            guard !_conversationResponses.isEmpty else { throw PlantyError.notFound }
+            return _conversationResponses.removeFirst()
+        }
     }
 
     func ask(_ question: ScratchQuestion) async throws -> PlantAnswer {

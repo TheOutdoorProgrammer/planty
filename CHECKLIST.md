@@ -47,6 +47,7 @@ Future work belongs in [ROADMAP.md](ROADMAP.md), durable trade-offs belong in [a
 - [x] Plant stories merge photographs, findings, sensor evidence, observations, notes, reminders, and harvest history.
 - [x] A plant story can start an assigned shared fan for a chosen bounded duration, show its countdown, and stop it explicitly.
 - [x] Consultations can use current and historical photographs and can write through the constrained `planty agent` interface.
+- [x] Plant chats persist before model work starts, survive the app closing or a backend rollout, and resume pending replies when reopened.
 - [x] More contains away mode, cold shelter state, owner questions, harvest history, postmortem lessons, owner updates, and settings.
 - [x] Settings tests API reachability and allows a compatible model to be selected independently for each model job.
 - [x] A stale Today state can launch a fresh daily check, and Settings can rerun any allowlisted CronJob from the phone without exposing arbitrary Kubernetes execution.

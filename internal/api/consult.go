@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -69,7 +70,7 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 	// A photograph taken mid-conversation is usually one the model asked for,
 	// so it is kept against the plant rather than discarded: a close-up of the
 	// undersides of the leaves is exactly the history worth having later.
-	offered := s.offerPhotos(r, p)
+	offered := s.offerPhotos(r.Context(), p)
 	var attached *uuid.UUID
 	if ask.Photo != "" {
 		shot, raw, media, err := s.keepAnswerPhoto(r.Context(), p, ask.Photo)
@@ -109,12 +110,12 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 // offerPhotos hands over recent photographs without attaching any, so the
 // model decides. A photograph that cannot be read is dropped rather than
 // failing the question, because it was optional to begin with.
-func (s *Server) offerPhotos(r *http.Request, p plant.Plant) []judge.Offer {
+func (s *Server) offerPhotos(ctx context.Context, p plant.Plant) []judge.Offer {
 	if s.photos == nil {
 		return nil
 	}
 
-	shots, err := s.store.Photos(r.Context(), p.ID, MaxOfferedPhotos)
+	shots, err := s.store.Photos(ctx, p.ID, MaxOfferedPhotos)
 	if err != nil {
 		s.log.Warn("no photographs offered", "plant", p.Slug, "error", err)
 		return nil
@@ -124,7 +125,7 @@ func (s *Server) offerPhotos(r *http.Request, p plant.Plant) []judge.Offer {
 		if shot.TakenAt.Before(time.Now().Add(-judge.ConsultWindow)) {
 			return nil, "", false
 		}
-		body, err := s.photos.Get(r.Context(), shot.StorageKey)
+		body, err := s.photos.Get(ctx, shot.StorageKey)
 		if err != nil {
 			return nil, "", false
 		}

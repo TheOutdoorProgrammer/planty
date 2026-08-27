@@ -74,6 +74,11 @@ protocol PlantyAPI: Sendable {
     func assess(slug: String) async throws -> Verdict
     func conversations(slug: String) async throws -> [PlantConversationSummary]
     func conversation(slug: String, id: UUID) async throws -> PlantConversation
+    func enqueueMessage(
+        slug: String,
+        conversationID: UUID,
+        message: ConversationMessage
+    ) async throws -> PlantConversationTurn
     func ask(_ question: ScratchQuestion) async throws -> PlantAnswer
     func createPlantFromPhoto(_ request: PlantFromPhoto) async throws -> PlantFromPhotoResult
     func linkSensor(_ link: NewSensorLink) async throws -> SensorLink
@@ -114,6 +119,17 @@ extension PlantyAPI {
 
     func conversation(slug: String, id: UUID) async throws -> PlantConversation {
         throw PlantyError.server(status: 503, message: "Chat history is unavailable from this client.")
+    }
+
+    func enqueueMessage(
+        slug: String,
+        conversationID: UUID,
+        message: ConversationMessage
+    ) async throws -> PlantConversationTurn {
+        throw PlantyError.server(
+            status: 503,
+            message: "Durable chat is unavailable from this client."
+        )
     }
 
     func scheduledJobs() async throws -> [ScheduledJob] { [] }

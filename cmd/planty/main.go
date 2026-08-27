@@ -212,6 +212,7 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 		})
 		server = server.WithPhotos(manager, seat)
 	}
+	server.StartConversationWorker(ctx)
 
 	srv := &http.Server{
 		Addr:              addr,

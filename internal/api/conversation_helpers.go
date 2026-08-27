@@ -25,6 +25,9 @@ func (s *Server) conversationHistory(ctx context.Context, ownerID uuid.UUID,
 	}
 	prior := make([]judge.PriorAnswer, 0, len(turns))
 	for _, turn := range turns {
+		if turn.Status != store.ConsultComplete {
+			continue
+		}
 		prior = append(prior, judge.PriorAnswer{
 			Asked: turn.Asked, Reply: turn.Reply, PhotoID: turn.PhotoID,
 		})
@@ -36,6 +39,18 @@ func (s *Server) conversationHistory(ctx context.Context, ownerID uuid.UUID,
 // Keeping it here means a new field cannot be returned by plant chat but
 // silently disappear from scratch chat, or vice versa.
 func conversationResponse(saved store.ConsultTurn) map[string]any {
+	response := map[string]any{
+		"id":              saved.ID,
+		"conversation_id": saved.ConversationID,
+		"status":          saved.Status,
+	}
+	if saved.Failure != "" {
+		response["failure"] = saved.Failure
+	}
+	if saved.Status != store.ConsultComplete {
+		return response
+	}
+
 	suggestions := saved.Reply.Suggestions
 	if suggestions == nil {
 		suggestions = []string{}
@@ -44,13 +59,10 @@ func conversationResponse(saved store.ConsultTurn) map[string]any {
 	if steps == nil {
 		steps = []judge.Step{}
 	}
-	return map[string]any{
-		"id":                   saved.ID,
-		"conversation_id":      saved.ConversationID,
-		"reply":                saved.Reply.Reply,
-		"confidence":           saved.Reply.Confidence,
-		"looked_at":            saved.Reply.LookedAt,
-		"suggested_follow_ups": suggestions,
-		"steps":                steps,
-	}
+	response["reply"] = saved.Reply.Reply
+	response["confidence"] = saved.Reply.Confidence
+	response["looked_at"] = saved.Reply.LookedAt
+	response["suggested_follow_ups"] = suggestions
+	response["steps"] = steps
+	return response
 }

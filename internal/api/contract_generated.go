@@ -35,6 +35,7 @@ const (
 	routeDeletePhoto               = "DELETE /v1/photos/{id}"
 	routeDeleteReminder            = "DELETE /v1/plants/{slug}/reminders/{kind}"
 	routeDiscoverActuators         = "GET /v1/home-assistant/actuators"
+	routeEnqueuePlantMessage       = "POST /v1/plants/{slug}/conversations/{id}/messages"
 	routeGetEvidenceCoverage       = "GET /v1/evidence-coverage"
 	routeGetEvidenceWindow         = "GET /v1/evidence-windows/{id}"
 	routeGetExperiment             = "GET /v1/experiments/{id}"
