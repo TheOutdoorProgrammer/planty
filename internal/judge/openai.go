@@ -144,8 +144,9 @@ func (b *openaiBackend) call(ctx context.Context, body chatRequest) (chatRespons
 
 // request builds the wire body shared by every round trip in a conversation.
 func (b *openaiBackend) request(req Request, messages []chatMessage) chatRequest {
+	model := modelFor(req, b.model)
 	body := chatRequest{
-		Model:     modelFor(req, b.model),
+		Model:     model,
 		Messages:  messages,
 		MaxTokens: req.MaxTokens,
 	}
@@ -156,9 +157,18 @@ func (b *openaiBackend) request(req Request, messages []chatMessage) chatRequest
 		}
 	}
 	if req.Effort != "" {
-		body.ReasoningEffort = string(req.Effort)
+		body.ReasoningEffort = openAIReasoningEffort(model, req.Effort)
 	}
 	return body
+}
+
+func openAIReasoningEffort(model string, effort Effort) string {
+	// Kimi rejects Planty's portable medium tier. Max preserves the model's
+	// documented reasoning behavior instead of silently disabling it.
+	if model == "kimi-k3" && effort == EffortMedium {
+		return string(EffortMax)
+	}
+	return string(effort)
 }
 
 // messagesForChat flattens a conversation into chat messages. Offered photos

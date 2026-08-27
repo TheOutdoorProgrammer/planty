@@ -93,6 +93,21 @@ func TestTheSchemaAndEffortReachTheWire(t *testing.T) {
 	}
 }
 
+func TestKimiUsesASupportedReasoningEffort(t *testing.T) {
+	backend, seen := serve(t, replied(t, `{}`))
+	backend.model = "kimi-k3"
+
+	if _, err := backend.Judge(context.Background(), Request{
+		Turns:  []Turn{ask(text("hello"))},
+		Effort: EffortMedium,
+	}); err != nil {
+		t.Fatalf("Judge: %v", err)
+	}
+	if got := (*seen)[0].ReasoningEffort; got != "max" {
+		t.Errorf("Kimi received unsupported reasoning effort %q", got)
+	}
+}
+
 func TestAPhotographRidesAsADataURI(t *testing.T) {
 	backend, seen := serve(t, replied(t, `{}`))
 

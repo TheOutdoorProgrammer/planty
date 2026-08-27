@@ -58,6 +58,7 @@ type Effort string
 const (
 	EffortMedium Effort = "medium"
 	EffortHigh   Effort = "high"
+	EffortMax    Effort = "max"
 )
 
 // Request is one call. Turns carries the whole conversation even when Session
