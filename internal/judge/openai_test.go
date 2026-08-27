@@ -108,6 +108,37 @@ func TestKimiUsesASupportedReasoningEffort(t *testing.T) {
 	}
 }
 
+func TestOnlyTransientProviderStatusesAreRetried(t *testing.T) {
+	for _, test := range []struct {
+		status    int
+		retryable bool
+	}{
+		{status: http.StatusBadRequest, retryable: false},
+		{status: http.StatusUnauthorized, retryable: false},
+		{status: http.StatusTooManyRequests, retryable: true},
+		{status: http.StatusBadGateway, retryable: true},
+	} {
+		t.Run(http.StatusText(test.status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(test.status)
+				_, _ = w.Write([]byte(`{"error":{"message":"provider failure"}}`))
+			}))
+			defer server.Close()
+
+			backend := newOpenAIBackend(Provider{
+				ID: "test", Kind: KindOpenAI, BaseURL: server.URL,
+			}, "test-model")
+			_, err := backend.call(context.Background(), chatRequest{Model: "test-model"})
+			if err == nil {
+				t.Fatal("provider failure was accepted")
+			}
+			if got := Retryable(err); got != test.retryable {
+				t.Fatalf("Retryable = %t, want %t for %d: %v", got, test.retryable, test.status, err)
+			}
+		})
+	}
+}
+
 func TestAPhotographRidesAsADataURI(t *testing.T) {
 	backend, seen := serve(t, replied(t, `{}`))
 
@@ -202,7 +233,7 @@ func TestOfferedHistoricalPhotoIsOpenedOnDemandWithoutActingPrivileges(t *testin
 
 	out, err := backend.Judge(context.Background(), Request{
 		Turns:   []Turn{ask(text("Has it changed?"))},
-		Offered: []Offer{{Label: "1 August", Media: "image/jpeg", Bytes: []byte("jpeg")}},
+		Offered: []Offer{{Label: "1 August", Media: "image/jpeg", Bytes: testImage(t, "jpeg")}},
 	})
 	if err != nil {
 		t.Fatalf("Judge: %v", err)

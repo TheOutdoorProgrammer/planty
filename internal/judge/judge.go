@@ -58,6 +58,12 @@ func (j *Judge) Assigned(a Assignments) *Judge {
 // assignment naming a model the job cannot do is refused rather than attempted,
 // because failing here names the misconfiguration instead of the symptom.
 func (j *Judge) dispatch(ctx context.Context, req Request) (Outcome, error) {
+	var err error
+	req, err = prepareRequestImages(ctx, req)
+	if err != nil {
+		return Outcome{}, err
+	}
+
 	if j.instructions != nil {
 		if overlay, ok := j.instructions.PromptInstructionsFor(ctx, req.Job); ok {
 			req.System = withPromptInstructions(req.System, overlay)

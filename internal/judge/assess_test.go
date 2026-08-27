@@ -1,6 +1,7 @@
 package judge
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"slices"
@@ -31,6 +32,7 @@ func (b *sequenceBackend) Judge(_ context.Context, request Request) (Outcome, er
 
 func TestAssessAttachesAndNamesTheExactLatestPhotograph(t *testing.T) {
 	photoID := uuid.New()
+	photo := testImage(t, "jpeg")
 	backend := &sequenceBackend{outcomes: []Outcome{{
 		Answer: `{"action":"none","reasoning":"Wait today.","confidence":0.8,"sensor_summary":"Leaves look steady.","health_mode":"baseline","health_value":85,"health_reasoning":"The attached current photo shows upright leaves."}`,
 		Model:  "model-a",
@@ -40,7 +42,7 @@ func TestAssessAttachesAndNamesTheExactLatestPhotograph(t *testing.T) {
 	result, err := seat.Assess(context.Background(), Evidence{
 		LatestPhoto: &PhotoEvidence{
 			ID: photoID, TakenAt: time.Now().Add(-time.Hour), Caption: "whole plant",
-			Frame: Frame{Media: "image/jpeg", Bytes: []byte("photograph")},
+			Frame: Frame{Media: "image/jpeg", Bytes: photo},
 		},
 	})
 	if err != nil {
@@ -50,7 +52,7 @@ func TestAssessAttachesAndNamesTheExactLatestPhotograph(t *testing.T) {
 		t.Fatalf("unexpected result or requests: %#v %d", result, len(backend.requests))
 	}
 	parts := backend.requests[0].Turns[0].Parts
-	if len(parts) != 2 || parts[1].Image == nil || string(parts[1].Image.Bytes) != "photograph" {
+	if len(parts) != 2 || parts[1].Image == nil || !bytes.Equal(parts[1].Image.Bytes, photo) {
 		t.Fatalf("assessment did not receive the exact photo bytes: %#v", parts)
 	}
 	if parts[0].Text == "" || backend.requests[0].Job != JobAssess {

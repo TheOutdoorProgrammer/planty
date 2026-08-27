@@ -64,11 +64,11 @@ func (b *cliBackend) run(ctx context.Context, req Request, resuming bool) (Outco
 		turns = turns[len(turns)-1:]
 	}
 
-	prompt, err := render(dir, turns)
+	prompt, err := render(ctx, dir, turns)
 	if err != nil {
 		return Outcome{}, err
 	}
-	catalogue, err := stage(dir, req.Offered)
+	catalogue, err := stage(ctx, dir, req.Offered)
 	if err != nil {
 		return Outcome{}, err
 	}
@@ -237,7 +237,7 @@ func environment(live bool) []string {
 
 // render flattens a conversation into the single prompt string the CLI takes,
 // writing photographs into dir for the model to open by name.
-func render(dir string, turns []Turn) (string, error) {
+func render(ctx context.Context, dir string, turns []Turn) (string, error) {
 	var body strings.Builder
 	var frames int
 	transcript := len(turns) > 1
@@ -252,9 +252,13 @@ func render(dir string, turns []Turn) (string, error) {
 				body.WriteString("\n")
 				continue
 			}
+			prepared, err := prepareModelImage(ctx, part.Image)
+			if err != nil {
+				return "", err
+			}
 			frames++
-			name := fmt.Sprintf("photo-%02d%s", frames, extensionFor(part.Image.Media))
-			if err := os.WriteFile(filepath.Join(dir, name), part.Image.Bytes, 0o600); err != nil {
+			name := fmt.Sprintf("photo-%02d%s", frames, extensionFor(prepared.Media))
+			if err := os.WriteFile(filepath.Join(dir, name), prepared.Bytes, 0o600); err != nil {
 				return "", fmt.Errorf("stage photograph: %w", err)
 			}
 			fmt.Fprintf(&body, "[photograph %s]\n", name)
@@ -275,7 +279,7 @@ func render(dir string, turns []Turn) (string, error) {
 // stage writes the offered photographs into dir and returns the catalogue that
 // tells the model they are there. This is where "you may look" is actually
 // expressed: the files exist, nothing has been read, and it decides.
-func stage(dir string, offered []Offer) (string, error) {
+func stage(ctx context.Context, dir string, offered []Offer) (string, error) {
 	if len(offered) == 0 {
 		return "", nil
 	}
@@ -286,8 +290,12 @@ func stage(dir string, offered []Offer) (string, error) {
 		"would change your answer; most questions do not need any.\n")
 
 	for i, offer := range offered {
-		name := fmt.Sprintf("day-%02d%s", i+1, extensionFor(offer.Media))
-		if err := os.WriteFile(filepath.Join(dir, name), offer.Bytes, 0o600); err != nil {
+		prepared, err := prepareModelImage(ctx, &Image{Media: offer.Media, Bytes: offer.Bytes})
+		if err != nil {
+			return "", err
+		}
+		name := fmt.Sprintf("day-%02d%s", i+1, extensionFor(prepared.Media))
+		if err := os.WriteFile(filepath.Join(dir, name), prepared.Bytes, 0o600); err != nil {
 			return "", fmt.Errorf("stage offered photograph: %w", err)
 		}
 		fmt.Fprintf(&b, "  %s  %s\n", name, offer.Label)

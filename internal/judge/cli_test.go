@@ -1,6 +1,8 @@
 package judge
 
 import (
+	"bytes"
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,7 +14,7 @@ import (
 )
 
 func TestOneTurnRendersAsPlainPrompt(t *testing.T) {
-	prompt, err := render(t.TempDir(), []Turn{ask(text("Plant: pothos. What now?"))})
+	prompt, err := render(context.Background(), t.TempDir(), []Turn{ask(text("Plant: pothos. What now?"))})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -28,7 +30,7 @@ func TestOneTurnRendersAsPlainPrompt(t *testing.T) {
 // The CLI takes one prompt, so a follow-up has to arrive as a transcript or the
 // model answers today's question with none of the conversation behind it.
 func TestPriorTurnsSurviveAsATranscript(t *testing.T) {
-	prompt, err := render(t.TempDir(), []Turn{
+	prompt, err := render(context.Background(), t.TempDir(), []Turn{
 		ask(text("what is wrong with it")),
 		answered(`{"observed":"yellow lower leaves"}`),
 		ask(text("should i repot")),
@@ -49,24 +51,26 @@ func TestPriorTurnsSurviveAsATranscript(t *testing.T) {
 
 func TestPhotographsAreStagedAsFilesTheModelIsToldToOpen(t *testing.T) {
 	dir := t.TempDir()
+	jpeg := testImage(t, "jpeg")
+	png := testImage(t, "png")
 
-	prompt, err := render(dir, []Turn{ask(
+	prompt, err := render(context.Background(), dir, []Turn{ask(
 		text("Taken 3 days ago:"),
-		picture("image/jpeg", []byte("first")),
+		picture("image/jpeg", jpeg),
 		text("Taken 1 hour ago:"),
-		picture("image/png", []byte("second")),
+		picture("image/png", png),
 	)})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
 
-	for name, want := range map[string]string{"photo-01.jpg": "first", "photo-02.png": "second"} {
+	for name, want := range map[string][]byte{"photo-01.jpg": jpeg, "photo-02.png": png} {
 		got, err := os.ReadFile(filepath.Join(dir, name))
 		if err != nil {
 			t.Fatalf("%s was never written: %v", name, err)
 		}
-		if string(got) != want {
-			t.Errorf("%s holds %q, want %q", name, got, want)
+		if !bytes.Equal(got, want) {
+			t.Errorf("%s does not hold the source photograph", name)
 		}
 		if !strings.Contains(prompt, name) {
 			t.Errorf("the prompt never names %s, so nothing opens it:\n%s", name, prompt)
@@ -87,7 +91,7 @@ func TestOnlyReadingIsAvailableWithoutActing(t *testing.T) {
 		t.Fatalf("arguments: %v", err)
 	}
 	withPhoto, err := backend.arguments(Request{
-		Turns: []Turn{ask(picture("image/jpeg", []byte("x")))},
+		Turns: []Turn{ask(picture("image/jpeg", testImage(t, "jpeg")))},
 	}, false)
 	if err != nil {
 		t.Fatalf("arguments: %v", err)
@@ -253,11 +257,11 @@ func TestResumingSendsOnlyTheNewQuestion(t *testing.T) {
 		ask(text("should i repot")),
 	}
 
-	whole, err := render(dir, turns)
+	whole, err := render(context.Background(), dir, turns)
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
-	newest, err := render(dir, turns[len(turns)-1:])
+	newest, err := render(context.Background(), dir, turns[len(turns)-1:])
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -323,7 +327,7 @@ func TestReadingAPhotographDoesNotBypassPermissions(t *testing.T) {
 	backend := newCLIBackend("claude", "claude-opus-5")
 
 	args, err := backend.arguments(Request{
-		Turns: []Turn{ask(picture("image/jpeg", []byte("x")))},
+		Turns: []Turn{ask(picture("image/jpeg", testImage(t, "jpeg")))},
 	}, false)
 	if err != nil {
 		t.Fatalf("arguments: %v", err)

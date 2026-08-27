@@ -127,19 +127,43 @@ func (b *openaiBackend) call(ctx context.Context, body chatRequest) (chatRespons
 
 	var decoded chatResponse
 	if err := json.Unmarshal(payload, &decoded); err != nil {
-		return chatResponse{}, fmt.Errorf("decode reply (%d): %s", response.StatusCode, truncate(payload))
+		err := fmt.Errorf("decode reply (%d): %s", response.StatusCode, truncate(payload))
+		if permanentHTTPStatus(response.StatusCode) {
+			return chatResponse{}, permanent(err)
+		}
+		return chatResponse{}, err
+	}
+	if response.StatusCode >= 300 {
+		message := truncate(payload)
+		if decoded.Error != nil {
+			message = decoded.Error.Message
+		}
+		err := fmt.Errorf("%s returned %d: %s", b.provider.ID, response.StatusCode, message)
+		if permanentHTTPStatus(response.StatusCode) {
+			return chatResponse{}, permanent(err)
+		}
+		return chatResponse{}, err
 	}
 	if decoded.Error != nil {
 		return chatResponse{}, fmt.Errorf("%s: %s", b.provider.ID, decoded.Error.Message)
-	}
-	if response.StatusCode >= 300 {
-		return chatResponse{}, fmt.Errorf("%s returned %d: %s",
-			b.provider.ID, response.StatusCode, truncate(payload))
 	}
 	if len(decoded.Choices) == 0 {
 		return chatResponse{}, fmt.Errorf("%s returned no answer", b.provider.ID)
 	}
 	return decoded, nil
+}
+
+func permanentHTTPStatus(status int) bool {
+	if status < 400 || status >= 500 {
+		return false
+	}
+	switch status {
+	case http.StatusRequestTimeout, http.StatusConflict, http.StatusTooEarly,
+		http.StatusTooManyRequests:
+		return false
+	default:
+		return true
+	}
 }
 
 // request builds the wire body shared by every round trip in a conversation.

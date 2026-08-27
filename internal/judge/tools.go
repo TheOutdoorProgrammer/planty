@@ -154,15 +154,15 @@ func (t *toolbox) run(ctx context.Context, call toolCall) toolResult {
 			return textResult("That historical photograph index does not exist.")
 		}
 		offer := t.offers[*args.Index]
-		media := offer.Media
-		if media == "" {
-			media = "image/jpeg"
+		prepared, err := prepareModelImage(ctx, &Image{Media: offer.Media, Bytes: offer.Bytes})
+		if err != nil {
+			return textResult("That historical photograph could not be opened: " + err.Error())
 		}
 		return toolResult{
 			Content: []contentPart{
 				{Type: "text", Text: offer.Label},
-				{Type: "image_url", ImageURL: &imageURL{URL: "data:" + media + ";base64," +
-					base64.StdEncoding.EncodeToString(offer.Bytes)}},
+				{Type: "image_url", ImageURL: &imageURL{URL: "data:" + prepared.Media + ";base64," +
+					base64.StdEncoding.EncodeToString(prepared.Bytes)}},
 			},
 			Summary: "Opened " + offer.Label,
 		}

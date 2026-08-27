@@ -131,7 +131,7 @@ func (s *Server) processNextModelWork(ctx context.Context) (bool, error) {
 	}
 
 	span.RecordError(err)
-	if work.Attempts < conversationMaxAttempts {
+	if work.Attempts < conversationMaxAttempts && judge.Retryable(err) {
 		if retryErr := s.store.RetryModelWork(ctx, work,
 			time.Duration(work.Attempts)*2*time.Second); retryErr != nil {
 			span.SetStatus(codes.Error, "schedule retry")
