@@ -48,7 +48,7 @@ COPY dist/planty_linux_${TARGETARCH}_*/planty /usr/local/bin/planty
 # A snapshot dist directory can otherwise survive in BuildKit's cache while
 # the image receives the new release tag and labels.
 RUN set -eu; \
-    if [ -n "$VERSION" ]; then \
+    if [ -n "${VERSION:-}" ]; then \
       output="$(/usr/local/bin/planty version)"; \
       details="${output#* }"; \
       actual_version="${details%% *}"; \
