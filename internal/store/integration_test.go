@@ -179,6 +179,36 @@ func TestConversationCannotMoveBetweenSubjects(t *testing.T) {
 	}
 }
 
+func TestConversationOrderIsStableWhenTimestampsMatch(t *testing.T) {
+	s, ctx := testStore(t)
+	p := newPlant(t, s, ctx, "Stable conversation order")
+	conversationID := uuid.New()
+	firstID := uuid.MustParse("00000000-0000-0000-0000-000000000001")
+	secondID := uuid.MustParse("00000000-0000-0000-0000-000000000002")
+
+	for _, turn := range []ConsultTurn{
+		{ID: secondID, PlantID: p.ID, ConversationID: conversationID, Asked: "Second", Reply: judge.Answer{Reply: "Second reply"}},
+		{ID: firstID, PlantID: p.ID, ConversationID: conversationID, Asked: "First", Reply: judge.Answer{Reply: "First reply"}},
+	} {
+		if _, err := s.SaveConsultTurn(ctx, turn); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.pool.Exec(ctx, `
+		UPDATE diagnosis_turns SET created_at = '2026-01-01 00:00:00+00'
+		WHERE conversation_id = $1`, conversationID); err != nil {
+		t.Fatal(err)
+	}
+
+	turns, err := s.Consultation(ctx, conversationID, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(turns) != 2 || turns[0].ID != firstID || turns[1].ID != secondID {
+		t.Fatalf("turn order = %#v", turns)
+	}
+}
+
 func TestDurableConversationLeaseRejectsAStaleWorker(t *testing.T) {
 	s, ctx := testStore(t)
 	p := newPlant(t, s, ctx, "Durable conversation")
@@ -219,6 +249,9 @@ func TestDurableConversationLeaseRejectsAStaleWorker(t *testing.T) {
 	second, ok, err := s.ClaimConsultTurn(ctx, time.Minute)
 	if err != nil || !ok || second.LeaseID == first.LeaseID || second.Attempts != 2 {
 		t.Fatalf("reclaimed turn = %#v, %v, %v", second, ok, err)
+	}
+	if err := s.RenewConsultTurn(ctx, first.ID, first.LeaseID, time.Minute); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("stale worker renewed a reclaimed turn: %v", err)
 	}
 	answer := judge.Answer{Reply: "Yes. The backend owns the work now."}
 	if _, err := s.CompleteConsultTurn(ctx, first.ID, first.LeaseID, answer); err == nil {

@@ -41,6 +41,7 @@ final class FakeAPI: PlantyAPI, ReminderResolving, @unchecked Sendable {
     private var _answer: PlantAnswer = .fixture()
     private var _asked: [(String, PlantQuestion)] = []
     private var _enqueuedStatus: ConversationTurnStatus = .complete
+    private var _enqueuedMessageIDs: [UUID] = []
     private var _conversationResponses: [PlantConversation] = []
     private var _conversationReads = 0
     private var _reminders: [Reminder] = []
@@ -67,6 +68,7 @@ final class FakeAPI: PlantyAPI, ReminderResolving, @unchecked Sendable {
     var asked: [(String, PlantQuestion)] { lock.withLock { _asked } }
     var scratchAsks: [ScratchQuestion] { lock.withLock { _scratchAsks } }
     var conversationReads: Int { lock.withLock { _conversationReads } }
+    var enqueuedMessageIDs: [UUID] { lock.withLock { _enqueuedMessageIDs } }
 
     var enqueuedStatus: ConversationTurnStatus {
         get { lock.withLock { _enqueuedStatus } }
@@ -254,6 +256,7 @@ final class FakeAPI: PlantyAPI, ReminderResolving, @unchecked Sendable {
     ) async throws -> PlantConversationTurn {
         try check()
         return lock.withLock {
+            _enqueuedMessageIDs.append(message.id)
             _asked.append((
                 slug,
                 PlantQuestion(

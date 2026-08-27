@@ -99,19 +99,42 @@ enum ConsultOrigin: Sendable, Hashable {
 struct ConsultMessage: Identifiable, Sendable, Hashable {
     enum Speaker: Sendable { case user, planty }
 
-    let id = UUID()
+    let id: UUID
     let speaker: Speaker
     let text: String
     var photo: Data?
     var photoID: UUID?
     var answer: PlantAnswer?
+
+    init(
+        id: UUID = UUID(),
+        speaker: Speaker,
+        text: String,
+        photo: Data? = nil,
+        photoID: UUID? = nil,
+        answer: PlantAnswer? = nil
+    ) {
+        self.id = id
+        self.speaker = speaker
+        self.text = text
+        self.photo = photo
+        self.photoID = photoID
+        self.answer = answer
+    }
 }
 
 /// One send: the words and the picture that were meant to go together. Kept as
 /// a pair so a failure can never hand back the words and drop the photo.
 struct ConsultAttempt: Sendable, Hashable {
+    let id: UUID
     var text: String
     var photo: Data?
+
+    init(id: UUID = UUID(), text: String, photo: Data?) {
+        self.id = id
+        self.text = text
+        self.photo = photo
+    }
 
     var isEmpty: Bool { text.isEmpty && photo == nil }
 }
@@ -223,6 +246,8 @@ final class ConsultStore {
 
     var hasStarted: Bool { !messages.isEmpty }
 
+    var canResumePendingReply: Bool { pendingTurnID != nil }
+
     /// A picture on its own is a question, so an empty composer is sendable
     /// whenever something is attached.
     var canSend: Bool {
@@ -291,10 +316,9 @@ final class ConsultStore {
 
     private func ask(_ attempt: ConsultAttempt) async {
         guard !attempt.isEmpty else { return }
+        let priorConversationID = conversationID
         let optimistic = ConsultMessage(
-            speaker: .user,
-            text: attempt.text,
-            photo: attempt.photo
+            id: attempt.id, speaker: .user, text: attempt.text, photo: attempt.photo
         )
         messages.append(optimistic)
         isThinking = true
@@ -306,7 +330,7 @@ final class ConsultStore {
             conversationID = conversation
             let turn = try await submit(
                 attempt,
-                id: optimistic.id,
+                id: attempt.id,
                 conversationID: conversation,
                 isNewConversation: isNewConversation
             )
@@ -334,7 +358,7 @@ final class ConsultStore {
             }
         } catch {
             if PlantyError.isCancellation(error) {
-                pendingTurnID = optimistic.id
+                handleCancellation(attempt, optimisticID: optimistic.id, priorConversationID: priorConversationID)
                 return
             }
 
@@ -345,6 +369,23 @@ final class ConsultStore {
             failed = attempt
             isThinking = false
         }
+    }
+
+    private func handleCancellation(
+        _ attempt: ConsultAttempt,
+        optimisticID: UUID,
+        priorConversationID: UUID?
+    ) {
+        guard plant != nil else {
+            if messages.last?.id == optimisticID { messages.removeLast() }
+            conversationID = priorConversationID
+            composer = attempt.text
+            attachment = attempt.photo
+            isThinking = false
+            return
+        }
+        pendingTurnID = optimisticID
+        failed = attempt
     }
 
     private func submit(
@@ -405,6 +446,12 @@ final class ConsultStore {
                 return
             }
         }
+    }
+
+    func resumePendingReply() async {
+        guard pendingTurnID != nil else { return }
+        error = nil
+        await pollPendingTurn()
     }
 
     private func restore(_ conversation: PlantConversation) {

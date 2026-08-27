@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"encoding/base64"
 	"errors"
 	"io"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/TheOutdoorProgrammer/planty/internal/api"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
+	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
@@ -98,6 +100,44 @@ func TestPlantMessageIsAcceptedBeforeTheModelRuns(t *testing.T) {
 	}
 	if _, err := db.Consultation(ctx, conversationID, uuid.Nil); !errors.Is(err, store.ErrConversationOwner) {
 		t.Fatalf("plant conversation lost its owner: %v", err)
+	}
+}
+
+func TestPlantMessageRetryKeepsOneTurnAndOnePhoto(t *testing.T) {
+	_, db, ctx := newServer(t)
+	quiet := slog.New(slog.NewTextHandler(io.Discard, nil))
+	storage := &readinessPhotos{state: photos.StateReady}
+	h := api.New(db, quiet).WithPhotos(storage, &judge.Judge{}).Handler()
+	slug := createPlant(t, h, map[string]any{"common_name": unique("Durable photo chat")})
+	p, err := db.GetPlant(ctx, slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conversationID := uuid.New()
+	turnID := uuid.New()
+	body := map[string]any{
+		"id": turnID, "message": "What does this show?",
+		"photo": base64.StdEncoding.EncodeToString([]byte{0xff, 0xd8, 0xff, 0xdb, 0x00, 0x43}),
+	}
+	requestPath := "/v1/plants/" + slug + "/conversations/" + conversationID.String() + "/messages"
+
+	for attempt := 1; attempt <= 2; attempt++ {
+		accepted, response := do(t, h, http.MethodPost, requestPath, body)
+		if accepted.Code != http.StatusAccepted || response["id"] != turnID.String() {
+			t.Fatalf("attempt %d = %d %#v", attempt, accepted.Code, response)
+		}
+	}
+
+	turns, err := db.Consultation(ctx, conversationID, p.ID)
+	if err != nil || len(turns) != 1 {
+		t.Fatalf("turns = %#v, %v", turns, err)
+	}
+	storedPhotos, err := db.Photos(ctx, p.ID, 10)
+	if err != nil || len(storedPhotos) != 1 {
+		t.Fatalf("photos = %#v, %v", storedPhotos, err)
+	}
+	if turns[0].PhotoID == nil || *turns[0].PhotoID != storedPhotos[0].ID {
+		t.Fatalf("turn photo = %v, stored photo = %s", turns[0].PhotoID, storedPhotos[0].ID)
 	}
 }
 

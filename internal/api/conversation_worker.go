@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"go.opentelemetry.io/otel"
@@ -61,7 +62,7 @@ func (s *Server) processNextConversation(ctx context.Context) (bool, error) {
 	span.SetAttributes(attribute.Int("conversation.attempt", turn.Attempts))
 	defer span.End()
 	leaseCtx, stopLease := context.WithCancel(ctx)
-	leaseDone := make(chan struct{})
+	leaseDone := make(chan error, 1)
 	go func() {
 		defer close(leaseDone)
 		ticker := time.NewTicker(conversationLease / 3)
@@ -75,14 +76,21 @@ func (s *Server) processNextConversation(ctx context.Context) (bool, error) {
 					leaseCtx, turn.ID, turn.LeaseID, conversationLease,
 				); err != nil {
 					s.log.WarnContext(leaseCtx, "conversation lease renewal failed", "error", err)
+					leaseDone <- err
+					stopLease()
+					return
 				}
 			}
 		}
 	}()
 
-	answer, err := s.answerQueuedConversation(ctx, turn)
+	answer, err := s.answerQueuedConversation(leaseCtx, turn)
 	stopLease()
-	<-leaseDone
+	if leaseErr := <-leaseDone; leaseErr != nil {
+		span.RecordError(leaseErr)
+		span.SetStatus(codes.Error, "lease renewal")
+		return true, fmt.Errorf("renew conversation lease: %w", leaseErr)
+	}
 	if err == nil {
 		if _, err := s.store.CompleteConsultTurn(ctx, turn.ID, turn.LeaseID, answer); err != nil {
 			span.RecordError(err)

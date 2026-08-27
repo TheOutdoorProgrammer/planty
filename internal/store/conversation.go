@@ -132,7 +132,7 @@ func (s *Store) conversation(ctx context.Context, kind string,
 		SELECT `+turnColumns+`
 		FROM diagnosis_turns
 		WHERE kind = $1 AND conversation_id = $2
-		ORDER BY created_at`, kind, conversationID)
+		ORDER BY created_at, id`, kind, conversationID)
 	if err != nil {
 		return nil, err
 	}

@@ -181,7 +181,7 @@ struct ConsultStoreTests {
         #expect(!store.isThinking)
     }
 
-    @Test("A cancelled request leaves its durable question ready to resume")
+    @Test("A cancelled request preserves its durable retry while waiting to resume")
     @MainActor
     func cancellationRestoresDraft() async {
         let api = FakeAPI()
@@ -194,7 +194,82 @@ struct ConsultStoreTests {
         #expect(store.messages.count == 1)
         #expect(store.composer.isEmpty)
         #expect(store.isThinking)
-        #expect(store.failed == nil)
+        #expect(store.failed?.id == store.messages.first?.id)
+        #expect(store.canResumePendingReply)
+    }
+
+    @Test("A cancelled scratch chat restores its draft because there is no durable reply")
+    @MainActor
+    func scratchCancellationRestoresDraft() async {
+        let photo = Data([0xff, 0xd8, 0xff])
+        let api = FakeAPI()
+        api.failure = PlantyError.from(URLError(.cancelled))
+        let store = ConsultStore(api: api, plant: nil, attachment: photo)
+        store.composer = "What is this?"
+
+        await store.send()
+
+        #expect(store.error == nil)
+        #expect(store.messages.isEmpty)
+        #expect(store.composer == "What is this?")
+        #expect(store.attachment == photo)
+        #expect(!store.isThinking)
+        #expect(!store.canResumePendingReply)
+    }
+
+    @Test("A polling failure can resume the already accepted reply")
+    @MainActor
+    func pollingFailureCanResume() async {
+        let conversationID = UUID()
+        let turnID = UUID()
+        let pending = PlantConversationTurn(
+            id: turnID,
+            conversationID: conversationID,
+            asked: "How is it doing?",
+            reply: nil,
+            confidence: 0,
+            lookedAt: nil,
+            suggestedFollowUps: [],
+            steps: [],
+            photoID: nil,
+            status: .processing,
+            createdAt: .reference
+        )
+        let completed = PlantConversationTurn(
+            id: turnID,
+            conversationID: conversationID,
+            asked: pending.asked,
+            reply: "It is doing well.",
+            confidence: 0.9,
+            lookedAt: nil,
+            suggestedFollowUps: [],
+            steps: [],
+            photoID: nil,
+            createdAt: .reference
+        )
+        let api = FakeAPI()
+        api.failure = .offline
+        let store = ConsultStore(
+            api: api,
+            plant: .fixture(),
+            conversation: PlantConversation(id: conversationID, turns: [pending]),
+            pollInterval: .milliseconds(1)
+        )
+
+        await store.begin()
+
+        #expect(store.error == .offline)
+        #expect(store.canResumePendingReply)
+
+        api.failure = nil
+        api.conversationResponses = [
+            PlantConversation(id: conversationID, turns: [completed])
+        ]
+        await store.resumePendingReply()
+
+        #expect(store.error == nil)
+        #expect(!store.canResumePendingReply)
+        #expect(store.messages.last?.text == completed.reply)
     }
 
     @Test("A Today question carries the card without rewriting the chat bubble")
@@ -269,6 +344,23 @@ struct ConsultRecoveryTests {
         // carried the original words rather than an empty string.
         #expect(api.asked.map(\.1.message) == ["is this too wet?"])
         #expect(store.messages.count == 2, "the dangling question was left behind")
+    }
+
+    @Test("A retry reuses the durable turn identity")
+    @MainActor
+    func retryReusesTheTurnID() async throws {
+        let api = FakeAPI()
+        api.failure = .offline
+        let store = ConsultStore(api: api, plant: .fixture())
+
+        await store.send("is this too wet?")
+        let firstID = try #require(store.messages.last?.id)
+
+        api.failure = nil
+        await store.retry()
+
+        #expect(api.enqueuedMessageIDs == [firstID])
+        #expect(store.messages.first?.id == firstID)
     }
 
     @Test("The words come back to the composer to be edited")

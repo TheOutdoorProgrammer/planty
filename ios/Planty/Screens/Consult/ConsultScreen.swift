@@ -202,6 +202,11 @@ struct ConsultScreen: View {
                         store.recoverDraft()
                     }
                     .buttonStyle(SecondaryButtonStyle())
+                } else if store.canResumePendingReply {
+                    Button("Check for reply") {
+                        Task { await store.resumePendingReply() }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
                 } else {
                     Button("Dismiss") { store.clearError() }
                         .buttonStyle(SecondaryButtonStyle())

@@ -160,7 +160,7 @@ func (s *Store) Consultations(ctx context.Context, plantID uuid.UUID) ([]Consult
 		SELECT `+turnColumns+`
 		FROM diagnosis_turns
 		WHERE kind = $1 AND plant_id = $2
-		ORDER BY created_at`, kindConsult, plantID)
+		ORDER BY created_at, id`, kindConsult, plantID)
 	if err != nil {
 		return nil, err
 	}
