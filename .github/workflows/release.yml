@@ -25,7 +25,7 @@ jobs:
   ios:
     name: iOS archive
     # Xcode 26 is the default here, which the iOS 26 deployment target needs.
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, mini-2, release, planty]
     steps:
       - uses: actions/checkout@v5
 
