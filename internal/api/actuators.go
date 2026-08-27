@@ -90,14 +90,16 @@ func (s *Server) updateActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		Name     string      `json:"name"`
-		PlantIDs []uuid.UUID `json:"plant_ids"`
+		Name                 string      `json:"name"`
+		PlantIDs             []uuid.UUID `json:"plant_ids"`
+		PolicyControlEnabled bool        `json:"policy_control_enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
-	updated, err := s.store.UpdateActuator(r.Context(), id, request.Name, request.PlantIDs)
+	updated, err := s.store.UpdateActuator(r.Context(), id, request.Name, request.PlantIDs,
+		request.PolicyControlEnabled)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return

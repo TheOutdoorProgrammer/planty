@@ -35,6 +35,7 @@ type Server struct {
 	homeAssistant homeAssistantDiscoverer
 	actuatorHA    job.ActuatorHomeAssistant
 	scheduledJobs scheduledjob.Launcher
+	policyRunner  *job.PolicyRunner
 	bearerToken   string
 }
 
@@ -72,6 +73,11 @@ func (s *Server) WithPush(sender *push.Sender) *Server {
 // checks; the HTTP route never accepts a resource name or command.
 func (s *Server) WithScheduledJobs(launcher scheduledjob.Launcher) *Server {
 	s.scheduledJobs = launcher
+	return s
+}
+
+func (s *Server) WithPolicies(runner job.PolicyRunner) *Server {
+	s.policyRunner = &runner
 	return s
 }
 
@@ -149,6 +155,15 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeListPromptInstructions, s.listPromptInstructions)
 	mux.HandleFunc(routeSetPromptInstruction, s.setPromptInstruction)
 	mux.HandleFunc(routeClearPromptInstruction, s.clearPromptInstruction)
+	mux.HandleFunc(routeListPolicies, s.listPolicies)
+	mux.HandleFunc(routeCreatePolicy, s.createPolicy)
+	mux.HandleFunc(routePreviewPolicy, s.previewPolicy)
+	mux.HandleFunc(routeGetPolicyReference, s.getPolicyReference)
+	mux.HandleFunc(routeGetPolicy, s.getPolicy)
+	mux.HandleFunc(routeUpdatePolicy, s.updatePolicy)
+	mux.HandleFunc(routeDeletePolicy, s.deletePolicy)
+	mux.HandleFunc(routeEvaluatePolicy, s.evaluatePolicy)
+	mux.HandleFunc(routeListPolicyEvaluations, s.listPolicyEvaluations)
 	mux.HandleFunc(routeListScheduledJobs, s.listScheduledJobs)
 	mux.HandleFunc(routeRunScheduledJob, s.runScheduledJob)
 

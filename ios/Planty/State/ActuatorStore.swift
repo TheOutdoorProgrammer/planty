@@ -122,7 +122,12 @@ final class ActuatorStore {
         }
     }
 
-    func update(_ actuator: Actuator, name: String, plantIDs: [UUID]) async -> PlantyError? {
+    func update(
+        _ actuator: Actuator,
+        name: String,
+        plantIDs: [UUID],
+        policyControlEnabled: Bool
+    ) async -> PlantyError? {
         let cleanedName = name.cleaned
         guard !cleanedName.isEmpty else { return .transport("Give the actuator a name.") }
         guard !plantIDs.isEmpty else { return .transport("Choose at least one plant this actuator serves.") }
@@ -130,7 +135,8 @@ final class ActuatorStore {
             let saved = try await api.renameActuator(
                 id: actuator.id,
                 name: cleanedName,
-                plantIDs: plantIDs
+                plantIDs: plantIDs,
+                policyControlEnabled: policyControlEnabled
             )
             if let index = registered.firstIndex(where: { $0.id == saved.id }) {
                 registered[index] = saved

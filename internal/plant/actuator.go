@@ -18,14 +18,15 @@ const (
 )
 
 type Actuator struct {
-	ID          uuid.UUID      `json:"id"`
-	EntityID    string         `json:"entity_id"`
-	Name        string         `json:"name"`
-	Kind        ActuatorKind   `json:"kind"`
-	PlantIDs    []uuid.UUID    `json:"plant_ids"`
-	ActiveLease *ActuatorLease `json:"active_lease,omitempty"`
-	CreatedAt   time.Time      `json:"created_at"`
-	UpdatedAt   time.Time      `json:"updated_at"`
+	ID                   uuid.UUID      `json:"id"`
+	EntityID             string         `json:"entity_id"`
+	Name                 string         `json:"name"`
+	Kind                 ActuatorKind   `json:"kind"`
+	PlantIDs             []uuid.UUID    `json:"plant_ids"`
+	PolicyControlEnabled bool           `json:"policy_control_enabled"`
+	ActiveLease          *ActuatorLease `json:"active_lease,omitempty"`
+	CreatedAt            time.Time      `json:"created_at"`
+	UpdatedAt            time.Time      `json:"updated_at"`
 }
 
 func (a Actuator) Valid() error {
@@ -38,6 +39,9 @@ func (a Actuator) Valid() error {
 	}
 	if a.Kind != ActuatorKind(domain) {
 		return invalid("actuator kind must match its entity_id domain")
+	}
+	if a.PolicyControlEnabled && a.Kind != ActuatorFan {
+		return invalid("policy control is only available for fans")
 	}
 	if len(a.PlantIDs) == 0 {
 		return invalid("actuator must be assigned to at least one plant")

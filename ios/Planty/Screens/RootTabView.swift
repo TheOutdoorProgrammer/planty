@@ -41,7 +41,9 @@ struct RootTabView: View {
     @ViewBuilder
     private var settingsDestination: some View {
         #if DEBUG
-        if ProcessInfo.processInfo.environment["PLANTY_START_SETTINGS_ROUTE"] == "scheduled-jobs" {
+        if ProcessInfo.processInfo.environment["PLANTY_START_SETTINGS_ROUTE"] == "policies" {
+            NavigationStack { PolicySettingsScreen() }
+        } else if ProcessInfo.processInfo.environment["PLANTY_START_SETTINGS_ROUTE"] == "scheduled-jobs" {
             NavigationStack { ScheduledJobsScreen() }
         } else {
             SettingsScreen()

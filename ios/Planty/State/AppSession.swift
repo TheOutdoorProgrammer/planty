@@ -36,6 +36,7 @@ final class AppSession {
     let choices: ManagedChoicesStore
     let models: ModelSettingsStore
     let promptInstructions: PromptInstructionStore
+    let policies: PolicyStore
     let scheduledJobs: ScheduledJobStore
     let actuators: ActuatorStore
     let evidenceWorkflows: EvidenceWorkflowStore
@@ -72,6 +73,7 @@ final class AppSession {
         choices = ManagedChoicesStore(api: client, isConfigured: resolved.isConfigured)
         models = ModelSettingsStore(api: client, isConfigured: resolved.isConfigured)
         promptInstructions = PromptInstructionStore(api: client, isConfigured: resolved.isConfigured)
+        policies = PolicyStore(api: client, isConfigured: resolved.isConfigured)
         scheduledJobs = ScheduledJobStore(api: client, isConfigured: resolved.isConfigured)
         actuators = ActuatorStore(api: client, isConfigured: resolved.isConfigured)
         evidenceWorkflows = EvidenceWorkflowStore(api: client, isConfigured: resolved.isConfigured)
@@ -125,6 +127,7 @@ final class AppSession {
         choices.replace(api: client, isConfigured: configuration.isConfigured)
         models.replace(api: client, isConfigured: configuration.isConfigured)
         promptInstructions.replace(api: client, isConfigured: configuration.isConfigured)
+        policies.replace(api: client, isConfigured: configuration.isConfigured)
         scheduledJobs.replace(api: client, isConfigured: configuration.isConfigured)
         actuators.replace(api: client, isConfigured: configuration.isConfigured)
         evidenceWorkflows.replace(api: client, isConfigured: configuration.isConfigured)

@@ -142,6 +142,9 @@ func Gather(ctx context.Context, db *store.Store, subject plant.Plant,
 				strings.TrimSpace(shot.VisionFindings))
 		}
 	}
+	if evaluations, err := db.PolicyEvaluations(ctx, &subject.ID, 20); err == nil {
+		history.Policies = evaluations
+	}
 	return history, nil
 }
 

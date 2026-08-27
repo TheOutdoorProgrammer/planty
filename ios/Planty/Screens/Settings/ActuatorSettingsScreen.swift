@@ -10,7 +10,10 @@ struct ActuatorSettingsScreen: View {
                 Label("Recurring schedules stay in Home Assistant", systemImage: "house.and.flag.fill")
                     .font(.headline)
                     .foregroundStyle(PlantyColor.cyan)
-                Text("Planty can start a registered fan or switch for a bounded lease and stop it by Planty actuator ID. It does not create or own recurring schedules.")
+                Text(
+                    "Planty can start a registered fan or switch for a bounded lease and stop it " +
+                    "by Planty actuator ID. It does not create or own recurring schedules."
+                )
                     .font(.subheadline)
                     .foregroundStyle(PlantyColor.secondaryText)
             }
@@ -87,7 +90,10 @@ private struct ActuatorRegistrationSheet: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Choose the exact Home Assistant fan or switch. Planty will never guess which plug controls a plant device.")
+                    Text(
+                        "Choose the exact Home Assistant fan or switch. Planty will never guess " +
+                        "which plug controls a plant device."
+                    )
                         .font(.subheadline)
                         .foregroundStyle(PlantyColor.secondaryText)
                 }
@@ -121,8 +127,14 @@ private struct ActuatorRegistrationSheet: View {
                                         .foregroundStyle(PlantyColor.secondaryText)
                                 }
                                 Spacer()
-                                Image(systemName: selectedPlantIDs.contains(plant.id) ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(selectedPlantIDs.contains(plant.id) ? PlantyColor.green : PlantyColor.secondaryText)
+                                Image(
+                                    systemName: selectedPlantIDs.contains(plant.id)
+                                        ? "checkmark.circle.fill" : "circle"
+                                )
+                                .foregroundStyle(
+                                    selectedPlantIDs.contains(plant.id)
+                                        ? PlantyColor.green : PlantyColor.secondaryText
+                                )
                             }
                         }
                         .buttonStyle(.plain)
@@ -132,7 +144,11 @@ private struct ActuatorRegistrationSheet: View {
                     if session.actuators.isDiscovering {
                         HStack { ProgressView(); Text("Asking Home Assistant…") }
                     } else if matches.isEmpty {
-                        Text(search.isEmpty ? "No fan or switch entities were discovered." : "No matching entities.")
+                        Text(
+                            search.isEmpty
+                                ? "No fan or switch entities were discovered."
+                                : "No matching entities."
+                        )
                             .foregroundStyle(PlantyColor.secondaryText)
                     }
                     ForEach(matches) { entity in
@@ -143,12 +159,23 @@ private struct ActuatorRegistrationSheet: View {
                             HStack(alignment: .top, spacing: 10) {
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(entity.friendlyName).foregroundStyle(.primary)
-                                    Text(entity.entityID).font(.caption.monospaced()).foregroundStyle(PlantyColor.secondaryText)
-                                    if let area = entity.area { Text(area).font(.caption).foregroundStyle(PlantyColor.secondaryText) }
-                                    if !entity.available { Text("Currently unavailable").font(.caption).foregroundStyle(PlantyColor.orange) }
+                                    Text(entity.entityID)
+                                        .font(.caption.monospaced())
+                                        .foregroundStyle(PlantyColor.secondaryText)
+                                    if let area = entity.area {
+                                        Text(area).font(.caption).foregroundStyle(PlantyColor.secondaryText)
+                                    }
+                                    if !entity.available {
+                                        Text("Currently unavailable")
+                                            .font(.caption)
+                                            .foregroundStyle(PlantyColor.orange)
+                                    }
                                 }
                                 Spacer()
-                                if selected?.id == entity.id { Image(systemName: "checkmark.circle.fill").foregroundStyle(PlantyColor.green) }
+                                if selected?.id == entity.id {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(PlantyColor.green)
+                                }
                             }
                         }
                         .buttonStyle(.plain)
@@ -195,6 +222,7 @@ private struct ActuatorDetailScreen: View {
     @State private var duration = ActuatorRunDuration.tenMinutes
     @State private var name = ""
     @State private var selectedPlantIDs: Set<UUID> = []
+    @State private var policyControlEnabled = false
     @State private var failure: PlantyError?
     @State private var confirmsRemoval = false
 
@@ -205,24 +233,37 @@ private struct ActuatorDetailScreen: View {
     var body: some View {
         Form {
             if let actuator {
-                Section("Registration") {
+                Section {
                     TextField("Name", text: $name)
                     LabeledContent("Home Assistant entity", value: actuator.entityID)
                     LabeledContent("Kind", value: actuator.kind.label)
                     ForEach(session.library.plants.filter { !$0.status.isRetired }) { plant in
                         Toggle(plant.commonName, isOn: plantBinding(plant.id))
                     }
+                    Toggle("Allow enforcing policies", isOn: $policyControlEnabled)
+                        .disabled(actuator.kind != .fan)
                     Button("Save registration") { Task { await save(actuator) } }
                         .disabled(
                             name.cleaned.isEmpty || selectedPlantIDs.isEmpty ||
-                            (name.cleaned == actuator.name && selectedPlantIDs == Set(actuator.plantIDs))
+                            (name.cleaned == actuator.name &&
+                             selectedPlantIDs == Set(actuator.plantIDs) &&
+                             policyControlEnabled == actuator.policyControlEnabled)
                         )
+                } header: {
+                    Text("Registration")
+                } footer: {
+                    Text(
+                        "Policy control is a separate opt-in and only works for fans. " +
+                        "Every run is still bounded by a durable lease."
+                    )
                 }
 
                 Section {
                     if let lease, lease.isActive {
                         LabeledContent("Current lease", value: "Running")
-                        LabeledContent("Deadline") { Text(lease.deadline.formatted(date: .abbreviated, time: .shortened)) }
+                        LabeledContent("Deadline") {
+                            Text(lease.deadline.formatted(date: .abbreviated, time: .shortened))
+                        }
                         LabeledContent("Requested by", value: lease.actor)
                     } else {
                         Text("No active lease is known.").foregroundStyle(PlantyColor.secondaryText)
@@ -232,14 +273,24 @@ private struct ActuatorDetailScreen: View {
                             Text(duration.label).tag(duration)
                         }
                     }
-                    Button("Start bounded run") { Task { failure = await session.actuators.start(actuator, durationSeconds: duration.rawValue) } }
+                    Button("Start bounded run") {
+                        Task {
+                            failure = await session.actuators.start(
+                                actuator,
+                                durationSeconds: duration.rawValue
+                            )
+                        }
+                    }
                         .disabled(session.actuators.controlling.contains(actuator.id) || lease?.isActive == true)
                     Button("Stop now") { Task { failure = await session.actuators.stop(actuator) } }
                         .disabled(session.actuators.controlling.contains(actuator.id))
                 } header: {
                     Text("Manual control")
                 } footer: {
-                    Text("Every start has a deadline. Stop is safe to repeat and addresses this Planty actuator ID. Recurring schedules remain Home Assistant-owned.")
+                    Text(
+                        "Every start has a deadline. Stop is safe to repeat and addresses this " +
+                        "Planty actuator ID. Recurring schedules remain Home Assistant-owned."
+                    )
                 }
 
                 if let failure {
@@ -257,7 +308,10 @@ private struct ActuatorDetailScreen: View {
                     Button("Remove registration", role: .destructive) { confirmsRemoval = true }
                         .disabled(lease?.isActive == true)
                 } footer: {
-                    Text("Stop an active lease before removing the registration. The Home Assistant entity itself is not deleted.")
+                    Text(
+                        "Stop an active lease before removing the registration. " +
+                        "The Home Assistant entity itself is not deleted."
+                    )
                 }
             }
         }
@@ -268,13 +322,18 @@ private struct ActuatorDetailScreen: View {
         .onAppear {
             name = actuator?.name ?? ""
             selectedPlantIDs = Set(actuator?.plantIDs ?? [])
+            policyControlEnabled = actuator?.policyControlEnabled ?? false
         }
         .task {
             async let plants: Void = session.library.load()
             if let actuator { await session.actuators.loadEvents(for: actuator) }
             _ = await plants
         }
-        .confirmationDialog("Remove this Planty registration?", isPresented: $confirmsRemoval, titleVisibility: .visible) {
+        .confirmationDialog(
+            "Remove this Planty registration?",
+            isPresented: $confirmsRemoval,
+            titleVisibility: .visible
+        ) {
             Button("Remove registration", role: .destructive) { Task { await remove() } }
             Button("Keep registration", role: .cancel) {}
         } message: {
@@ -286,7 +345,8 @@ private struct ActuatorDetailScreen: View {
         failure = await session.actuators.update(
             actuator,
             name: name,
-            plantIDs: Array(selectedPlantIDs)
+            plantIDs: Array(selectedPlantIDs),
+            policyControlEnabled: policyControlEnabled
         )
     }
 
@@ -312,8 +372,13 @@ private struct ActuatorEventRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(event.action.label).font(.subheadline.weight(.semibold))
-            if let detail = event.detail?.nilIfBlank { Text(detail).font(.caption).foregroundStyle(PlantyColor.secondaryText) }
-            Text("\(event.source.label) · \(event.actor) · \(event.createdAt.formatted(date: .abbreviated, time: .shortened))")
+            if let detail = event.detail?.nilIfBlank {
+                Text(detail).font(.caption).foregroundStyle(PlantyColor.secondaryText)
+            }
+            Text(
+                "\(event.source.label) · \(event.actor) · " +
+                event.createdAt.formatted(date: .abbreviated, time: .shortened)
+            )
                 .font(.caption2)
                 .foregroundStyle(PlantyColor.secondaryText)
         }
@@ -323,7 +388,11 @@ private struct ActuatorEventRow: View {
 
 private extension ActuatorKind {
     var label: String {
-        switch self { case .fan: "Fan"; case .switch: "Switch"; case .unknown: "Unknown" }
+        switch self {
+        case .fan: "Fan"
+        case .switch: "Switch"
+        case .unknown: "Unknown"
+        }
     }
     var symbol: String { self == .fan ? "fan.fill" : "powerplug.fill" }
 }

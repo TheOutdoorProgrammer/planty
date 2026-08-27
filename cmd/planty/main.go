@@ -21,6 +21,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/job"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
+	"github.com/TheOutdoorProgrammer/planty/internal/policy"
 	"github.com/TheOutdoorProgrammer/planty/internal/push"
 	"github.com/TheOutdoorProgrammer/planty/internal/scheduledjob"
 	"github.com/TheOutdoorProgrammer/planty/internal/seed"
@@ -195,7 +196,8 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 	}
 
 	seat := judge.New().Able(acting()).Assigned(db).Instructed(db)
-	server := api.New(db, log).WithBearerToken(apiToken).WithJudge(seat).WithPush(notifications)
+	policies := policyRunner(db, log, notifications)
+	server := api.New(db, log).WithBearerToken(apiToken).WithJudge(seat).WithPush(notifications).WithPolicies(policies)
 	if launcher, err := scheduledjob.NewInCluster(); err != nil {
 		log.Warn("scheduled job control unavailable", "error", err)
 	} else {
@@ -236,6 +238,17 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 
 func actuatorControl(db *store.Store, log *slog.Logger) job.ActuatorControl {
 	return job.ActuatorControl{Store: db, HA: homeAssistant(), Log: log}
+}
+
+func policyRunner(db *store.Store, log *slog.Logger, notifications job.Notifier) job.PolicyRunner {
+	weather := os.Getenv("PLANTY_WEATHER_ENTITY")
+	if weather == "" {
+		weather = "weather.nws_home"
+	}
+	return job.PolicyRunner{
+		Store: db, Engine: policy.Engine{}, Actuators: actuatorControl(db, log),
+		Notifications: notifications, Log: log, Weather: homeAssistant(), WeatherEntity: weather,
+	}
 }
 
 func reconcileActuators(ctx context.Context, control job.ActuatorControl, log *slog.Logger) {
@@ -297,12 +310,14 @@ func daily(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 			storage = opened
 		}
 	}
+	policies := policyRunner(db, log, notifications)
 	return job.Daily{
 		Store:         db,
 		Judge:         judge.New().Able(acting()).Assigned(db).Instructed(db),
 		Log:           log,
 		Notifications: notifications,
 		Photos:        storage,
+		Policies:      &policies,
 	}
 }
 

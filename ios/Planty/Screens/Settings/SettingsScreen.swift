@@ -21,6 +21,7 @@ struct SettingsScreen: View {
                 scheduledJobsSection
                 modelsSection
                 promptInstructionsSection
+                policiesSection
                 sensorsSection
                 actuatorsSection
                 aboutSection
@@ -75,7 +76,10 @@ struct SettingsScreen: View {
         } header: {
             Text("Notifications")
         } footer: {
-            Text("Permission, Apple registration, token upload, and APNs delivery are separate checks. The service connection test proves none of them.")
+            Text(
+                "Permission, Apple registration, token upload, and APNs delivery are separate checks. " +
+                "The service connection test proves none of them."
+            )
         }
         .task { await push.synchronize() }
     }
@@ -245,6 +249,21 @@ struct SettingsScreen: View {
         }
     }
 
+    private var policiesSection: some View {
+        Section {
+            NavigationLink {
+                PolicySettingsScreen()
+            } label: {
+                Label("OPA decision policies", systemImage: "checkmark.shield.fill")
+            }
+        } footer: {
+            Text(
+                "Write and preview deterministic rules for care signals, agent guidance, " +
+                "notifications, health, and opted-in fans."
+            )
+        }
+    }
+
     private var actuatorsSection: some View {
         Section {
             NavigationLink {
@@ -253,7 +272,10 @@ struct SettingsScreen: View {
                 Label("Fans and switches", systemImage: "fan.fill")
             }
         } footer: {
-            Text("Register an exact Home Assistant entity before Planty can control it. Recurring schedules stay in Home Assistant.")
+            Text(
+                "Register an exact Home Assistant entity before Planty can control it. " +
+                "Recurring schedules stay in Home Assistant."
+            )
         }
     }
 

@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
-const actuatorColumns = `id, entity_id, name, kind, created_at, updated_at`
+const actuatorColumns = `id, entity_id, name, kind, policy_control_enabled, created_at, updated_at`
 const actuatorLeaseColumns = `id, actuator_id, requested_seconds, deadline, actor, source,
 	idempotency_key, started_at, stopped_at, stop_reason, created_at`
 
@@ -85,7 +85,7 @@ func (s *Store) RegisterActuator(ctx context.Context, actuator plant.Actuator) (
 	return s.Actuator(ctx, created.ID)
 }
 
-func (s *Store) UpdateActuator(ctx context.Context, id uuid.UUID, name string, plantIDs []uuid.UUID) (plant.Actuator, error) {
+func (s *Store) UpdateActuator(ctx context.Context, id uuid.UUID, name string, plantIDs []uuid.UUID, policyControlEnabled bool) (plant.Actuator, error) {
 	name = strings.TrimSpace(name)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -102,11 +102,13 @@ func (s *Store) UpdateActuator(ctx context.Context, id uuid.UUID, name string, p
 	}
 	actuator.Name = name
 	actuator.PlantIDs = plantIDs
+	actuator.PolicyControlEnabled = policyControlEnabled
 	if err := actuator.Valid(); err != nil {
 		return plant.Actuator{}, err
 	}
-	if _, err := tx.Exec(ctx, `UPDATE plant_actuators SET name = $2, updated_at = now()
-		WHERE id = $1`, id, name); err != nil {
+	if _, err := tx.Exec(ctx, `UPDATE plant_actuators
+		SET name = $2, policy_control_enabled = $3, updated_at = now()
+		WHERE id = $1`, id, name, policyControlEnabled); err != nil {
 		return plant.Actuator{}, err
 	}
 	if err := replaceActuatorPlants(ctx, tx, id, plantIDs); err != nil {
@@ -514,7 +516,8 @@ func insertActuatorEvent(ctx context.Context, db actuatorEventExecer, event plan
 
 func scanActuator(row interface{ Scan(...any) error }) (plant.Actuator, error) {
 	var actuator plant.Actuator
-	err := row.Scan(&actuator.ID, &actuator.EntityID, &actuator.Name, &actuator.Kind, &actuator.CreatedAt, &actuator.UpdatedAt)
+	err := row.Scan(&actuator.ID, &actuator.EntityID, &actuator.Name, &actuator.Kind,
+		&actuator.PolicyControlEnabled, &actuator.CreatedAt, &actuator.UpdatedAt)
 	return actuator, err
 }
 

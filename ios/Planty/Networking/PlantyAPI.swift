@@ -35,12 +35,25 @@ protocol PlantyAPI: Sendable {
     func promptInstructions() async throws -> [PromptInstructionSetting]
     func setPromptInstruction(job: AIJob, instructions: String) async throws -> PromptInstructionSetting
     func clearPromptInstruction(job: AIJob) async throws -> PromptInstructionSetting
+    func policies() async throws -> [OPAPolicy]
+    func createPolicy(_ draft: PolicyDraft) async throws -> OPAPolicy
+    func updatePolicy(id: UUID, draft: PolicyDraft) async throws -> OPAPolicy
+    func deletePolicy(id: UUID) async throws
+    func previewPolicy(_ draft: PolicyDraft, plantSlug: String) async throws -> PolicyPreview
+    func evaluatePolicy(id: UUID, plantSlug: String) async throws -> PolicyEvaluation
+    func policyEvaluations() async throws -> [PolicyEvaluation]
+    func policyReference() async throws -> PolicyReference
     func scheduledJobs() async throws -> [ScheduledJob]
     func runScheduledJob(_ job: ScheduledJobID) async throws -> ScheduledJobRun
     func discoverActuators() async throws -> [HomeAssistantEntity]
     func actuators() async throws -> [Actuator]
     func registerActuator(_ registration: ActuatorRegistration) async throws -> Actuator
-    func renameActuator(id: UUID, name: String, plantIDs: [UUID]) async throws -> Actuator
+    func renameActuator(
+        id: UUID,
+        name: String,
+        plantIDs: [UUID],
+        policyControlEnabled: Bool
+    ) async throws -> Actuator
     func deleteActuator(id: UUID) async throws
     func actuatorEvents(id: UUID) async throws -> [ActuatorEvent]
     func startActuator(id: UUID, request: ActuatorStartRequest) async throws -> ActuatorLease
@@ -122,6 +135,27 @@ protocol PlantyAPI: Sendable {
 }
 
 extension PlantyAPI {
+    func policies() async throws -> [OPAPolicy] { [] }
+    func policyEvaluations() async throws -> [PolicyEvaluation] { [] }
+    func policyReference() async throws -> PolicyReference {
+        throw PlantyError.server(status: 503, message: "OPA policy reference is unavailable from this client.")
+    }
+    func createPolicy(_ draft: PolicyDraft) async throws -> OPAPolicy {
+        throw PlantyError.server(status: 503, message: "OPA policy editing is unavailable from this client.")
+    }
+    func updatePolicy(id: UUID, draft: PolicyDraft) async throws -> OPAPolicy {
+        throw PlantyError.server(status: 503, message: "OPA policy editing is unavailable from this client.")
+    }
+    func deletePolicy(id: UUID) async throws {
+        throw PlantyError.server(status: 503, message: "OPA policy editing is unavailable from this client.")
+    }
+    func previewPolicy(_ draft: PolicyDraft, plantSlug: String) async throws -> PolicyPreview {
+        throw PlantyError.server(status: 503, message: "OPA policy preview is unavailable from this client.")
+    }
+    func evaluatePolicy(id: UUID, plantSlug: String) async throws -> PolicyEvaluation {
+        throw PlantyError.server(status: 503, message: "OPA policy evaluation is unavailable from this client.")
+    }
+
     func assess(slug: String) async throws -> Verdict {
         throw PlantyError.server(status: 503, message: "On-demand analysis is unavailable from this client.")
     }
@@ -228,7 +262,12 @@ extension PlantyAPI {
         throw PlantyError.server(status: 503, message: "Actuator registration is unavailable from this client.")
     }
 
-    func renameActuator(id: UUID, name: String, plantIDs: [UUID]) async throws -> Actuator {
+    func renameActuator(
+        id: UUID,
+        name: String,
+        plantIDs: [UUID],
+        policyControlEnabled: Bool
+    ) async throws -> Actuator {
         throw PlantyError.server(status: 503, message: "Actuator editing is unavailable from this client.")
     }
 

@@ -8,12 +8,56 @@ struct SettingsAutomationTests {
     private let actuatorID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
     private let leaseID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
 
+    @Test("Policy preview sends unsaved Rego and a real plant without enabling it")
+    func policyPreviewIsSideEffectFree() async throws {
+        let stub = IsolatedStubTransport()
+        stub.respond(json: """
+            {"decision":{"summary":"Dry soil","signals":[],"notifications":[],"fan_runs":[],
+             "agent":{"facts":[],"guidance":[],"deny_actions":[]}},"duration_ms":1.25}
+            """)
+        let draft = PolicyDraft(
+            name: "Dry soil",
+            description: "Warns from calibrated evidence.",
+            source: PolicyDraft.fallbackExample,
+            mode: .advisory,
+            enabled: false
+        )
+
+        let preview = try await stub.client().previewPolicy(draft, plantSlug: "fern")
+        let request = try #require(stub.requests.first)
+        let json = try requestJSON(request)
+
+        #expect(preview.decision.summary == "Dry soil")
+        #expect(request.url?.path == "/v1/policies/preview")
+        #expect(json["plant_slug"] as? String == "fern")
+        #expect(json["source"] as? String == PolicyDraft.fallbackExample)
+        #expect(json["enabled"] as? Bool == false)
+    }
+
+    @Test("Policy reference documents input, output, and safety from the service")
+    func policyReferenceDecodes() async throws {
+        let stub = IsolatedStubTransport()
+        stub.respond(json: """
+            {"input_version":"planty.policy.input/v1","entrypoint":"data.planty.decision",
+             "sections":[{"title":"Plant","fields":[{"path":"input.plant.age_days","type":"number",
+             "description":"Whole days since acquisition."}]}],
+             "output":[{"path":"decision.signals","type":"array","description":"Typed signals."}],
+             "example":"package planty","safety":["Preview never acts."]}
+            """)
+
+        let reference = try await stub.client().policyReference()
+
+        #expect(reference.inputVersion == "planty.policy.input/v1")
+        #expect(reference.sections.first?.fields.first?.path == "input.plant.age_days")
+        #expect(reference.safety == ["Preview never acts."])
+    }
+
     @Test("Prompt settings decode every job, including jobs without an overlay")
     func promptListDecodesAllJobs() async throws {
         let stub = IsolatedStubTransport()
         stub.respond(json: """
             {"instructions":[
-              {"job":"assess","instructions":"Prefer the newest whole-plant photo.","updated_at":"2026-08-25T12:00:00Z"},
+              {"job":"assess","instructions":"Prefer the newest photo.","updated_at":"2026-08-25T12:00:00Z"},
               {"job":"identify","instructions":""},
               {"job":"consult","instructions":""},
               {"job":"ask","instructions":""},

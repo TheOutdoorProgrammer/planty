@@ -15,11 +15,20 @@ extension PlantyClient {
         try await send("POST", APIPath.registerActuator, body: registration)
     }
 
-    func renameActuator(id: UUID, name: String, plantIDs: [UUID]) async throws -> Actuator {
+    func renameActuator(
+        id: UUID,
+        name: String,
+        plantIDs: [UUID],
+        policyControlEnabled: Bool
+    ) async throws -> Actuator {
         try await send(
             "PATCH",
             APIPath.updateActuator(id: id.uuidString),
-            body: ActuatorRename(name: name, plantIDs: plantIDs)
+            body: ActuatorRename(
+                name: name,
+                plantIDs: plantIDs,
+                policyControlEnabled: policyControlEnabled
+            )
         )
     }
 

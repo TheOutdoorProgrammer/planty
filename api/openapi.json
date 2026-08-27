@@ -135,6 +135,19 @@
       "put": {"operationId": "setPromptInstruction"},
       "delete": {"operationId": "clearPromptInstruction"}
     },
+    "/v1/policies": {
+      "get": {"operationId": "listPolicies"},
+      "post": {"operationId": "createPolicy"}
+    },
+    "/v1/policies/preview": {"post": {"operationId": "previewPolicy"}},
+    "/v1/policies/reference": {"get": {"operationId": "getPolicyReference"}},
+    "/v1/policies/{id}": {
+      "get": {"operationId": "getPolicy"},
+      "put": {"operationId": "updatePolicy"},
+      "delete": {"operationId": "deletePolicy"}
+    },
+    "/v1/policies/{id}/evaluate": {"post": {"operationId": "evaluatePolicy"}},
+    "/v1/policy-evaluations": {"get": {"operationId": "listPolicyEvaluations"}},
     "/v1/scheduled-jobs": {"get": {"operationId": "listScheduledJobs"}},
     "/v1/scheduled-jobs/{job}/runs": {"post": {"operationId": "runScheduledJob"}},
     "/v1/away": {
@@ -173,6 +186,10 @@
       "IncidentResolution": {"type": "string", "enum": ["confirmed_common_cause", "unrelated", "contained", "inconclusive"]},
       "SensorRole": {"type": "string", "enum": ["soil_moisture", "ambient_temp", "ambient_humidity", "illuminance"]},
       "AIJob": {"type": "string", "enum": ["assess", "identify", "consult", "ask", "postmortem", "owner_update"]},
+      "PolicyMode": {"type": "string", "enum": ["advisory", "enforce"]},
+      "PolicyTrigger": {"type": "string", "enum": ["preview", "manual", "daily", "agent"]},
+      "PolicySignalKind": {"type": "string", "enum": ["needs_watered", "needs_misted", "move_inside", "move_outside", "incident", "health", "airflow"]},
+      "PolicySeverity": {"type": "string", "enum": ["info", "warning", "critical"]},
       "PromptInstruction": {
         "type": "object",
         "required": ["job", "instructions"],

@@ -102,6 +102,8 @@ The service still belongs on the LAN because the pod holds credentials for Home 
 
 ## Documentation
 
+- [OPA decision policies](docs/OPA-POLICIES.md): authoring, inputs, outputs, examples, safety boundaries, and API.
+
 - [Delivered capabilities](CHECKLIST.md)
 - [Roadmap](ROADMAP.md)
 - [Data model and API behavior](docs/DATA-MODEL.md)

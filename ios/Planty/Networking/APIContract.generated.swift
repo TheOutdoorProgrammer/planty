@@ -26,6 +26,7 @@ enum APIPath {
     static let createOwnerUpdate = "/v1/owner-update"
     static let createPlant = "/v1/plants"
     static let createPlantFromPhoto = "/v1/plants/from-photo"
+    static let createPolicy = "/v1/policies"
     static func createPostmortem(slug: String) -> String { "/v1/plants/\(slug)/postmortem" }
     static let createQuestion = "/v1/questions"
     static func deleteActuator(id: String) -> String { "/v1/actuators/\(id)" }
@@ -33,11 +34,13 @@ enum APIPath {
     static func deleteHarvest(id: String) -> String { "/v1/harvests/\(id)" }
     static func deleteNote(id: String) -> String { "/v1/notes/\(id)" }
     static func deletePhoto(id: String) -> String { "/v1/photos/\(id)" }
+    static func deletePolicy(id: String) -> String { "/v1/policies/\(id)" }
     static func deleteReminder(slug: String, kind: String) -> String { "/v1/plants/\(slug)/reminders/\(kind)" }
     static let discoverActuators = "/v1/home-assistant/actuators"
     static func enqueueIdentification(id: String) -> String { "/v1/identifications/\(id)" }
     static func enqueuePlantMessage(slug: String, id: String) -> String { "/v1/plants/\(slug)/conversations/\(id)/messages" }
     static func enqueueScratchMessage(id: String) -> String { "/v1/conversations/\(id)/messages" }
+    static func evaluatePolicy(id: String) -> String { "/v1/policies/\(id)/evaluate" }
     static let getEvidenceCoverage = "/v1/evidence-coverage"
     static func getEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)" }
     static func getExperiment(id: String) -> String { "/v1/experiments/\(id)" }
@@ -46,6 +49,8 @@ enum APIPath {
     static func getPlant(slug: String) -> String { "/v1/plants/\(slug)" }
     static func getPlantConversation(slug: String, id: String) -> String { "/v1/plants/\(slug)/conversations/\(id)" }
     static func getPlantHealth(slug: String) -> String { "/v1/plants/\(slug)/health" }
+    static func getPolicy(id: String) -> String { "/v1/policies/\(id)" }
+    static let getPolicyReference = "/v1/policies/reference"
     static func getScratchConversation(id: String) -> String { "/v1/conversations/\(id)" }
     static func getTimeline(slug: String) -> String { "/v1/plants/\(slug)/timeline" }
     static let harvestSummary = "/v1/harvests/summary"
@@ -69,6 +74,8 @@ enum APIPath {
     static func listPlantHarvests(slug: String) -> String { "/v1/plants/\(slug)/harvests" }
     static func listPlantNotes(slug: String) -> String { "/v1/plants/\(slug)/notes" }
     static let listPlants = "/v1/plants"
+    static let listPolicies = "/v1/policies"
+    static let listPolicyEvaluations = "/v1/policy-evaluations"
     static let listPostmortems = "/v1/postmortems"
     static let listPromptInstructions = "/v1/prompt-instructions"
     static let listQuestions = "/v1/questions"
@@ -77,6 +84,7 @@ enum APIPath {
     static let listScheduledJobs = "/v1/scheduled-jobs"
     static let listSensors = "/v1/sensors"
     static func overrideGuardrail(id: String) -> String { "/v1/guardrails/\(id)/override" }
+    static let previewPolicy = "/v1/policies/preview"
     static let proposeExperiment = "/v1/experiments"
     static func proposeRecheck(slug: String) -> String { "/v1/plants/\(slug)/rechecks" }
     static let pushHealth = "/v1/push/health"
@@ -103,6 +111,7 @@ enum APIPath {
     static func updateHarvest(id: String) -> String { "/v1/harvests/\(id)" }
     static func updateNote(id: String) -> String { "/v1/notes/\(id)" }
     static func updatePlant(slug: String) -> String { "/v1/plants/\(slug)" }
+    static func updatePolicy(id: String) -> String { "/v1/policies/\(id)" }
     static func uploadPhoto(slug: String) -> String { "/v1/plants/\(slug)/photos" }
 }
 
@@ -303,6 +312,46 @@ enum PlantStatus: String, FallbackDecodable, CaseIterable {
     case unknown
 
     static let fallback = PlantStatus.unknown
+}
+
+enum PolicyMode: String, FallbackDecodable, CaseIterable {
+    case advisory
+    case enforce
+    case unknown
+
+    static let fallback = PolicyMode.unknown
+}
+
+enum PolicySeverity: String, FallbackDecodable, CaseIterable {
+    case info
+    case warning
+    case critical
+    case unknown
+
+    static let fallback = PolicySeverity.unknown
+}
+
+enum PolicySignalKind: String, FallbackDecodable, CaseIterable {
+    case needsWatered = "needs_watered"
+    case needsMisted = "needs_misted"
+    case moveInside = "move_inside"
+    case moveOutside = "move_outside"
+    case incident
+    case health
+    case airflow
+    case unknown
+
+    static let fallback = PolicySignalKind.unknown
+}
+
+enum PolicyTrigger: String, FallbackDecodable, CaseIterable {
+    case preview
+    case manual
+    case daily
+    case agent
+    case unknown
+
+    static let fallback = PolicyTrigger.unknown
 }
 
 struct PromptInstruction: Codable, Sendable {

@@ -6,6 +6,7 @@ struct Actuator: Codable, Sendable, Hashable, Identifiable {
     var name: String
     let kind: ActuatorKind
     var plantIDs: [UUID]
+    var policyControlEnabled: Bool = false
     let createdAt: Date
     let updatedAt: Date
     var activeLease: ActuatorLease?
@@ -16,9 +17,25 @@ struct Actuator: Codable, Sendable, Hashable, Identifiable {
         case name
         case kind
         case plantIDs = "plant_ids"
+        case policyControlEnabled = "policy_control_enabled"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case activeLease = "active_lease"
+    }
+}
+
+extension Actuator {
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        entityID = try container.decode(String.self, forKey: .entityID)
+        name = try container.decode(String.self, forKey: .name)
+        kind = try container.decode(ActuatorKind.self, forKey: .kind)
+        plantIDs = try container.decode([UUID].self, forKey: .plantIDs)
+        policyControlEnabled = try container.decodeIfPresent(Bool.self, forKey: .policyControlEnabled) ?? false
+        createdAt = try container.decode(Date.self, forKey: .createdAt)
+        updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        activeLease = try container.decodeIfPresent(ActuatorLease.self, forKey: .activeLease)
     }
 }
 
@@ -129,10 +146,12 @@ struct ActuatorRegistration: Codable, Sendable, Equatable {
 struct ActuatorRename: Codable, Sendable {
     let name: String
     let plantIDs: [UUID]
+    let policyControlEnabled: Bool
 
     enum CodingKeys: String, CodingKey {
         case name
         case plantIDs = "plant_ids"
+        case policyControlEnabled = "policy_control_enabled"
     }
 }
 

@@ -22,6 +22,7 @@ func (s *Server) assessPlant(w http.ResponseWriter, r *http.Request) {
 
 	verdict, err := (job.Daily{
 		Store: s.store, Judge: s.judge, Photos: s.photos, Log: s.log,
+		Policies: s.policyRunner,
 	}).AssessPlant(r.Context(), p)
 	if err != nil {
 		s.fail(w, http.StatusBadGateway, err)

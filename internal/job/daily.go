@@ -15,6 +15,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/TheOutdoorProgrammer/planty/internal/policy"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 )
 
@@ -27,6 +28,7 @@ type Daily struct {
 	Log           *slog.Logger
 	Notifications Notifier
 	Photos        photos.Storage
+	Policies      *PolicyRunner
 }
 
 // Run judges every live plant and notifies only if something needs doing or the
@@ -41,6 +43,10 @@ func (d Daily) Run(ctx context.Context) error {
 	run, err := d.Store.StartJudgmentRun(ctx, len(plants))
 	if err != nil {
 		return fmt.Errorf("start judgment run: %w", err)
+	}
+	policyDecisions := make(map[uuid.UUID][]policy.Evaluation, len(plants))
+	for _, subject := range plants {
+		policyDecisions[subject.ID] = d.evaluatePolicies(ctx, subject, policy.TriggerDaily)
 	}
 
 	// No key is a Planty running without its opinion, not a broken cold-watch or
@@ -64,7 +70,7 @@ func (d Daily) Run(ctx context.Context) error {
 
 	var failed int
 	for _, p := range plants {
-		result, err := d.judgeOne(ctx, run.ID, p)
+		result, err := d.judgeOne(ctx, run.ID, p, policyDecisions[p.ID])
 		if err != nil {
 			// One plant failing must not silence the rest of the digest.
 			d.Log.Error("judgment failed", "plant", p.Slug, "error", err)
@@ -109,12 +115,13 @@ func (d Daily) AssessPlant(ctx context.Context, p plant.Plant) (plant.Verdict, e
 	if d.Judge == nil {
 		return plant.Verdict{}, errors.New("no model backend is configured")
 	}
+	policyDecisions := d.evaluatePolicies(ctx, p, policy.TriggerAgent)
 
 	run, err := d.Store.StartJudgmentRun(ctx, 1)
 	if err != nil {
 		return plant.Verdict{}, fmt.Errorf("start judgment run: %w", err)
 	}
-	result, assessErr := d.judgeOne(ctx, run.ID, p)
+	result, assessErr := d.judgeOne(ctx, run.ID, p, policyDecisions)
 	if err := d.Store.RecordJudgmentPlantResult(ctx, run.ID,
 		judgmentResult(p.ID, result, assessErr)); err != nil {
 		return plant.Verdict{}, fmt.Errorf("record judgment result: %w", err)
@@ -134,11 +141,12 @@ func (d Daily) AssessPlant(ctx context.Context, p plant.Plant) (plant.Verdict, e
 	return verdict, nil
 }
 
-func (d Daily) judgeOne(ctx context.Context, runID uuid.UUID, p plant.Plant) (judge.Result, error) {
+func (d Daily) judgeOne(ctx context.Context, runID uuid.UUID, p plant.Plant, policies []policy.Evaluation) (judge.Result, error) {
 	evidence, err := d.gather(ctx, p)
 	if err != nil {
 		return judge.Result{}, err
 	}
+	evidence.PolicyDecisions = policies
 
 	result, err := d.Judge.Assess(ctx, evidence)
 	if err != nil {
@@ -243,7 +251,7 @@ func (d Daily) RetryFailed(ctx context.Context) error {
 
 	remaining := 0
 	for _, prior := range failed {
-		result, judgeErr := d.judgeOne(ctx, run.ID, prior.Plant)
+		result, judgeErr := d.judgeOne(ctx, run.ID, prior.Plant, d.currentPolicyDecisions(ctx, prior.Plant))
 		if judgeErr != nil {
 			remaining++
 			d.Log.Error("judgment retry failed", "plant", prior.Plant.Slug, "error", judgeErr)
@@ -332,6 +340,59 @@ func (d Daily) gather(ctx context.Context, p plant.Plant) (judge.Evidence, error
 		evidence.HealthEvidenceNew = true
 	}
 	return evidence, nil
+}
+
+func (d Daily) evaluatePolicies(ctx context.Context, subject plant.Plant, trigger policy.Trigger) []policy.Evaluation {
+	if d.Policies == nil {
+		return nil
+	}
+	evaluations, err := d.Policies.EvaluateEnabled(ctx, subject, trigger)
+	if err != nil {
+		d.Log.Error("policy evaluation failed", "plant", subject.Slug, "error", err)
+	}
+	return successfulPolicyDecisions(evaluations)
+}
+
+func (d Daily) currentPolicyDecisions(ctx context.Context, subject plant.Plant) []policy.Evaluation {
+	items, err := d.Store.Policies(ctx)
+	if err != nil {
+		d.Log.Error("read policies for judgment retry", "plant", subject.Slug, "error", err)
+		return nil
+	}
+	active := make(map[uuid.UUID]int, len(items))
+	for _, item := range items {
+		if item.Enabled {
+			active[item.ID] = item.Version
+		}
+	}
+	if len(active) == 0 {
+		return nil
+	}
+	history, err := d.Store.PolicyEvaluations(ctx, &subject.ID, 200)
+	if err != nil {
+		d.Log.Error("read policy decisions for judgment retry", "plant", subject.Slug, "error", err)
+		return nil
+	}
+	seen := make(map[uuid.UUID]bool, len(active))
+	current := make([]policy.Evaluation, 0, len(active))
+	for _, evaluation := range history {
+		if seen[evaluation.PolicyID] || active[evaluation.PolicyID] != evaluation.PolicyVersion {
+			continue
+		}
+		seen[evaluation.PolicyID] = true
+		current = append(current, evaluation)
+	}
+	return successfulPolicyDecisions(current)
+}
+
+func successfulPolicyDecisions(evaluations []policy.Evaluation) []policy.Evaluation {
+	out := make([]policy.Evaluation, 0, len(evaluations))
+	for _, evaluation := range evaluations {
+		if evaluation.Outcome == "advisory" || evaluation.Outcome == "enforced" {
+			out = append(out, evaluation)
+		}
+	}
+	return out
 }
 
 func (d Daily) gatherPhoto(ctx context.Context, evidence *judge.Evidence) {

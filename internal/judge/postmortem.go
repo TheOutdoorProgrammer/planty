@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/TheOutdoorProgrammer/planty/internal/policy"
 )
 
 // History is everything a dead plant left behind.
@@ -21,6 +22,7 @@ type History struct {
 	// True of the house rather than of this plant, and true of every other
 	// plant too: a cat that chews things, a week nobody is home.
 	Household []plant.Note
+	Policies  []policy.Evaluation
 }
 
 // Sample is one soil reading in the run-up, already expressed as a fraction of
@@ -187,6 +189,7 @@ func record(h History, voice tense) string {
 			fmt.Fprintf(&b, "  %s\n", note)
 		}
 	}
+	writePolicyContext(&b, h.Policies)
 	return b.String()
 }
 

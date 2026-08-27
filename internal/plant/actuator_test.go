@@ -16,6 +16,8 @@ func TestActuatorRequiresMatchingAllowlistedDomainAndBoundedLease(t *testing.T) 
 	for _, actuator := range []Actuator{
 		{Name: "Light", EntityID: "light.grow", Kind: ActuatorSwitch, PlantIDs: []uuid.UUID{plantID}},
 		{Name: "Wrong domain", EntityID: "fan.cabinet", Kind: ActuatorSwitch, PlantIDs: []uuid.UUID{plantID}},
+		{Name: "Policy switch", EntityID: "switch.circulator", Kind: ActuatorSwitch,
+			PlantIDs: []uuid.UUID{plantID}, PolicyControlEnabled: true},
 		{Name: "Unassigned", EntityID: "fan.unassigned", Kind: ActuatorFan},
 	} {
 		if !errors.Is(actuator.Valid(), ErrInvalid) {
