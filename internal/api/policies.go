@@ -136,13 +136,13 @@ func (s *Server) previewPolicy(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	decision, duration, err := runner.Preview(r.Context(), item, input)
+	result, duration, err := runner.Preview(r.Context(), item, input)
 	if err != nil {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{
-		"input": input, "decision": decision,
+		"input": input, "result": result,
 		"duration_ms": float64(duration.Microseconds()) / 1000,
 	})
 }

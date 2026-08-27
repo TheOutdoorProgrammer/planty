@@ -331,19 +331,6 @@ enum PolicySeverity: String, FallbackDecodable, CaseIterable {
     static let fallback = PolicySeverity.unknown
 }
 
-enum PolicySignalKind: String, FallbackDecodable, CaseIterable {
-    case needsWatered = "needs_watered"
-    case needsMisted = "needs_misted"
-    case moveInside = "move_inside"
-    case moveOutside = "move_outside"
-    case incident
-    case health
-    case airflow
-    case unknown
-
-    static let fallback = PolicySignalKind.unknown
-}
-
 enum PolicyTrigger: String, FallbackDecodable, CaseIterable {
     case preview
     case manual

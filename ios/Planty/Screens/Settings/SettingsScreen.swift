@@ -254,7 +254,7 @@ struct SettingsScreen: View {
             NavigationLink {
                 PolicySettingsScreen()
             } label: {
-                Label("OPA decision policies", systemImage: "checkmark.shield.fill")
+                Label("OPA policy rules", systemImage: "checkmark.shield.fill")
             }
         } footer: {
             Text(

@@ -102,60 +102,44 @@ func Reference() ReferenceDocument {
 			}},
 		},
 		Output: []ReferenceField{
-			{Path: "decision.summary", Type: "string", Description: "Plain-English result shown in history and supplied to agents."},
-			{Path: "decision.signals", Type: "array", Description: "Typed needs_watered, needs_misted, move_inside, move_outside, incident, health, or airflow signals."},
-			{Path: "decision.signals[_]", Type: "object", Description: "Requires kind, active, severity, and reason. Confidence from 0 through 1 is optional."},
-			{Path: "decision.health", Type: "object or undefined", Description: "A record-backed delta from -20 through 20. Enforce mode only."},
-			{Path: "decision.notifications", Type: "array", Description: "Each item requires title, body, and info, warning, or critical priority."},
-			{Path: "decision.fan_runs", Type: "array", Description: "Each item requires actuator_id, duration_seconds from 1 through 3600, and reason."},
-			{Path: "decision.agent.facts", Type: "array of strings", Description: "Owner-authored facts appended to agent context."},
-			{Path: "decision.agent.guidance", Type: "array of strings", Description: "Owner-authored decision guidance appended to agent context."},
-			{Path: "decision.agent.deny_actions", Type: "array of strings", Description: "Presented as owner constraints in enforce mode. Cannot revoke or grant tools."},
+			{Path: "needs_<thing>", Type: "any JSON value", Description: "Extensible care rules such as needs_water, needs_misted, or needs_staked. Missing means false; a boolean uses its value; every present non-boolean value is active."},
+			{Path: "move_inside | move_outside | incident | health", Type: "any JSON value", Description: "Named care rules with the same activity semantics."},
+			{Path: "health_adjustment", Type: "object", Description: "A delta from -20 through 20 plus a reason. Enforce mode also requires newer record-backed evidence."},
+			{Path: "notification | notifications", Type: "object | array", Description: "Each notification requires title, body, and an info, warning, or critical priority."},
+			{Path: "fan_run | fan_runs", Type: "object | array", Description: "Each run requires actuator_id, duration_seconds from 1 through 3600, and reason."},
+			{Path: "agent_fact | agent_facts", Type: "string | array of strings", Description: "Owner-authored facts appended to agent context."},
+			{Path: "agent_guidance", Type: "string | array of strings", Description: "Owner-authored guidance appended to agent context."},
+			{Path: "deny_action | deny_actions", Type: "string | array of strings", Description: "Presented as owner constraints in enforce mode. Cannot revoke or grant tools."},
 		},
 		Example: ExampleSource,
 		Safety: []string{
 			"Preview never writes records, sends notifications, or controls devices.",
-			"Advisory policies only record decisions.",
+			"Advisory policies only record rule results.",
 			"Watering, misting, and moving plants always require a person.",
 			"Fan runs require enforce mode, plant assignment, owner opt-in, and a durable bounded lease.",
-			"Source is limited to 64 KiB, evaluation to 250 ms, output to 256 KiB, and each decision array to 100 items.",
+			"Unknown top-level rule names outside the needs_<thing> family fail closed.",
+			"Source is limited to 64 KiB, evaluation to 250 ms, output to 256 KiB, and each output array to 100 items.",
 			"Policy failures are fail-closed and do not block Planty's built-in safety jobs.",
 		},
 	}
 }
 
-const ExampleSource = `package planty
+const ExampleSource = `package planty.v1
 
-default decision := {
-  "summary": "No policy action needed.",
-  "signals": [],
-  "notifications": [],
-  "fan_runs": [],
-  "agent": {"facts": [], "guidance": [], "deny_actions": []},
-}
-
-decision := {
-  "summary": sprintf("%s looks dry", [input.plant.common_name]),
-  "signals": [{
-    "kind": "needs_watered",
-    "active": true,
-    "severity": "warning",
-    "reason": "Calibrated soil moisture is below 25%.",
-    "confidence": 0.95,
-  }],
-  "notifications": [{
-    "title": "Plant needs water",
-    "body": sprintf("Check %s before watering by hand.", [input.plant.common_name]),
-    "priority": "warning",
-  }],
-  "fan_runs": [],
-  "agent": {
-    "facts": ["The calibrated soil probe reads below 25%."],
-    "guidance": ["Ask the owner to verify the soil before watering."],
-    "deny_actions": ["water"],
-  },
-} if {
+needs_water if {
   input.sensors.soil_moisture.calibrated
   input.sensors.soil_moisture.fraction < 0.25
   not input.care.last_watered.recent_24h
-}`
+}
+
+notification := {
+  "title": "Plant needs water",
+  "body": sprintf("Check %s before watering by hand.", [input.plant.common_name]),
+  "priority": "warning",
+} if needs_water
+
+agent_fact := "The calibrated soil probe reads below 25%." if needs_water
+
+agent_guidance := "Ask the owner to verify the soil before watering." if needs_water
+
+deny_action := "water" if needs_water`

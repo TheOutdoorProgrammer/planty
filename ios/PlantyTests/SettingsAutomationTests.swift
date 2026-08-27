@@ -12,8 +12,9 @@ struct SettingsAutomationTests {
     func policyPreviewIsSideEffectFree() async throws {
         let stub = IsolatedStubTransport()
         stub.respond(json: """
-            {"decision":{"summary":"Dry soil","signals":[],"notifications":[],"fan_runs":[],
-             "agent":{"facts":[],"guidance":[],"deny_actions":[]}},"duration_ms":1.25}
+            {"result":{"rules":[{"name":"needs_water","active":true,"value":{"reason":"Dry soil"}}],
+             "notifications":[],"fan_runs":[],"agent":{"facts":[],"guidance":[],"deny_actions":[]}},
+             "duration_ms":1.25}
             """)
         let draft = PolicyDraft(
             name: "Dry soil",
@@ -27,7 +28,8 @@ struct SettingsAutomationTests {
         let request = try #require(stub.requests.first)
         let json = try requestJSON(request)
 
-        #expect(preview.decision.summary == "Dry soil")
+        #expect(preview.result.rules.first?.name == "needs_water")
+        #expect(preview.result.rules.first?.active == true)
         #expect(request.url?.path == "/v1/policies/preview")
         #expect(json["plant_slug"] as? String == "fern")
         #expect(json["source"] as? String == PolicyDraft.fallbackExample)
@@ -38,16 +40,18 @@ struct SettingsAutomationTests {
     func policyReferenceDecodes() async throws {
         let stub = IsolatedStubTransport()
         stub.respond(json: """
-            {"input_version":"planty.policy.input/v1","entrypoint":"data.planty.decision",
+            {"input_version":"planty.policy.input/v1","entrypoint":"data.planty.v1",
              "sections":[{"title":"Plant","fields":[{"path":"input.plant.age_days","type":"number",
              "description":"Whole days since acquisition."}]}],
-             "output":[{"path":"decision.signals","type":"array","description":"Typed signals."}],
-             "example":"package planty","safety":["Preview never acts."]}
+             "output":[{"path":"needs_water | needs_misted","type":"any JSON value",
+             "description":"Independent rules."}],
+             "example":"package planty.v1","safety":["Preview never acts."]}
             """)
 
         let reference = try await stub.client().policyReference()
 
         #expect(reference.inputVersion == "planty.policy.input/v1")
+        #expect(reference.entrypoint == "data.planty.v1")
         #expect(reference.sections.first?.fields.first?.path == "input.plant.age_days")
         #expect(reference.safety == ["Preview never acts."])
     }

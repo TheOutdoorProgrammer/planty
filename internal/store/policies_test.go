@@ -46,9 +46,9 @@ func TestPoliciesAreVersionedAndEvaluationsAreReplayableAndIdempotent(t *testing
 		PlantID: subject.ID, Trigger: policy.TriggerDaily,
 		InputFingerprint: fingerprint, IdempotencyKey: policy.IdempotencyKey(input, fingerprint),
 		PolicyFingerprint: updated.Fingerprint(), Input: input,
-		Decision: policy.Decision{
-			Summary: "Nothing to do", Signals: []policy.Signal{}, Notifications: []policy.Notification{},
-			FanRuns: []policy.FanRun{}, Agent: policy.AgentGuidance{Facts: []string{}, Guidance: []string{}, DenyActions: []string{}},
+		Result: policy.Result{
+			Rules: []policy.Rule{}, Notifications: []policy.Notification{}, FanRuns: []policy.FanRun{},
+			Agent: policy.AgentGuidance{Facts: []string{}, Guidance: []string{}, DenyActions: []string{}},
 		},
 		Outcome: "advisory", Enforced: []string{},
 	}

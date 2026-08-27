@@ -43,14 +43,10 @@ struct PolicyDraft: Codable, Sendable, Equatable {
     }
 
     static let fallbackExample = """
-        package planty
+        package planty.v1
 
-        default decision := {
-          "summary": "No policy action needed.",
-          "signals": [],
-          "notifications": [],
-          "fan_runs": [],
-          "agent": {"facts": [], "guidance": [], "deny_actions": []},
+        incident if {
+          input.plant.is_sick
         }
         """
 }
@@ -80,37 +76,84 @@ struct PolicyEvaluationRequest: Codable, Sendable {
 }
 
 struct PolicyPreview: Codable, Sendable {
-    let decision: PolicyDecision
+    let result: PolicyResult
     let durationMS: Double
 
     enum CodingKeys: String, CodingKey {
-        case decision
+        case result
         case durationMS = "duration_ms"
     }
 }
 
-struct PolicyDecision: Codable, Sendable, Hashable {
-    let summary: String
-    let signals: [PolicySignal]
+struct PolicyResult: Codable, Sendable, Hashable {
+    let rules: [PolicyRule]
     let health: PolicyHealthAdjustment?
     let notifications: [PolicyNotification]
     let fanRuns: [PolicyFanRun]
     let agent: PolicyAgentGuidance
 
     enum CodingKeys: String, CodingKey {
-        case summary, signals, health, notifications, agent
+        case rules, health, notifications, agent
         case fanRuns = "fan_runs"
     }
 }
 
-struct PolicySignal: Codable, Sendable, Hashable, Identifiable {
-    let kind: PolicySignalKind
+struct PolicyRule: Codable, Sendable, Hashable, Identifiable {
+    let name: String
     let active: Bool
-    let severity: PolicySeverity
-    let reason: String
-    let confidence: Double?
+    let value: JSONValue
 
-    var id: String { "\(kind.rawValue):\(reason)" }
+    var id: String { name }
+}
+
+enum JSONValue: Codable, Sendable, Hashable {
+    case null
+    case bool(Bool)
+    case number(Double)
+    case string(String)
+    case array([JSONValue])
+    case object([String: JSONValue])
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
+            self = .null
+        } else if let value = try? container.decode(Bool.self) {
+            self = .bool(value)
+        } else if let value = try? container.decode(Double.self) {
+            self = .number(value)
+        } else if let value = try? container.decode(String.self) {
+            self = .string(value)
+        } else if let value = try? container.decode([JSONValue].self) {
+            self = .array(value)
+        } else {
+            self = .object(try container.decode([String: JSONValue].self))
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        switch self {
+        case .null: try container.encodeNil()
+        case let .bool(value): try container.encode(value)
+        case let .number(value): try container.encode(value)
+        case let .string(value): try container.encode(value)
+        case let .array(value): try container.encode(value)
+        case let .object(value): try container.encode(value)
+        }
+    }
+
+    var displayValue: String {
+        switch self {
+        case .null: "null"
+        case let .bool(value): value ? "true" : "false"
+        case let .number(value): value.formatted()
+        case let .string(value): value
+        case let .array(value): "[\(value.map(\.displayValue).joined(separator: ", "))]"
+        case let .object(value):
+            "{\(value.keys.sorted().map { "\($0): \(value[$0]!.displayValue)" }.joined(separator: ", "))}"
+        }
+    }
 }
 
 struct PolicyHealthAdjustment: Codable, Sendable, Hashable {
@@ -158,7 +201,7 @@ struct PolicyEvaluation: Codable, Sendable, Hashable, Identifiable {
     let policyMode: PolicyMode
     let plantID: UUID
     let trigger: PolicyTrigger
-    let decision: PolicyDecision
+    let result: PolicyResult
     let durationMS: Double
     let outcome: String
     let error: String?
@@ -166,7 +209,7 @@ struct PolicyEvaluation: Codable, Sendable, Hashable, Identifiable {
     let createdAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case id, trigger, decision, outcome, error, enforced
+        case id, trigger, result, outcome, error, enforced
         case policyID = "policy_id"
         case policyVersion = "policy_version"
         case policyMode = "policy_mode"

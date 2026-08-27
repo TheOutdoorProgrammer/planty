@@ -233,7 +233,7 @@ type Evidence struct {
 	HealthEvidenceNew bool
 	LatestPhoto       *PhotoEvidence
 	PhotoCoverage     string
-	PolicyDecisions   []policy.Evaluation
+	PolicyResults     []policy.Evaluation
 }
 
 // PhotoEvidence is a photograph that is attached to the assessment request.
@@ -648,7 +648,7 @@ func describe(e Evidence) string {
 	} else {
 		fmt.Fprintf(&b, "Latest photograph: not attached (%s). Do not make visual claims.\n", e.PhotoCoverage)
 	}
-	writePolicyContext(&b, e.PolicyDecisions)
+	writePolicyContext(&b, e.PolicyResults)
 	return b.String()
 }
 
@@ -656,17 +656,22 @@ func writePolicyContext(b *strings.Builder, evaluations []policy.Evaluation) {
 	if len(evaluations) == 0 {
 		return
 	}
-	b.WriteString("\nOwner-authored OPA policy decisions:\n")
+	b.WriteString("\nOwner-authored OPA policy rules:\n")
 	for _, evaluation := range evaluations {
-		fmt.Fprintf(b, "  %s policy: %s\n", evaluation.PolicyMode, evaluation.Decision.Summary)
-		for _, fact := range evaluation.Decision.Agent.Facts {
+		fmt.Fprintf(b, "  %s policy:\n", evaluation.PolicyMode)
+		for _, rule := range evaluation.Result.Rules {
+			if rule.Active {
+				fmt.Fprintf(b, "    %s = %s\n", rule.Name, rule.Value)
+			}
+		}
+		for _, fact := range evaluation.Result.Agent.Facts {
 			fmt.Fprintf(b, "    fact: %s\n", fact)
 		}
-		for _, guidance := range evaluation.Decision.Agent.Guidance {
+		for _, guidance := range evaluation.Result.Agent.Guidance {
 			fmt.Fprintf(b, "    guidance: %s\n", guidance)
 		}
 		if evaluation.PolicyMode == policy.ModeEnforce {
-			for _, action := range evaluation.Decision.Agent.DenyActions {
+			for _, action := range evaluation.Result.Agent.DenyActions {
 				fmt.Fprintf(b, "    denied action: %s\n", action)
 			}
 		}

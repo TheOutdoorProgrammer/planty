@@ -4,17 +4,20 @@ Planty embeds Open Policy Agent so an owner can turn current plant evidence into
 
 ## Contract
 
-Every module uses this package and entrypoint:
+Every module uses this versioned package:
 
 ```rego
-package planty
+package planty.v1
 
-decision := { ... }
+needs_water if { ... }
+agent_guidance := "Check the soil by hand." if needs_water
 ```
 
-Planty evaluates `data.planty.decision`. It must return exactly one object matching the output contract below. Unknown fields, invalid enum values, unbounded health changes, and unbounded fan runs fail closed.
+Planty evaluates the independent rules materialized under `data.planty.v1`. There is no aggregate decision object and no required default. A missing rule is false. A boolean rule uses its boolean value. Every present non-boolean value, including an empty collection or null, is active. Planty records the original JSON value with the derived active flag.
 
-Policy source is limited to 64 KiB and evaluation to 250 ms. A decision is limited to 256 KiB, each array to 100 items, and each text value to 4 KiB.
+The v1 care-rule family is `needs_<thing>`, including `needs_water`, `needs_misted`, `needs_fertilized`, `needs_pruned`, `needs_repotted`, `needs_light`, `needs_shade`, and `needs_airflow`. New suffixes work without a Planty release. The named care rules are `move_inside`, `move_outside`, `incident`, and `health`. Unknown top-level names outside the `needs_<thing>` family fail closed. Rules that request side effects have additional typed contracts and fail closed when malformed.
+
+Policy source is limited to 64 KiB and evaluation to 250 ms. Combined output is limited to 256 KiB, each array to 100 items, and each text value to 4 KiB.
 
 The input version is `planty.policy.input/v1`. A breaking input change gets a new version rather than silently changing a field under existing rules.
 
@@ -97,81 +100,55 @@ Weather is optional because Home Assistant can be unavailable without blocking p
 | `policy_control_enabled` | boolean | Separate owner opt-in for enforcing policies. |
 | `active_until` | timestamp, optional | Deadline of the active durable lease. |
 
-## Outputs
+## Rules and outputs
 
-Every decision requires these fields, even when their arrays are empty:
+Every supported top-level value in the package is a rule result. Planty returns results in sorted order as `{"name", "active", "value"}` records. Rules that do not materialize are omitted and therefore false.
 
-```json
-{
-  "summary": "No policy action needed.",
-  "signals": [],
-  "notifications": [],
-  "fan_runs": [],
-  "agent": {
-    "facts": [],
-    "guidance": [],
-    "deny_actions": []
-  }
-}
+```rego
+package planty.v1
+
+needs_water if input.sensors.soil_moisture.fraction < 0.25
+needs_misted := false
+health := {"state": "recovering", "confidence": 0.8}
 ```
 
-Signals have `kind`, `active`, `severity`, `reason`, and optional `confidence` from 0 through 1. Supported kinds are:
+Here `needs_water` and `health` are active, `needs_misted` is present but inactive, and every unmentioned rule is false. `health` remains an ordinary owner-defined rule. A health score mutation uses the separate typed `health_adjustment` rule.
 
-- `needs_watered`
-- `needs_misted`
-- `move_inside`
-- `move_outside`
-- `incident`
-- `health`
-- `airflow`
+Care rules accept any JSON value and are available to the app and agents. These additional names have built-in behavior when active:
 
-Severity is `info`, `warning`, or `critical`. A policy incident is a policy signal. It does not impersonate Planty's separately correlated garden incident records.
+| Rule | Value | Effect in enforce mode |
+| --- | --- | --- |
+| `health_adjustment` | `{"delta": -5, "reason": "New symptom with fresh evidence."}` | Append a bounded health change. Delta is non-zero and from -20 through 20. An existing score and newer durable evidence are required. |
+| `notification` | `{"title", "body", "priority"}` | Send one notification. Priority is `info`, `warning`, or `critical`. |
+| `notifications` | array of notification objects | Send every notification. |
+| `fan_run` | `{"actuator_id", "duration_seconds", "reason"}` | Run one assigned, opted-in fan for 1 through 3600 seconds through its durable lease. |
+| `fan_runs` | array of fan-run objects | Run every validated fan directive. |
+| `agent_fact` or `agent_facts` | string or array of strings | Add facts to agent context. |
+| `agent_guidance` | string or array of strings | Add owner-authored guidance to agent context. |
+| `deny_action` or `deny_actions` | string or array of strings | Present owner constraints to agents for enforce-mode evaluations. This cannot revoke or grant tools. |
 
-Optional output directives:
-
-- `health`: `{"delta": -5, "reason": "New symptom with fresh evidence."}`. Delta must be non-zero and between -20 and 20. Enforcement requires an existing score and newer record-backed evidence.
-- `notifications`: each item has `title`, `body`, and `priority`.
-- `fan_runs`: each item has an assigned Planty `actuator_id`, `duration_seconds` from 1 through 3600, and `reason`.
-- `agent`: `facts` and `guidance` are added to agent context. `deny_actions` is presented to agents as an owner constraint only for enforce-mode decisions. Policy context can narrow authority but never grant a tool.
+Singular and plural side-effect rules may both be present; Planty combines them. A false boolean typed rule has no effect. A present non-boolean typed rule must match its schema even when the policy is advisory, so broken automation cannot quietly earn trust.
 
 ## Example rules
 
 ```rego
-package planty
+package planty.v1
 
-default decision := {
-  "summary": "No policy action needed.",
-  "signals": [],
-  "notifications": [],
-  "fan_runs": [],
-  "agent": {"facts": [], "guidance": [], "deny_actions": []},
-}
-
-decision := {
-  "summary": sprintf("%s looks dry", [input.plant.common_name]),
-  "signals": [{
-    "kind": "needs_watered",
-    "active": true,
-    "severity": "warning",
-    "reason": "Calibrated soil moisture is below 25%.",
-    "confidence": 0.95,
-  }],
-  "notifications": [{
-    "title": "Plant needs water",
-    "body": sprintf("Check %s before watering by hand.", [input.plant.common_name]),
-    "priority": "warning",
-  }],
-  "fan_runs": [],
-  "agent": {
-    "facts": ["The calibrated soil probe reads below 25%."],
-    "guidance": ["Ask the owner to verify the soil before watering."],
-    "deny_actions": ["water"],
-  },
-} if {
+needs_water if {
   input.sensors.soil_moisture.calibrated
   input.sensors.soil_moisture.fraction < 0.25
   not input.care.last_watered.recent_24h
 }
+
+notification := {
+  "title": "Plant needs water",
+  "body": sprintf("Check %s before watering by hand.", [input.plant.common_name]),
+  "priority": "warning",
+} if needs_water
+
+agent_fact := "The calibrated soil probe reads below 25%." if needs_water
+agent_guidance := "Ask the owner to verify the soil before watering." if needs_water
+deny_action := "water" if needs_water
 ```
 
 Weather and fan rule fragments:
@@ -190,12 +167,12 @@ needs_airflow if {
 }
 ```
 
-Use these conditions to construct the one `decision` object. Multiple complete `decision` rules must be mutually exclusive or OPA will report a conflict.
+These rules compose independently. Adding `move_inside` cannot conflict with `needs_water`, and no empty output envelope is required.
 
 ## Modes and safety
 
 - Preview uses current production facts but never persists or acts.
-- Advisory records decisions for the app and agents, but performs no directives.
+- Advisory records rule results for the app and agents, but performs no directives.
 - Enforce may send notifications, write a bounded health delta from fresh durable evidence, and run an explicitly opted-in assigned fan through the existing durable lease path.
 - No policy can start the shared watering line, mist a plant, move it, create a recurring schedule, call arbitrary Home Assistant services, or invoke a shell command.
 - `http.send`, DNS lookup, clock, random, UUID, and OPA runtime built-ins are blocked. Inputs therefore determine outputs and can be replayed.
@@ -210,4 +187,4 @@ Use these conditions to construct the one `decision` object. Multiple complete `
 - `POST /v1/policies/{id}/evaluate` records a manual evaluation and enforces it when configured to do so.
 - `GET /v1/policy-evaluations` returns replayable evaluation history.
 
-Production records include the policy ID, version, mode, source fingerprint, input fingerprint, idempotency key, complete input, typed decision, duration, outcome, enforcement results, and timestamp. Daily evaluations use the UTC date as their idempotency key, so a retry cannot repeat same-day effects. Manual and agent evaluations use the complete input fingerprint. OpenTelemetry spans record IDs, mode, trigger, duration, outcome, and errors without recording Rego source or plant notes.
+Production records include the policy ID, version, mode, source fingerprint, input fingerprint, idempotency key, complete input, original rule values, derived active flags, normalized typed directives, duration, outcome, enforcement results, and timestamp. Daily evaluations use the UTC date as their idempotency key, so a retry cannot repeat same-day effects. Manual and agent evaluations use the complete input fingerprint. OpenTelemetry spans record IDs, mode, trigger, duration, outcome, and errors without recording Rego source or plant notes.

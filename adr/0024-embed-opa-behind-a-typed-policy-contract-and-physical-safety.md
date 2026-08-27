@@ -4,7 +4,9 @@ Date: 2026-08-27
 
 ## Status
 
-Accepted.
+Accepted. The Rego authoring and output shape is superseded by [ADR-0025](0025-expose-independent-planty-policy-rules.md).
+
+The embedded OPA, typed enforcement, safety boundary, persistence, and idempotency decisions still stand.
 
 ## Context and Problem Statement
 

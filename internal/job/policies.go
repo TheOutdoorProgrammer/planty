@@ -56,7 +56,7 @@ func (r PolicyRunner) BuildInput(ctx context.Context, subject plant.Plant, trigg
 	return input, nil
 }
 
-func (r PolicyRunner) Preview(ctx context.Context, item policy.Policy, input policy.Input) (policy.Decision, time.Duration, error) {
+func (r PolicyRunner) Preview(ctx context.Context, item policy.Policy, input policy.Input) (policy.Result, time.Duration, error) {
 	input.Version = policy.InputVersion
 	input.Context.Trigger = policy.TriggerPreview
 	if input.Context.Now.IsZero() {
@@ -146,7 +146,7 @@ func (r PolicyRunner) Evaluate(ctx context.Context, item policy.Policy, input po
 	if input.Context.Trigger == policy.TriggerPreview {
 		return policy.Evaluation{}, false, fmt.Errorf("preview input cannot be persisted or enforced")
 	}
-	decision, duration, evalErr := r.Engine.Evaluate(ctx, item.Source, input)
+	result, duration, evalErr := r.Engine.Evaluate(ctx, item.Source, input)
 	span.SetAttributes(attribute.Float64("policy.duration_ms", float64(duration.Microseconds())/1000))
 	if evalErr != nil {
 		span.RecordError(evalErr)
@@ -160,7 +160,7 @@ func (r PolicyRunner) Evaluate(ctx context.Context, item policy.Policy, input po
 		PolicyID: item.ID, PolicyVersion: item.Version, PolicyMode: item.Mode, PlantID: input.Plant.ID,
 		Trigger: input.Context.Trigger, InputFingerprint: fingerprint,
 		IdempotencyKey:    policy.IdempotencyKey(input, fingerprint),
-		PolicyFingerprint: item.Fingerprint(), Input: input, Decision: decision,
+		PolicyFingerprint: item.Fingerprint(), Input: input, Result: result,
 		DurationMS: float64(duration.Microseconds()) / 1000, Outcome: "advisory", Enforced: []string{},
 	}
 	if evalErr != nil {
@@ -196,27 +196,27 @@ func (r PolicyRunner) Evaluate(ctx context.Context, item policy.Policy, input po
 func (r PolicyRunner) enforce(ctx context.Context, evaluation policy.Evaluation) ([]string, error) {
 	var applied []string
 	var failures []error
-	decision := evaluation.Decision
-	if decision.Health != nil {
+	result := evaluation.Result
+	if result.Health != nil {
 		if !evaluation.Input.Health.Known || !evaluation.Input.Health.EvidenceNew {
 			applied = append(applied, "health skipped: requires an existing score and newer evidence")
 		} else {
 			evidence := policyHealthEvidence(evaluation.Input)
 			key := evaluation.ID
 			_, inserted, err := r.Store.RecordHealth(ctx, plant.HealthChange{
-				PlantID: evaluation.PlantID, Delta: &decision.Health.Delta,
-				Rationale: decision.Health.Reason, Evidence: evidence,
+				PlantID: evaluation.PlantID, Delta: &result.Health.Delta,
+				Rationale: result.Health.Reason, Evidence: evidence,
 				Source: plant.SourceAutomation, Actor: "OPA policy", IdempotencyKey: &key,
 			})
 			if err != nil {
 				failures = append(failures, fmt.Errorf("health: %w", err))
 			} else if inserted {
-				applied = append(applied, fmt.Sprintf("health adjusted by %g", decision.Health.Delta))
+				applied = append(applied, fmt.Sprintf("health adjusted by %g", result.Health.Delta))
 			}
 		}
 	}
 
-	for _, run := range decision.FanRuns {
+	for _, run := range result.FanRuns {
 		actuator, ok := slices.BinarySearchFunc(evaluation.Input.Actuators, run.ActuatorID,
 			func(candidate policy.ActuatorFacts, id uuid.UUID) int { return bytes.Compare(candidate.ID[:], id[:]) })
 		_ = actuator
@@ -239,7 +239,7 @@ func (r PolicyRunner) enforce(ctx context.Context, evaluation policy.Evaluation)
 		}
 	}
 
-	for _, notification := range decision.Notifications {
+	for _, notification := range result.Notifications {
 		err := notify(ctx, r.Notifications, notification.Title, notification.Body, map[string]any{
 			"policy_evaluation_id": evaluation.ID.String(),
 			"plant_slug":           evaluation.Input.Plant.Slug,

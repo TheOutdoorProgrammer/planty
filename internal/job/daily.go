@@ -146,7 +146,7 @@ func (d Daily) judgeOne(ctx context.Context, runID uuid.UUID, p plant.Plant, pol
 	if err != nil {
 		return judge.Result{}, err
 	}
-	evidence.PolicyDecisions = policies
+	evidence.PolicyResults = policies
 
 	result, err := d.Judge.Assess(ctx, evidence)
 	if err != nil {
@@ -251,7 +251,7 @@ func (d Daily) RetryFailed(ctx context.Context) error {
 
 	remaining := 0
 	for _, prior := range failed {
-		result, judgeErr := d.judgeOne(ctx, run.ID, prior.Plant, d.currentPolicyDecisions(ctx, prior.Plant))
+		result, judgeErr := d.judgeOne(ctx, run.ID, prior.Plant, d.currentPolicyResults(ctx, prior.Plant))
 		if judgeErr != nil {
 			remaining++
 			d.Log.Error("judgment retry failed", "plant", prior.Plant.Slug, "error", judgeErr)
@@ -350,10 +350,10 @@ func (d Daily) evaluatePolicies(ctx context.Context, subject plant.Plant, trigge
 	if err != nil {
 		d.Log.Error("policy evaluation failed", "plant", subject.Slug, "error", err)
 	}
-	return successfulPolicyDecisions(evaluations)
+	return successfulPolicyResults(evaluations)
 }
 
-func (d Daily) currentPolicyDecisions(ctx context.Context, subject plant.Plant) []policy.Evaluation {
+func (d Daily) currentPolicyResults(ctx context.Context, subject plant.Plant) []policy.Evaluation {
 	items, err := d.Store.Policies(ctx)
 	if err != nil {
 		d.Log.Error("read policies for judgment retry", "plant", subject.Slug, "error", err)
@@ -370,7 +370,7 @@ func (d Daily) currentPolicyDecisions(ctx context.Context, subject plant.Plant) 
 	}
 	history, err := d.Store.PolicyEvaluations(ctx, &subject.ID, 200)
 	if err != nil {
-		d.Log.Error("read policy decisions for judgment retry", "plant", subject.Slug, "error", err)
+		d.Log.Error("read policy results for judgment retry", "plant", subject.Slug, "error", err)
 		return nil
 	}
 	seen := make(map[uuid.UUID]bool, len(active))
@@ -382,10 +382,10 @@ func (d Daily) currentPolicyDecisions(ctx context.Context, subject plant.Plant) 
 		seen[evaluation.PolicyID] = true
 		current = append(current, evaluation)
 	}
-	return successfulPolicyDecisions(current)
+	return successfulPolicyResults(current)
 }
 
-func successfulPolicyDecisions(evaluations []policy.Evaluation) []policy.Evaluation {
+func successfulPolicyResults(evaluations []policy.Evaluation) []policy.Evaluation {
 	out := make([]policy.Evaluation, 0, len(evaluations))
 	for _, evaluation := range evaluations {
 		if evaluation.Outcome == "advisory" || evaluation.Outcome == "enforced" {

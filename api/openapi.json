@@ -188,7 +188,6 @@
       "AIJob": {"type": "string", "enum": ["assess", "identify", "consult", "ask", "postmortem", "owner_update"]},
       "PolicyMode": {"type": "string", "enum": ["advisory", "enforce"]},
       "PolicyTrigger": {"type": "string", "enum": ["preview", "manual", "daily", "agent"]},
-      "PolicySignalKind": {"type": "string", "enum": ["needs_watered", "needs_misted", "move_inside", "move_outside", "incident", "health", "airflow"]},
       "PolicySeverity": {"type": "string", "enum": ["info", "warning", "critical"]},
       "PromptInstruction": {
         "type": "object",

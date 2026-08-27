@@ -13,12 +13,12 @@ import (
 )
 
 const (
-	InputVersion         = "planty.policy.input/v1"
-	Entrypoint           = "data.planty.decision"
-	MaxSourceBytes       = 64 << 10
-	MaxDecisionBytes     = 256 << 10
-	MaxDecisionItems     = 100
-	MaxDecisionTextBytes = 4 << 10
+	InputVersion       = "planty.policy.input/v1"
+	Entrypoint         = "data.planty.v1"
+	MaxSourceBytes     = 64 << 10
+	MaxOutputBytes     = 256 << 10
+	MaxOutputItems     = 100
+	MaxOutputTextBytes = 4 << 10
 )
 
 type Mode string
@@ -197,33 +197,18 @@ const (
 	SeverityCritical Severity = "critical"
 )
 
-type SignalKind string
-
-const (
-	SignalNeedsWatered SignalKind = "needs_watered"
-	SignalNeedsMisted  SignalKind = "needs_misted"
-	SignalMoveInside   SignalKind = "move_inside"
-	SignalMoveOutside  SignalKind = "move_outside"
-	SignalIncident     SignalKind = "incident"
-	SignalHealth       SignalKind = "health"
-	SignalAirflow      SignalKind = "airflow"
-)
-
-type Decision struct {
-	Summary       string            `json:"summary"`
-	Signals       []Signal          `json:"signals"`
+type Result struct {
+	Rules         []Rule            `json:"rules"`
 	Health        *HealthAdjustment `json:"health,omitempty"`
 	Notifications []Notification    `json:"notifications"`
 	FanRuns       []FanRun          `json:"fan_runs"`
 	Agent         AgentGuidance     `json:"agent"`
 }
 
-type Signal struct {
-	Kind       SignalKind `json:"kind"`
-	Active     bool       `json:"active"`
-	Severity   Severity   `json:"severity"`
-	Reason     string     `json:"reason"`
-	Confidence float64    `json:"confidence,omitempty"`
+type Rule struct {
+	Name   string          `json:"name"`
+	Active bool            `json:"active"`
+	Value  json.RawMessage `json:"value"`
 }
 
 type HealthAdjustment struct {
@@ -260,7 +245,7 @@ type Evaluation struct {
 	IdempotencyKey    string    `json:"idempotency_key"`
 	PolicyFingerprint string    `json:"policy_fingerprint"`
 	Input             Input     `json:"input"`
-	Decision          Decision  `json:"decision"`
+	Result            Result    `json:"result"`
 	DurationMS        float64   `json:"duration_ms"`
 	Outcome           string    `json:"outcome"`
 	Error             string    `json:"error,omitempty"`

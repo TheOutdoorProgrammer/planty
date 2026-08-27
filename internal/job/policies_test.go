@@ -17,16 +17,16 @@ type policyWeatherFake struct {
 	forecasts []ha.Forecast
 }
 
-func TestSuccessfulPolicyDecisionsExcludeFailedEvaluations(t *testing.T) {
+func TestSuccessfulPolicyResultsExcludeFailedEvaluations(t *testing.T) {
 	advisoryID, enforcedID := uuid.New(), uuid.New()
-	got := successfulPolicyDecisions([]policy.Evaluation{
+	got := successfulPolicyResults([]policy.Evaluation{
 		{ID: advisoryID, Outcome: "advisory"},
 		{ID: uuid.New(), Outcome: "failed"},
 		{ID: enforcedID, Outcome: "enforced"},
 	})
 
 	if len(got) != 2 || got[0].ID != advisoryID || got[1].ID != enforcedID {
-		t.Fatalf("successful policy decisions = %#v", got)
+		t.Fatalf("successful policy results = %#v", got)
 	}
 }
 
@@ -44,14 +44,8 @@ func TestEnforcingPolicyRunsOnlyAnOptedInFanAndDailyRetryIsIdempotent(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	source := fmt.Sprintf(`package planty
-decision := {
-  "summary": "Run the opted-in fan.",
-  "signals": [],
-  "notifications": [],
-  "fan_runs": [{"actuator_id": %q, "duration_seconds": 60, "reason": "High humidity."}],
-  "agent": {"facts": [], "guidance": [], "deny_actions": []},
-}`, actuator.ID.String())
+	source := fmt.Sprintf(`package planty.v1
+fan_run := {"actuator_id": %q, "duration_seconds": 60, "reason": "High humidity."}`, actuator.ID.String())
 	item, err := db.CreatePolicy(ctx, policy.Policy{
 		Name: "Policy fan integration", Source: source, Mode: policy.ModeEnforce, Enabled: true,
 	})

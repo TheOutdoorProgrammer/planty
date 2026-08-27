@@ -40,7 +40,7 @@ struct PolicySettingsScreen: View {
                 }
             }
             if !session.policies.evaluations.isEmpty {
-                Section("Recent decisions") {
+                Section("Recent evaluations") {
                     ForEach(session.policies.evaluations.prefix(20)) { evaluation in
                         PolicyEvaluationRow(evaluation: evaluation)
                     }
@@ -135,7 +135,7 @@ private struct PolicyEditorScreen: View {
                 Text(draft.mode == .enforce
                      ? "Enforce may notify, adjust health from fresh evidence, or run an opted-in fan. " +
                         "It still cannot water, mist, or move a plant."
-                     : "Advisory records the decision and gives it to agents, but changes nothing physical.")
+                     : "Advisory records the rule results and gives them to agents, but changes nothing physical.")
             }
             Section {
                 TextEditor(text: $draft.source)
@@ -154,7 +154,7 @@ private struct PolicyEditorScreen: View {
                 Text("Rego v1")
             } footer: {
                 Text(
-                    "Define one object at data.planty.decision. Network, clock, random, UUID, " +
+                    "Define independent rules under package planty.v1. Network, clock, random, UUID, " +
                     "and runtime built-ins are blocked."
                 )
             }
@@ -211,7 +211,7 @@ private struct PolicyEditorScreen: View {
             }
             .disabled(!draft.isValid || selectedPlantSlug.isEmpty || isPreviewing)
             if let preview {
-                PolicyDecisionView(decision: preview.decision)
+                PolicyResultView(result: preview.result)
                 LabeledContent("Evaluation", value: String(format: "%.2f ms", preview.durationMS))
                     .font(.caption)
             }
@@ -241,33 +241,35 @@ private struct PolicyEditorScreen: View {
     }
 }
 
-private struct PolicyDecisionView: View {
-    let decision: PolicyDecision
+private struct PolicyResultView: View {
+    let result: PolicyResult
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(decision.summary, systemImage: "sparkles")
+            Label("\(result.rules.filter(\.active).count) active rules", systemImage: "sparkles")
                 .font(.headline)
-            ForEach(decision.signals.filter(\.active)) { signal in
+            ForEach(result.rules) { rule in
                 HStack(alignment: .top) {
-                    Image(systemName: signal.kind.symbol).foregroundStyle(signal.severity.color)
+                    Image(systemName: rule.active ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(rule.active ? PlantyColor.green : PlantyColor.secondaryText)
                     VStack(alignment: .leading) {
-                        Text(signal.kind.label).font(.subheadline.weight(.semibold))
-                        Text(signal.reason).font(.caption).foregroundStyle(PlantyColor.secondaryText)
+                        Text(rule.name.replacingOccurrences(of: "_", with: " ").capitalized)
+                            .font(.subheadline.weight(.semibold))
+                        Text(rule.value.displayValue).font(.caption).foregroundStyle(PlantyColor.secondaryText)
                     }
                 }
             }
-            if let health = decision.health {
+            if let health = result.health {
                 Label(
                     "Health \(health.delta, format: .number.sign(strategy: .always()))",
                     systemImage: "heart.text.square"
                 )
             }
-            if !decision.fanRuns.isEmpty {
-                Label("\(decision.fanRuns.count) bounded fan run requested", systemImage: "fan.fill")
+            if !result.fanRuns.isEmpty {
+                Label("\(result.fanRuns.count) bounded fan run requested", systemImage: "fan.fill")
             }
-            if !decision.notifications.isEmpty {
-                Label("\(decision.notifications.count) notification", systemImage: "bell.badge.fill")
+            if !result.notifications.isEmpty {
+                Label("\(result.notifications.count) notification", systemImage: "bell.badge.fill")
             }
         }
         .padding(.vertical, 6)
@@ -277,9 +279,14 @@ private struct PolicyDecisionView: View {
 private struct PolicyEvaluationRow: View {
     let evaluation: PolicyEvaluation
 
+    private var activeRules: String {
+        let names = evaluation.result.rules.filter(\.active).map(\.name)
+        return names.isEmpty ? "No active rules" : names.joined(separator: ", ")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(evaluation.decision.summary).font(.subheadline.weight(.semibold))
+            Text(activeRules).font(.subheadline.weight(.semibold))
             Text(
                 "\(evaluation.policyMode.label) · \(evaluation.outcome) · " +
                 evaluation.createdAt.formatted(date: .abbreviated, time: .shortened)
@@ -347,31 +354,4 @@ private struct ReferenceFieldRow: View {
 
 private extension PolicyMode {
     var label: String { self == .enforce ? "Enforce" : "Advisory" }
-}
-
-private extension PolicySignalKind {
-    var label: String { rawValue.replacingOccurrences(of: "_", with: " ").capitalized }
-    var symbol: String {
-        switch self {
-        case .needsWatered: "drop.fill"
-        case .needsMisted: "humidity.fill"
-        case .moveInside: "house.fill"
-        case .moveOutside: "sun.max.fill"
-        case .incident: "exclamationmark.triangle.fill"
-        case .health: "heart.fill"
-        case .airflow: "fan.fill"
-        case .unknown: "questionmark.circle"
-        }
-    }
-}
-
-private extension PolicySeverity {
-    var color: Color {
-        switch self {
-        case .info: PlantyColor.cyan
-        case .warning: PlantyColor.orange
-        case .critical: PlantyColor.red
-        case .unknown: PlantyColor.secondaryText
-        }
-    }
 }

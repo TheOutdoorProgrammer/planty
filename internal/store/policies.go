@@ -96,7 +96,7 @@ func (s *Store) SavePolicyEvaluation(ctx context.Context, evaluation policy.Eval
 	if err != nil {
 		return policy.Evaluation{}, false, err
 	}
-	decision, err := json.Marshal(evaluation.Decision)
+	result, err := json.Marshal(evaluation.Result)
 	if err != nil {
 		return policy.Evaluation{}, false, err
 	}
@@ -107,13 +107,13 @@ func (s *Store) SavePolicyEvaluation(ctx context.Context, evaluation policy.Eval
 	row := s.pool.QueryRow(ctx, `
 		INSERT INTO opa_policy_evaluations
 			(policy_id, policy_version, policy_mode, plant_id, trigger, input_fingerprint,
-			 idempotency_key, policy_fingerprint, input, decision, duration_ms, outcome, error, enforced)
+			 idempotency_key, policy_fingerprint, input, result, duration_ms, outcome, error, enforced)
 		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)
 		ON CONFLICT (policy_id, policy_version, plant_id, trigger, idempotency_key)
 		DO NOTHING
 		RETURNING id, created_at`, evaluation.PolicyID, evaluation.PolicyVersion,
 		evaluation.PolicyMode, evaluation.PlantID, evaluation.Trigger, evaluation.InputFingerprint,
-		evaluation.IdempotencyKey, evaluation.PolicyFingerprint, input, decision, evaluation.DurationMS,
+		evaluation.IdempotencyKey, evaluation.PolicyFingerprint, input, result, evaluation.DurationMS,
 		evaluation.Outcome, evaluation.Error, enforced)
 	if err := row.Scan(&evaluation.ID, &evaluation.CreatedAt); err == nil {
 		return evaluation, true, nil
@@ -130,7 +130,7 @@ func (s *Store) PolicyEvaluations(ctx context.Context, plantID *uuid.UUID, limit
 		return nil, fmt.Errorf("policy evaluation limit must be between 1 and 200")
 	}
 	rows, err := s.pool.Query(ctx, `SELECT id, policy_id, policy_version, policy_mode, plant_id, trigger,
-		input_fingerprint, idempotency_key, policy_fingerprint, input, decision, duration_ms, outcome,
+		input_fingerprint, idempotency_key, policy_fingerprint, input, result, duration_ms, outcome,
 		error, enforced, created_at FROM opa_policy_evaluations
 		WHERE ($1::uuid IS NULL OR plant_id = $1)
 		ORDER BY created_at DESC, id DESC LIMIT $2`, plantID, limit)
@@ -167,7 +167,7 @@ func (s *Store) FinishPolicyEvaluation(ctx context.Context, id uuid.UUID, outcom
 
 func (s *Store) policyEvaluationByKey(ctx context.Context, key policy.Evaluation) (policy.Evaluation, error) {
 	return scanPolicyEvaluation(s.pool.QueryRow(ctx, `SELECT id, policy_id, policy_version, policy_mode, plant_id, trigger,
-		input_fingerprint, idempotency_key, policy_fingerprint, input, decision, duration_ms, outcome,
+		input_fingerprint, idempotency_key, policy_fingerprint, input, result, duration_ms, outcome,
 		error, enforced, created_at FROM opa_policy_evaluations
 		WHERE policy_id = $1 AND policy_version = $2 AND plant_id = $3
 			AND trigger = $4 AND idempotency_key = $5`, key.PolicyID,
@@ -185,17 +185,17 @@ func scanPolicy(row interface{ Scan(...any) error }) (policy.Policy, error) {
 
 func scanPolicyEvaluation(row interface{ Scan(...any) error }) (policy.Evaluation, error) {
 	var evaluation policy.Evaluation
-	var input, decision, enforced []byte
+	var input, result, enforced []byte
 	if err := row.Scan(&evaluation.ID, &evaluation.PolicyID, &evaluation.PolicyVersion, &evaluation.PolicyMode,
 		&evaluation.PlantID, &evaluation.Trigger, &evaluation.InputFingerprint,
-		&evaluation.IdempotencyKey, &evaluation.PolicyFingerprint, &input, &decision, &evaluation.DurationMS,
+		&evaluation.IdempotencyKey, &evaluation.PolicyFingerprint, &input, &result, &evaluation.DurationMS,
 		&evaluation.Outcome, &evaluation.Error, &enforced, &evaluation.CreatedAt); err != nil {
 		return policy.Evaluation{}, err
 	}
 	if err := json.Unmarshal(input, &evaluation.Input); err != nil {
 		return policy.Evaluation{}, err
 	}
-	if err := json.Unmarshal(decision, &evaluation.Decision); err != nil {
+	if err := json.Unmarshal(result, &evaluation.Result); err != nil {
 		return policy.Evaluation{}, err
 	}
 	if err := json.Unmarshal(enforced, &evaluation.Enforced); err != nil {
