@@ -25,7 +25,7 @@ jobs:
   ios:
     name: iOS archive
     # Xcode 26 is the default here, which the iOS 26 deployment target needs.
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, mini-2, release, planty]
     steps:
       - uses: actions/checkout@v5
 
@@ -46,7 +46,7 @@ jobs:
 
       - name: Persistent Apple signing
         id: signing
-        uses: TheOutdoorProgrammer/quill/apple-signing@1eb90455ea34ced58e5377dc0058cc6e50e297b0
+        uses: TheOutdoorProgrammer/quill/apple-signing@3157e0821deb8d7667b0242d185ceadc5e480939
         with:
           p12-file-base64: ${{ secrets.APPSTORE_CERTIFICATES_FILE_BASE64 }}
           p12-password: ${{ secrets.APPSTORE_CERTIFICATES_PASSWORD }}
@@ -62,6 +62,7 @@ jobs:
           PROFILE_NAME: ${{ steps.signing.outputs.profile-name }}
           PROFILE_UUID: ${{ steps.signing.outputs.profile-uuid }}
           SIGNING_KEYCHAIN: ${{ steps.signing.outputs.keychain }}
+          SIGNING_KEYCHAIN_PASSWORD: ${{ steps.signing.outputs.keychain-password }}
           PLANTY_BASE_URL: ${{ secrets.PLANTY_BASE_URL }}
           PLANTY_API_TOKEN: ${{ secrets.PLANTY_API_TOKEN }}
           FLEDGE_BASE_URL: ${{ secrets.FLEDGE_URL }}
@@ -69,6 +70,8 @@ jobs:
           BUILD_NUMBER: ${{ github.run_number }}
         run: |
           set -euo pipefail
+          security unlock-keychain -p "$SIGNING_KEYCHAIN_PASSWORD" "$SIGNING_KEYCHAIN"
+          security default-keychain -d user -s "$SIGNING_KEYCHAIN"
           : "${PLANTY_API_TOKEN:?PLANTY_API_TOKEN must be configured before releasing}"
 
           # The build number comes from the run, not the project file. Hand
@@ -82,7 +85,6 @@ jobs:
             echo "CODE_SIGN_STYLE[sdk=iphoneos*] = Manual"
             echo "CODE_SIGN_IDENTITY[sdk=iphoneos*] = Apple Distribution"
             echo "PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*] = $PROFILE_NAME"
-            echo "OTHER_CODE_SIGN_FLAGS[sdk=iphoneos*] = --keychain $SIGNING_KEYCHAIN"
           } > "$signing_config"
 
           xcodebuild archive \
