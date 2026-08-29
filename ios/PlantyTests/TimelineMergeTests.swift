@@ -74,6 +74,23 @@ struct TimelineMergeTests {
         #expect(merged.series.first?.latest?.value == 500)
     }
 
+    @Test("A linked sensor stays visible while waiting for its first reading")
+    func buildsEmptySeriesFromDetail() {
+        let link = SensorLink(
+            id: UUID(),
+            haEntityID: "sensor.mona_moisture",
+            role: .soilMoisture,
+            createdAt: Date()
+        )
+        var detail = PlantDetail(plant: .fixture())
+        detail.sensors = [link]
+
+        let merged = PlantTimeline().merging(detail)
+
+        #expect(merged.series.count == 1)
+        #expect(merged.series.first?.latest == nil)
+    }
+
     /// The timeline's photos carry a presigned link and the plant's do not, so
     /// a merge that preferred the plant's would render placeholders.
     @Test("Photos that came with a link are kept over ones without")

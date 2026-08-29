@@ -118,6 +118,37 @@ struct ModelDecodingTests {
         #expect(detail.verdict == nil)
     }
 
+    @Test("Plant detail keeps sensor links and their durable readings together")
+    func plantDetailSensors() throws {
+        let linkID = "8B7B4A0E-3B9C-4E2A-9A6F-0F1C2D3E4A5B"
+        let json = """
+            {
+              "plant": \(Self.monaJSON),
+              "sensors": [{
+                "id": "\(linkID)",
+                "plant_id": "0651DE3F-6EC5-4A7B-9981-8CF8F53D0F4D",
+                "ha_entity_id": "sensor.mona_soil_moisture",
+                "role": "soil_moisture",
+                "created_at": "2026-08-29T20:00:00Z"
+              }],
+              "readings": [{
+                "id": "C0FFEE00-3B9C-4E2A-9A6F-0F1C2D3E4A5B",
+                "sensor_link_id": "\(linkID)",
+                "value": 42.5,
+                "unit": "%",
+                "taken_at": "2026-08-29T21:40:00Z"
+              }]
+            }
+            """
+
+        let detail = try decode(PlantDetail.self, json)
+
+        #expect(detail.sensors?.first?.haEntityID == "sensor.mona_soil_moisture")
+        #expect(detail.readings?.first?.sensorLinkID == detail.sensors?.first?.id)
+        #expect(detail.readings?.first?.value == 42.5)
+        #expect(detail.readings?.first?.unit == "%")
+    }
+
     @Test("The service's structured error body")
     func errorBody() throws {
         let body = try decode(

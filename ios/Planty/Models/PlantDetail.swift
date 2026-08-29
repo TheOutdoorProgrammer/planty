@@ -105,7 +105,7 @@ struct PlantTimeline: Decodable, Sendable, Hashable {
         return copy
     }
 
-    /// Series for the "Why Planty thinks this" disclosure, newest link first.
+    /// Every linked sensor, including one still waiting for its first reading.
     var series: [SensorSeries] {
         sensors.map { link in
             SensorSeries(
@@ -115,7 +115,6 @@ struct PlantTimeline: Decodable, Sendable, Hashable {
                     .sorted { $0.takenAt < $1.takenAt }
             )
         }
-        .filter { !$0.readings.isEmpty }
     }
 }
 

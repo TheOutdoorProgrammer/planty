@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
@@ -124,9 +126,15 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Readings and the current verdict, because a plant page without them
-	// sends the client straight back for two more round trips.
-	if readings, err := s.latestReadings(r.Context(), p); err == nil && len(readings) > 0 {
+	// Sensor links and readings have to travel together. A reading without its
+	// link loses its role, calibration, and stable identity on the client.
+	links, readings, err := s.sensorSnapshot(r.Context(), p)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	if len(links) > 0 {
+		body["sensors"] = links
 		body["readings"] = readings
 	}
 	if verdict, err := s.store.LatestVerdict(r.Context(), p.ID); err == nil {
@@ -138,48 +146,37 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 	s.ok(w, http.StatusOK, body)
 }
 
-// readingView is one probe's latest sample, expressed against its own
-// baselines because two probes' absolute numbers are never comparable.
-type readingView struct {
-	Role       plant.SensorRole `json:"role"`
-	EntityID   string           `json:"ha_entity_id"`
-	Raw        float64          `json:"raw"`
-	Fraction   *float64         `json:"fraction,omitempty"`
-	Calibrated bool             `json:"calibrated"`
-	TakenAt    time.Time        `json:"taken_at"`
-}
+func (s *Server) sensorSnapshot(
+	ctx context.Context,
+	p plant.Plant,
+) ([]plant.SensorLink, []plant.Reading, error) {
+	ctx, span := otel.Tracer("planty/api").Start(ctx, "plant.sensor.snapshot")
+	defer span.End()
 
-func (s *Server) latestReadings(ctx context.Context, p plant.Plant) ([]readingView, error) {
 	links, err := s.store.SensorLinks(ctx, &p.ID)
 	if err != nil {
-		return nil, err
+		span.RecordError(err)
+		return nil, nil, err
 	}
 
-	out := make([]readingView, 0, len(links))
+	readings := make([]plant.Reading, 0, len(links))
 	for _, link := range links {
 		latest, err := s.store.LatestReading(ctx, link.ID)
 		if errors.Is(err, store.ErrNotFound) {
 			continue
 		}
 		if err != nil {
-			return nil, err
+			span.RecordError(err)
+			return nil, nil, err
 		}
-
-		view := readingView{
-			Role:       link.Role,
-			EntityID:   link.HAEntityID,
-			Raw:        latest.Value,
-			Calibrated: link.Calibrated(),
-			TakenAt:    latest.TakenAt,
-		}
-		if view.Calibrated {
-			if f, err := link.Fraction(latest.Value); err == nil {
-				view.Fraction = &f
-			}
-		}
-		out = append(out, view)
+		readings = append(readings, latest)
 	}
-	return out, nil
+
+	span.SetAttributes(
+		attribute.Int("plant.sensor.count", len(links)),
+		attribute.Int("plant.sensor.reading_count", len(readings)),
+	)
+	return links, readings, nil
 }
 
 // updatePlant applies a sparse patch, so an agent can change one field.

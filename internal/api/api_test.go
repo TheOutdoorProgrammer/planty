@@ -740,6 +740,58 @@ func TestSensorLinkAndCalibration(t *testing.T) {
 	}
 }
 
+func TestPlantDetailReturnsSensorLinksWithContractReadings(t *testing.T) {
+	h, db, ctx := newServer(t)
+	slug := createPlant(t, h, map[string]any{
+		"common_name": "Measured", "slug": unique("measured"),
+	})
+	p, err := db.GetPlant(ctx, slug)
+	if err != nil {
+		t.Fatalf("read back: %v", err)
+	}
+
+	moisture, err := db.LinkSensor(ctx, plant.SensorLink{
+		PlantID: &p.ID, HAEntityID: "sensor." + slug + "_soil", Role: plant.RoleSoilMoisture,
+	})
+	if err != nil {
+		t.Fatalf("link moisture sensor: %v", err)
+	}
+	if _, err := db.LinkSensor(ctx, plant.SensorLink{
+		PlantID: &p.ID, HAEntityID: "sensor." + slug + "_temperature", Role: plant.RoleAmbientTemp,
+	}); err != nil {
+		t.Fatalf("link temperature sensor: %v", err)
+	}
+	takenAt := time.Now().UTC().Truncate(time.Microsecond)
+	if err := db.RecordReading(ctx, plant.Reading{
+		SensorLinkID: moisture.ID, Value: 42.5, Unit: "%", TakenAt: takenAt,
+	}); err != nil {
+		t.Fatalf("record reading: %v", err)
+	}
+
+	rec, out := do(t, h, http.MethodGet, "/v1/plants/"+slug, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get plant: got %d, body %s", rec.Code, rec.Body.String())
+	}
+	sensors, ok := out["sensors"].([]any)
+	if !ok || len(sensors) != 2 {
+		t.Fatalf("sensors = %#v, want both linked sensors", out["sensors"])
+	}
+	readings, ok := out["readings"].([]any)
+	if !ok || len(readings) != 1 {
+		t.Fatalf("readings = %#v, want one latest reading", out["readings"])
+	}
+	reading, ok := readings[0].(map[string]any)
+	if !ok {
+		t.Fatalf("reading = %#v", readings[0])
+	}
+	if reading["sensor_link_id"] != moisture.ID.String() {
+		t.Errorf("sensor_link_id = %v, want %s", reading["sensor_link_id"], moisture.ID)
+	}
+	if reading["value"] != 42.5 || reading["unit"] != "%" || reading["id"] == nil {
+		t.Errorf("reading lost its durable contract fields: %#v", reading)
+	}
+}
+
 // A soil probe measures one pot, so it cannot belong to a zone.
 func TestSoilSensorMustNameAPlant(t *testing.T) {
 	h, _, _ := newServer(t)

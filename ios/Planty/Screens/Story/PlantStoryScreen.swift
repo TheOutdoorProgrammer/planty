@@ -29,6 +29,7 @@ struct PlantStoryScreen: View {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 currentState
+                PlantSensorSection(series: store.series)
                 PlantHealthSection(plant: store.plant)
                 EvidenceWorkflowSection(
                     plant: store.plant,
@@ -185,7 +186,10 @@ struct PlantStoryScreen: View {
             Button("Archive") { Task { await archivePlant() } }
             Button("Keep active", role: .cancel) {}
         } message: {
-            Text("This removes the plant from the active garden without deleting its story or photos. You can restore it later.")
+            Text(
+                "This removes the plant from the active garden without deleting its story or photos. "
+                    + "You can restore it later."
+            )
         }
         .confirmationDialog(
             "Delete this photo?",
