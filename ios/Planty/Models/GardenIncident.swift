@@ -53,6 +53,7 @@ struct GardenIncident: Codable, Sendable, Hashable, Identifiable {
     let suspectedFactorType: IncidentFactor
     let suspectedFactorRef: String
     let summary: String
+    private let providedReason: String?
     let confidence: Double
     let evidence: IncidentEvidence
     let detectedRunID: UUID
@@ -68,8 +69,11 @@ struct GardenIncident: Codable, Sendable, Hashable, Identifiable {
     let createdAt: Date
     let updatedAt: Date
 
+    var reason: String { providedReason?.nilIfBlank ?? summary }
+
     enum CodingKeys: String, CodingKey {
         case id, status, summary, confidence, evidence, plants, resolution, conclusion
+        case providedReason = "reason"
         case suspectedFactorType = "suspected_factor_type"
         case suspectedFactorRef = "suspected_factor_ref"
         case detectedRunID = "detected_run_id"
@@ -86,4 +90,8 @@ struct GardenIncident: Codable, Sendable, Hashable, Identifiable {
 
 struct IncidentListResponse: Codable, Sendable { let incidents: [GardenIncident] }
 struct IncidentActorRequest: Codable, Sendable { let actor: String }
-struct IncidentResolutionRequest: Codable, Sendable { let outcome: IncidentResolution; let actor: String; let conclusion: String }
+struct IncidentResolutionRequest: Codable, Sendable {
+    let outcome: IncidentResolution
+    let actor: String
+    let conclusion: String
+}

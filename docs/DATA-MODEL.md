@@ -164,6 +164,7 @@ One row per plant per day, the output of the daily judgment run.
 `garden_incidents` is a lifecycle record for a suspected shared factor across otherwise independent plant verdicts.
 The deterministic detector runs only after a judgment run completed successfully for every expected plant.
 It may open or refresh an incident only for at least two affected plants, or for one affected plant plus an independent environmental or actuator failure record.
+Every incident has a required `reason` that explains both the correlation and the agent findings that caused each affected plant to be flagged. Existing incidents are backfilled from their preserved verdict reasoning, and the API and app surface the reason as the primary explanation.
 
 Typed factor membership names a shared Home Assistant area, current location, registered actuator, tightly timed common-care batch, or environmental failure.
 `garden_incident_plants` keeps plant membership normalized while each row retains its verdict and action evidence.

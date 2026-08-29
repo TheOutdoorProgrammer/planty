@@ -60,7 +60,9 @@ func TestIncidentRadarCorrelatesOnlyCompletedIndependentPlantSignals(t *testing.
 	if err != nil || len(incidents) != 1 {
 		t.Fatalf("incidents=%#v err=%v", incidents, err)
 	}
-	if incidents[0].SuspectedFactorType != plant.FactorLocation || !strings.Contains(incidents[0].Summary, "worth checking") || len(incidents[0].Plants) != 2 {
+	if incidents[0].SuspectedFactorType != plant.FactorLocation || !strings.Contains(incidents[0].Summary, "worth checking") ||
+		!strings.Contains(incidents[0].Reason, "Radar first was marked urgent. Agent reason: individual urgent action remains visible") ||
+		len(incidents[0].Plants) != 2 {
 		t.Fatalf("incident=%#v", incidents[0])
 	}
 }

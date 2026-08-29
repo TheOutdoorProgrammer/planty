@@ -97,12 +97,25 @@ struct WorkflowClientTests {
         #expect(incident.plants.first?.action == .urgent)
         #expect(incident.evidence.sensorLinkIDs.isEmpty)
         #expect(incident.evidence.note == "Two signals moved together.")
+        #expect(incident.reason == "Both plant agents reported leaf damage.")
+
+        let legacyJSON = incidentJSON.replacingOccurrences(
+            of: "\"reason\":\"Both plant agents reported leaf damage.\",",
+            with: ""
+        )
+        let legacy = try PlantyCoders.decoder().decode(GardenIncident.self, from: Data(legacyJSON.utf8))
+        #expect(legacy.reason == legacy.summary)
     }
 
     @Test("Resolution uses the contract outcome and Planty incident ID")
     func incidentResolutionRoute() async throws {
         let stub = IsolatedStubTransport()
-        stub.respond(json: incidentJSON.replacingOccurrences(of: "\"status\":\"open\"", with: "\"status\":\"resolved\""))
+        stub.respond(
+            json: incidentJSON.replacingOccurrences(
+                of: "\"status\":\"open\"",
+                with: "\"status\":\"resolved\""
+            )
+        )
         let incidentID = UUID(uuidString: "44444444-4444-4444-4444-444444444444")!
 
         _ = try await stub.client().resolveIncident(
@@ -146,11 +159,17 @@ struct WorkflowClientTests {
         """
         {"id":"\(windowID.uuidString)","kind":"recheck","status":"proposed",
          "plant_ids":["\(plantID.uuidString)"],"intervention_kind":"watered",
-         "baseline":[{"plant_id":"\(plantID.uuidString)","kind":"photo","id":"\(photoID.uuidString)","phase":"baseline"}],
+         "baseline":[{
+             "plant_id":"\(plantID.uuidString)","kind":"photo",
+             "id":"\(photoID.uuidString)","phase":"baseline"
+         }],
          "expected":[{"plant_id":"\(plantID.uuidString)","kind":"photo","instruction":"Same angle"}],"review":[],
          "earliest_review_at":"2026-08-25T14:00:00Z","latest_review_at":"2026-08-28T12:00:00Z",
          "proposed_by":"app","proposed_actor":"owner",
-         "guardrail":{"reason":"Wait for delivery evidence before watering again.","conflicting_kinds":["watered"],"red_flags":["rapid collapse"]},
+         "guardrail":{
+             "reason":"Wait for delivery evidence before watering again.",
+             "conflicting_kinds":["watered"],"red_flags":["rapid collapse"]
+         },
          "overrides":[],"created_at":"2026-08-25T12:00:00Z","updated_at":"2026-08-25T12:00:00Z"}
         """
     }
@@ -160,9 +179,19 @@ struct WorkflowClientTests {
         {"id":"44444444-4444-4444-4444-444444444444","status":"open",
          "suspected_factor_type":"location","suspected_factor_ref":"Living room",
          "summary":"Two plants declined together.","confidence":0.7,
-         "evidence":{"run_id":"55555555-5555-5555-5555-555555555555","verdict_ids":["66666666-6666-6666-6666-666666666666"],"note":"Two signals moved together."},
+         "reason":"Both plant agents reported leaf damage.",
+         "evidence":{
+             "run_id":"55555555-5555-5555-5555-555555555555",
+             "verdict_ids":["66666666-6666-6666-6666-666666666666"],
+             "note":"Two signals moved together."
+         },
          "detected_run_id":"55555555-5555-5555-5555-555555555555",
-         "plants":[{"plant":\(ModelDecodingTests.monaJSON),"role":"affected","verdict_id":"66666666-6666-6666-6666-666666666666","action":"urgent","confidence":0.8,"first_seen_at":"2026-08-25T10:00:00Z","last_seen_at":"2026-08-25T12:00:00Z"}],
+         "plants":[{
+             "plant":\(ModelDecodingTests.monaJSON),"role":"affected",
+             "verdict_id":"66666666-6666-6666-6666-666666666666",
+             "action":"urgent","confidence":0.8,
+             "first_seen_at":"2026-08-25T10:00:00Z","last_seen_at":"2026-08-25T12:00:00Z"
+         }],
          "first_seen_at":"2026-08-25T10:00:00Z","last_seen_at":"2026-08-25T12:00:00Z",
          "created_at":"2026-08-25T12:00:00Z","updated_at":"2026-08-25T12:00:00Z"}
         """

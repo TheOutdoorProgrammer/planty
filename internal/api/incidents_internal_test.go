@@ -59,6 +59,7 @@ func TestIncidentHandlersListAcknowledgeAndResolve(t *testing.T) {
 	}
 	incident, _, err := db.UpsertIncidentCandidate(ctx, plant.IncidentCandidate{
 		Factor: plant.FactorLocation, FactorRef: "office", Summary: "Shared factor worth checking",
+		Reason:     "Both plant agents reported new leaf damage in the office.",
 		Confidence: 0.7, Evidence: plant.IncidentEvidence{RunID: run.ID, VerdictIDs: []uuid.UUID{firstVerdict.ID, secondVerdict.ID}},
 		Plants: []plant.IncidentPlant{{Plant: first, VerdictID: firstVerdict.ID}, {Plant: second, VerdictID: secondVerdict.ID}},
 	})
@@ -70,6 +71,9 @@ func TestIncidentHandlersListAcknowledgeAndResolve(t *testing.T) {
 	server.listIncidents(list, httptest.NewRequest(http.MethodGet, "/v1/incidents?status=open", nil))
 	if list.Code != http.StatusOK {
 		t.Fatalf("list status=%d body=%s", list.Code, list.Body.String())
+	}
+	if !bytes.Contains(list.Body.Bytes(), []byte(`"reason":"Both plant agents reported new leaf damage in the office."`)) {
+		t.Fatalf("list omitted incident reason: %s", list.Body.String())
 	}
 	call := func(handler func(http.ResponseWriter, *http.Request), path, id, body string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(http.MethodPost, path, bytes.NewBufferString(body))

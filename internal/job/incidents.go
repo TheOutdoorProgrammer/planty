@@ -10,6 +10,9 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 const CommonCareWindow = 30 * time.Minute
@@ -18,11 +21,21 @@ type IncidentRadar struct {
 	Store *store.Store
 }
 
-func (r IncidentRadar) Run(ctx context.Context, runID uuid.UUID) ([]plant.GardenIncident, error) {
+func (r IncidentRadar) Run(ctx context.Context, runID uuid.UUID) (incidents []plant.GardenIncident, runErr error) {
+	ctx, span := otel.Tracer("planty/incidents").Start(ctx, "incident.detect")
+	defer func() {
+		if runErr != nil {
+			span.RecordError(runErr)
+			span.SetStatus(codes.Error, "incident detection failed")
+		}
+		span.End()
+	}()
+
 	run, signals, err := r.Store.IncidentSignalsForRun(ctx, runID)
 	if err != nil {
 		return nil, err
 	}
+	span.SetAttributes(attribute.Int("incident.signal_count", len(signals)))
 	if len(signals) == 0 {
 		return []plant.GardenIncident{}, nil
 	}
@@ -127,14 +140,23 @@ func (r IncidentRadar) Run(ctx context.Context, runID uuid.UUID) ([]plant.Garden
 		}
 		return candidates[i].Factor < candidates[j].Factor
 	})
-	incidents := make([]plant.GardenIncident, 0, len(candidates))
+	incidents = make([]plant.GardenIncident, 0, len(candidates))
+	createdCount := 0
 	for _, candidate := range candidates {
-		incident, _, err := r.Store.UpsertIncidentCandidate(ctx, candidate)
+		incident, created, err := r.Store.UpsertIncidentCandidate(ctx, candidate)
 		if err != nil {
 			return nil, err
 		}
+		if created {
+			createdCount++
+		}
 		incidents = append(incidents, incident)
 	}
+	span.SetAttributes(
+		attribute.Int("incident.candidate_count", len(candidates)),
+		attribute.Int("incident.created_count", createdCount),
+		attribute.Int("incident.refreshed_count", len(candidates)-createdCount),
+	)
 	return incidents, nil
 }
 
@@ -168,12 +190,30 @@ func incidentCandidate(runID uuid.UUID, factor plant.IncidentFactor, ref string,
 		confidence = 0.55
 	}
 	return plant.IncidentCandidate{
-		Factor: factor, FactorRef: ref, Summary: summary, Confidence: confidence, Plants: members,
+		Factor: factor, FactorRef: ref, Summary: summary, Reason: incidentReason(summary, signals),
+		Confidence: confidence, Plants: members,
 		Evidence: plant.IncidentEvidence{
 			RunID: runID, VerdictIDs: verdictIDs, ObservationIDs: observationIDs,
 			SensorLinkIDs: sensorIDs, Note: "Deterministic correlation only; this does not establish causation.",
 		},
 	}
+}
+
+func incidentReason(summary string, signals []store.IncidentSignal) string {
+	findings := make([]string, 0, len(signals))
+	for _, signal := range signals {
+		reasoning := strings.TrimSpace(signal.Reasoning)
+		if reasoning == "" {
+			continue
+		}
+		findings = append(findings, fmt.Sprintf("%s was marked %s. Agent reason: %s",
+			signal.Plant.CommonName, signal.Action, reasoning))
+	}
+	sort.Strings(findings)
+	if len(findings) == 0 {
+		return summary
+	}
+	return summary + " " + strings.Join(findings, " ")
 }
 
 func commonCareCandidates(runID uuid.UUID, signals []store.IncidentSignal, care []store.IncidentCareSignal) []plant.IncidentCandidate {

@@ -61,6 +61,7 @@ type GardenIncident struct {
 	SuspectedFactorType IncidentFactor      `json:"suspected_factor_type"`
 	SuspectedFactorRef  string              `json:"suspected_factor_ref"`
 	Summary             string              `json:"summary"`
+	Reason              string              `json:"reason"`
 	Confidence          float64             `json:"confidence"`
 	Evidence            IncidentEvidence    `json:"evidence"`
 	DetectedRunID       uuid.UUID           `json:"detected_run_id"`
@@ -81,14 +82,16 @@ type IncidentCandidate struct {
 	Factor     IncidentFactor
 	FactorRef  string
 	Summary    string
+	Reason     string
 	Confidence float64
 	Evidence   IncidentEvidence
 	Plants     []IncidentPlant
 }
 
 func (c IncidentCandidate) Valid() error {
-	if c.Evidence.RunID == uuid.Nil || strings.TrimSpace(c.FactorRef) == "" || strings.TrimSpace(c.Summary) == "" {
-		return invalid("incident run, factor reference, and summary are required")
+	if c.Evidence.RunID == uuid.Nil || strings.TrimSpace(c.FactorRef) == "" ||
+		strings.TrimSpace(c.Summary) == "" || strings.TrimSpace(c.Reason) == "" {
+		return invalid("incident run, factor reference, summary, and reason are required")
 	}
 	if !finite(c.Confidence) || c.Confidence < 0 || c.Confidence > 1 {
 		return invalid("incident confidence must be between zero and one")

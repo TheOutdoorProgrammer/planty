@@ -14,7 +14,7 @@ import (
 )
 
 const incidentColumns = `id, status, suspected_factor_type, suspected_factor_ref,
-	summary, confidence, evidence, detected_run_id, first_seen_at, last_seen_at,
+	summary, reason, confidence, evidence, detected_run_id, first_seen_at, last_seen_at,
 	acknowledged_at, acknowledged_by, resolved_at, resolved_by, resolution,
 	conclusion, created_at, updated_at`
 
@@ -22,6 +22,7 @@ type IncidentSignal struct {
 	Plant      plant.Plant
 	VerdictID  uuid.UUID
 	Action     plant.Action
+	Reasoning  string
 	Confidence float64
 }
 
@@ -62,11 +63,11 @@ func (s *Store) IncidentSignalsForRun(ctx context.Context, runID uuid.UUID) (Jud
 	}
 
 	rows, err := s.pool.Query(ctx, `
-		SELECT `+plantColumnsFor("p")+`, v.id, v.action, v.confidence
+		SELECT `+plantColumnsFor("p")+`, v.id, v.action, v.reasoning, v.confidence
 		FROM judgment_results jr
 		JOIN plants p ON p.id = jr.plant_id
 		JOIN LATERAL (
-			SELECT id, action, confidence FROM verdicts
+			SELECT id, action, reasoning, confidence FROM verdicts
 			WHERE plant_id = p.id AND created_at >= $2 AND created_at <= $3
 			ORDER BY created_at DESC LIMIT 1
 		) v ON true
@@ -83,7 +84,7 @@ func (s *Store) IncidentSignalsForRun(ctx context.Context, runID uuid.UUID) (Jud
 		var signal IncidentSignal
 		var ps plantScan
 		dest := ps.targets(&signal.Plant)
-		dest = append(dest, &signal.VerdictID, &signal.Action, &signal.Confidence)
+		dest = append(dest, &signal.VerdictID, &signal.Action, &signal.Reasoning, &signal.Confidence)
 		if err := rows.Scan(dest...); err != nil {
 			return run, nil, err
 		}
@@ -206,13 +207,13 @@ func (s *Store) UpsertIncidentCandidate(ctx context.Context, candidate plant.Inc
 	if errors.Is(err, pgx.ErrNoRows) {
 		created = true
 		err = tx.QueryRow(ctx, `INSERT INTO garden_incidents
-			(suspected_factor_type, suspected_factor_ref, summary, confidence, evidence, detected_run_id)
-			VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`, candidate.Factor,
-			candidate.FactorRef, candidate.Summary, candidate.Confidence, raw, candidate.Evidence.RunID).Scan(&id)
+			(suspected_factor_type, suspected_factor_ref, summary, reason, confidence, evidence, detected_run_id)
+			VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`, candidate.Factor,
+			candidate.FactorRef, candidate.Summary, candidate.Reason, candidate.Confidence, raw, candidate.Evidence.RunID).Scan(&id)
 	} else if err == nil {
-		_, err = tx.Exec(ctx, `UPDATE garden_incidents SET summary = $2, confidence = $3,
-			evidence = $4, detected_run_id = $5, last_seen_at = now(), updated_at = now()
-			WHERE id = $1`, id, candidate.Summary, candidate.Confidence, raw, candidate.Evidence.RunID)
+		_, err = tx.Exec(ctx, `UPDATE garden_incidents SET summary = $2, reason = $3, confidence = $4,
+			evidence = $5, detected_run_id = $6, last_seen_at = now(), updated_at = now()
+			WHERE id = $1`, id, candidate.Summary, candidate.Reason, candidate.Confidence, raw, candidate.Evidence.RunID)
 	}
 	if err != nil {
 		return plant.GardenIncident{}, false, classify(err)
@@ -386,7 +387,7 @@ func scanIncident(row interface{ Scan(...any) error }) (plant.GardenIncident, er
 	var incident plant.GardenIncident
 	var raw []byte
 	err := row.Scan(&incident.ID, &incident.Status, &incident.SuspectedFactorType,
-		&incident.SuspectedFactorRef, &incident.Summary, &incident.Confidence, &raw,
+		&incident.SuspectedFactorRef, &incident.Summary, &incident.Reason, &incident.Confidence, &raw,
 		&incident.DetectedRunID, &incident.FirstSeenAt, &incident.LastSeenAt,
 		&incident.AcknowledgedAt, &incident.AcknowledgedBy, &incident.ResolvedAt,
 		&incident.ResolvedBy, &incident.Resolution, &incident.Conclusion,

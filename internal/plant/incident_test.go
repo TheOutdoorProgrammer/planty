@@ -11,8 +11,14 @@ func TestIncidentCandidateRequiresIndependentEvidence(t *testing.T) {
 	member := IncidentPlant{Plant: Plant{ID: uuid.New()}, VerdictID: uuid.New()}
 	candidate := IncidentCandidate{
 		Factor: FactorHAArea, FactorRef: "office", Summary: "Shared factor worth checking",
+		Reason:     "Two agents reported urgent leaf damage in the same area.",
 		Confidence: 0.6, Evidence: IncidentEvidence{RunID: uuid.New(), VerdictIDs: []uuid.UUID{member.VerdictID}}, Plants: []IncidentPlant{member},
 	}
+	candidate.Reason = ""
+	if !errors.Is(candidate.Valid(), ErrInvalid) {
+		t.Fatal("an incident without a reason was accepted")
+	}
+	candidate.Reason = "Two agents reported urgent leaf damage in the same area."
 	if !errors.Is(candidate.Valid(), ErrInvalid) {
 		t.Fatal("one plant without independent system evidence opened an incident")
 	}

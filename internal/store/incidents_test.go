@@ -26,6 +26,7 @@ func TestIncidentLifecycleRequiresCompleteRunAndPreservesMembers(t *testing.T) {
 	}
 	candidate := plant.IncidentCandidate{
 		Factor: plant.FactorLocation, FactorRef: "office", Summary: "Shared factor worth checking",
+		Reason:     "Both plant agents reported new leaf damage in the office.",
 		Confidence: 0.75, Evidence: plant.IncidentEvidence{RunID: run.ID, VerdictIDs: []uuid.UUID{firstVerdict.ID, secondVerdict.ID}},
 		Plants: []plant.IncidentPlant{
 			{Plant: first, VerdictID: firstVerdict.ID, Action: plant.ActionUrgent},
@@ -47,6 +48,9 @@ func TestIncidentLifecycleRequiresCompleteRunAndPreservesMembers(t *testing.T) {
 	incident, created, err := s.UpsertIncidentCandidate(ctx, candidate)
 	if err != nil || !created || len(incident.Plants) != 2 {
 		t.Fatalf("incident=%#v created=%v err=%v", incident, created, err)
+	}
+	if incident.Reason != candidate.Reason {
+		t.Fatalf("reason=%q", incident.Reason)
 	}
 	incident, err = s.AcknowledgeIncident(ctx, incident.ID, "Joey")
 	if err != nil || incident.Status != plant.IncidentAcknowledged {

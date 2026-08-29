@@ -6,7 +6,10 @@ struct IncidentRadarSection: View {
     var body: some View {
         if !session.incidents.unresolved.isEmpty {
             VStack(alignment: .leading, spacing: 12) {
-                SectionHeading("Garden Incident Radar", detail: "Shared timing is a lead to investigate. Correlation is not causation.")
+                SectionHeading(
+                    "Garden Incident Radar",
+                    detail: "Shared timing is a lead to investigate. Correlation is not causation."
+                )
                 ForEach(session.incidents.unresolved) { incident in
                     NavigationLink { IncidentDetailScreen(incidentID: incident.id) } label: {
                         IncidentCard(incident: incident)
@@ -32,7 +35,7 @@ private struct IncidentCard: View {
                 Spacer(minLength: 8)
                 Text(incident.status.label).font(.caption.weight(.semibold))
             }
-            Text(incident.summary).font(.subheadline)
+            IncidentReasonPanel(reason: incident.reason, compact: true)
             Text("Suspected factor: \(incident.suspectedFactorType.label) · \(incident.suspectedFactorRef)")
                 .font(.caption).foregroundStyle(PlantyColor.secondaryText)
             Divider().overlay(PlantyColor.quietDecoration)
@@ -40,7 +43,9 @@ private struct IncidentCard: View {
                 HStack(alignment: .firstTextBaseline) {
                     Text(member.plant.commonName).font(.subheadline.weight(.semibold))
                     Spacer()
-                    Text(member.action.shortLabel).font(.subheadline).foregroundStyle(member.action == .urgent ? PlantyColor.red : PlantyColor.orange)
+                    Text(member.action.shortLabel)
+                        .font(.subheadline)
+                        .foregroundStyle(member.action == .urgent ? PlantyColor.red : PlantyColor.orange)
                 }
             }
             Text("Keep handling each urgent plant action individually while investigating the possible connection.")
@@ -63,21 +68,33 @@ private struct IncidentDetailScreen: View {
         List {
             if let incident {
                 Section {
-                    Text("Correlation is not causation. This groups inspectable signals into a hypothesis; it does not replace any plant's individual urgent action.")
+                    Text(
+                        "Correlation is not causation. This groups inspectable signals into a hypothesis; " +
+                            "it does not replace any plant's individual urgent action."
+                    )
                         .font(.subheadline).foregroundStyle(PlantyColor.secondaryText)
                 }
+                Section {
+                    IncidentReasonPanel(reason: incident.reason, compact: false)
+                }
                 Section("Suspected connection") {
-                    Text(incident.summary)
                     LabeledContent("Factor", value: incident.suspectedFactorType.label)
                     LabeledContent("Reference", value: incident.suspectedFactorRef)
-                    LabeledContent("Confidence", value: incident.confidence.formatted(.percent.precision(.fractionLength(0))))
+                    LabeledContent(
+                        "Confidence",
+                        value: incident.confidence.formatted(.percent.precision(.fractionLength(0)))
+                    )
                     Text(incident.evidence.note).font(.caption).foregroundStyle(PlantyColor.secondaryText)
                 }
                 Section("Affected plants — keep actions separate") {
                     ForEach(incident.plants) { member in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(member.plant.commonName).font(.headline)
-                            Label(member.action.shortLabel, systemImage: member.action == .urgent ? "exclamationmark.triangle.fill" : "hand.raised.fill")
+                            Label(
+                                member.action.shortLabel,
+                                systemImage: member.action == .urgent
+                                    ? "exclamationmark.triangle.fill" : "hand.raised.fill"
+                            )
                                 .foregroundStyle(member.action == .urgent ? PlantyColor.red : PlantyColor.orange)
                             Text("Last signal \(member.lastSeenAt.formatted(date: .abbreviated, time: .shortened))")
                                 .font(.caption).foregroundStyle(PlantyColor.secondaryText)
@@ -92,7 +109,11 @@ private struct IncidentDetailScreen: View {
                 }
                 if let failure { Section { SheetErrorRow(headline: "The incident was not changed.", error: failure) } }
                 if incident.status == .open {
-                    Section { Button("Acknowledge investigation") { Task { failure = await session.incidents.acknowledge(incident) } } }
+                    Section {
+                        Button("Acknowledge investigation") {
+                            Task { failure = await session.incidents.acknowledge(incident) }
+                        }
+                    }
                 }
                 if incident.status != .resolved {
                     Section { Button("Resolve with evidence…") { resolves = true } }
@@ -137,7 +158,10 @@ private struct IncidentResolutionSheet: View {
             .plantyPage().navigationTitle("Resolve incident").navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) { Button("Resolve") { Task { await submit() } }.disabled(conclusion.cleaned.isEmpty) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Resolve") { Task { await submit() } }
+                        .disabled(conclusion.cleaned.isEmpty)
+                }
             }
         }
     }
@@ -145,6 +169,31 @@ private struct IncidentResolutionSheet: View {
     private func submit() async {
         failure = await session.incidents.resolve(incident, outcome: outcome, conclusion: conclusion)
         if failure == nil { dismiss() }
+    }
+}
+
+private struct IncidentReasonPanel: View {
+    let reason: String
+    let compact: Bool
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(PlantyColor.orange)
+                .frame(width: 4)
+            VStack(alignment: .leading, spacing: 4) {
+                Label("Why this is an incident", systemImage: "text.magnifyingglass")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(PlantyColor.orange)
+                Text(reason)
+                    .font(.subheadline)
+                    .foregroundStyle(PlantyColor.foreground)
+                    .lineLimit(compact ? 5 : nil)
+            }
+        }
+        .padding(12)
+        .background(PlantyColor.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 12))
+        .accessibilityElement(children: .combine)
     }
 }
 
