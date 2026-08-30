@@ -42,13 +42,15 @@ struct HomeAssistantEntity: Codable, Sendable, Hashable, Identifiable {
         let tokens = discoveryTokens
         switch role {
         case .soilMoisture:
-            return deviceClass == "moisture" || tokens.containsAny("soil", "moisture", "wetness", "substrate", "miflora")
+            return deviceClass == "moisture"
+                || tokens.containsAny("soil", "moisture", "wetness", "substrate", "miflora")
         case .ambientTemp:
             return deviceClass == "temperature" || tokens.containsAny("temperature", "temp")
         case .ambientHumidity:
             return deviceClass == "humidity" || tokens.containsAny("humidity", "humid")
         case .illuminance:
-            return deviceClass == "illuminance" || tokens.containsAny("illuminance", "lux", "light", "brightness")
+            return deviceClass == "illuminance"
+                || tokens.containsAny("illuminance", "lux", "light", "brightness")
         case .unknown:
             return true
         }
@@ -56,12 +58,17 @@ struct HomeAssistantEntity: Codable, Sendable, Hashable, Identifiable {
 
     private var discoveryTokens: Set<String> {
         let text = [entityID, friendlyName, deviceClass ?? ""].joined(separator: " ")
-        return Set(text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty })
+        let components = text.lowercased().components(separatedBy: CharacterSet.alphanumerics.inverted)
+        return Set(components.filter { !$0.isEmpty })
     }
 }
 
 private extension Set where Element == String {
     func containsAny(_ candidates: String...) -> Bool { candidates.contains(where: contains) }
+}
+
+extension SensorRole {
+    var requiresCalibration: Bool { self == .soilMoisture }
 }
 
 struct HomeAssistantEntityListResponse: Decodable, Sendable {
@@ -73,7 +80,11 @@ enum HomeAssistantEntityFilter {
         ordered(entities.filter { $0.matches(search: query) })
     }
 
-    static func likely(in entities: [HomeAssistantEntity], for role: SensorRole, matching query: String = "") -> [HomeAssistantEntity] {
+    static func likely(
+        in entities: [HomeAssistantEntity],
+        for role: SensorRole,
+        matching query: String = ""
+    ) -> [HomeAssistantEntity] {
         all(in: entities, matching: query).filter { $0.isLikely(for: role) }
     }
 
@@ -88,7 +99,7 @@ enum HomeAssistantEntityFilter {
 }
 
 /// A Home Assistant entity tied to a plant, or to a zone when plantID is nil.
-/// Calibration lives here because it belongs to a probe in a pot, not a plant.
+/// Soil calibration follows the probe when its plant changes.
 struct SensorLink: Codable, Sendable, Hashable, Identifiable {
     let id: UUID
     var plantID: UUID?

@@ -87,9 +87,9 @@ A plant is watched by zero or more Home Assistant entities.
 | `wet_baseline` | numeric null | |
 | `calibrated_at` | timestamptz null | |
 
-**Calibration belongs here, not on the plant.** A raw percentage is meaningless until dry and saturated are recorded for that probe in that soil in that pot. Two sensors' absolute numbers are never comparable, so every threshold is expressed relative to that link's own baselines.
+**Soil calibration belongs here, not on the plant.** A raw moisture percentage is meaningless until dry and saturated are recorded for that probe in that soil in that pot. Two soil sensors' absolute numbers are never comparable, so every moisture threshold is expressed relative to that link's own baselines. Temperature, humidity, and illuminance use their reported values directly.
 
-An uncalibrated link produces readings but must never produce an automated watering decision. Confident wrong alerts are worse than no alerts.
+An uncalibrated soil link produces readings but must never produce an automated watering decision. Confident wrong alerts are worse than no alerts.
 
 ## Plant-dedicated actuators
 

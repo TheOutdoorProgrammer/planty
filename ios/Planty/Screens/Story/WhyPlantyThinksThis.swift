@@ -77,7 +77,7 @@ struct SensorChartCard: View {
                     .foregroundStyle(PlantyColor.secondaryText)
             }
 
-            if !series.link.isCalibrated {
+            if series.link.role.requiresCalibration && !series.link.isCalibrated {
                 Label(
                     "Not calibrated. These numbers cannot drive a decision.",
                     systemImage: "exclamationmark.triangle"

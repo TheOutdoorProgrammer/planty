@@ -126,7 +126,7 @@ func TestFractionNeedsCalibration(t *testing.T) {
 
 func TestFractionIsRelativeToItsOwnBaselines(t *testing.T) {
 	dry, wet := 20.0, 60.0
-	link := SensorLink{DryBaseline: &dry, WetBaseline: &wet}
+	link := SensorLink{Role: RoleSoilMoisture, DryBaseline: &dry, WetBaseline: &wet}
 
 	for _, tc := range []struct{ raw, want float64 }{
 		{20, 0},
@@ -147,8 +147,19 @@ func TestFractionIsRelativeToItsOwnBaselines(t *testing.T) {
 
 func TestCalibratedRejectsInvertedBaselines(t *testing.T) {
 	dry, wet := 60.0, 20.0
-	if (SensorLink{DryBaseline: &dry, WetBaseline: &wet}).Calibrated() {
+	if (SensorLink{Role: RoleSoilMoisture, DryBaseline: &dry, WetBaseline: &wet}).Calibrated() {
 		t.Fatal("wet must exceed dry for a probe to count as calibrated")
+	}
+}
+
+func TestOnlySoilMoistureRequiresCalibration(t *testing.T) {
+	if !RoleSoilMoisture.RequiresCalibration() {
+		t.Fatal("soil moisture must require probe-relative calibration")
+	}
+	for _, role := range []SensorRole{RoleAmbientTemp, RoleAmbientHumidity, RoleIlluminance} {
+		if role.RequiresCalibration() {
+			t.Errorf("%s unexpectedly requires calibration", role)
+		}
 	}
 }
 

@@ -38,12 +38,19 @@ func (s *Store) LinkSensor(ctx context.Context, l plant.SensorLink) (plant.Senso
 	return scanSensor(row)
 }
 
-// Calibrate records this probe's own dry and wet baselines.
+// Calibrate records a soil probe's own dry and wet baselines.
 func (s *Store) Calibrate(ctx context.Context, id uuid.UUID, dry, wet float64) (plant.SensorLink, error) {
 	if wet <= dry {
 		return plant.SensorLink{}, fmt.Errorf(
 			"%w: wet baseline must exceed dry baseline, or every reading maps backwards",
 			plant.ErrInvalid)
+	}
+	var role plant.SensorRole
+	if err := s.pool.QueryRow(ctx, `SELECT role FROM sensor_links WHERE id = $1`, id).Scan(&role); err != nil {
+		return plant.SensorLink{}, classify(err)
+	}
+	if !role.RequiresCalibration() {
+		return plant.SensorLink{}, fmt.Errorf("%w: only soil moisture sensors can be calibrated", plant.ErrInvalid)
 	}
 	row := s.pool.QueryRow(ctx, `
 		UPDATE sensor_links

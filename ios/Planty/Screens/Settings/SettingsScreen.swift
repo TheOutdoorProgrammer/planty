@@ -233,7 +233,7 @@ struct SettingsScreen: View {
                 SensorListScreen(api: session.api)
             }
         } footer: {
-            Text("An uncalibrated probe reports, but never drives a decision.")
+            Text("An uncalibrated soil probe reports, but never drives a decision.")
         }
     }
 
@@ -344,8 +344,6 @@ enum ProbeResult: Equatable {
     case failed(String)
 }
 
-/// An uncalibrated probe reports and is ignored, which looks identical to a
-/// working one from here, so the state is on every row and tapping fixes it.
 struct SensorListScreen: View {
     let api: any PlantyAPI
 
@@ -375,14 +373,19 @@ struct SensorListScreen: View {
                 emptyState
             }
             ForEach(links) { link in
-                Button {
-                    calibrating = link
-                } label: {
+                if link.role.requiresCalibration {
+                    Button {
+                        calibrating = link
+                    } label: {
+                        row(for: link)
+                    }
+                    .buttonStyle(.plain)
+                    .listRowBackground(PlantyColor.surface)
+                    .accessibilityHint("Opens calibration.")
+                } else {
                     row(for: link)
+                        .listRowBackground(PlantyColor.surface)
                 }
-                .buttonStyle(.plain)
-                .listRowBackground(PlantyColor.surface)
-                .accessibilityHint("Opens calibration.")
             }
         }
         .scrollContentBackground(.hidden)
@@ -434,12 +437,18 @@ struct SensorListScreen: View {
             Text(link.role.label)
                 .font(.caption)
                 .foregroundStyle(PlantyColor.secondaryText)
-            Label(
-                link.isCalibrated ? "Calibrated" : "Not calibrated, so it cannot drive watering",
-                systemImage: link.isCalibrated ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
-            )
-            .font(.caption)
-            .foregroundStyle(link.isCalibrated ? PlantyColor.green : PlantyColor.yellow)
+            if link.role.requiresCalibration {
+                Label(
+                    link.isCalibrated ? "Calibrated" : "Not calibrated, so it cannot drive watering",
+                    systemImage: link.isCalibrated ? "checkmark.seal.fill" : "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(link.isCalibrated ? PlantyColor.green : PlantyColor.yellow)
+            } else {
+                Label("Uses the reported value directly", systemImage: "checkmark.seal.fill")
+                    .font(.caption)
+                    .foregroundStyle(PlantyColor.green)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())

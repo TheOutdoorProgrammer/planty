@@ -177,8 +177,6 @@ func (d Deps) printReadings(ctx context.Context, out io.Writer, p plant.Plant) e
 	return nil
 }
 
-// readingLine says what one probe knows, in that probe's own terms: a raw
-// number without its baselines is deliberately reported as meaning nothing.
 func (d Deps) readingLine(ctx context.Context, link plant.SensorLink) string {
 	latest, err := d.Store.LatestReading(ctx, link.ID)
 	if errors.Is(err, store.ErrNotFound) {
@@ -187,8 +185,15 @@ func (d Deps) readingLine(ctx context.Context, link plant.SensorLink) string {
 	if err != nil {
 		return "readings unavailable"
 	}
+	return describeReading(link, latest)
+}
 
-	line := fmt.Sprintf("%g raw at %s", latest.Value, latest.TakenAt.Format(stamp))
+func describeReading(link plant.SensorLink, latest plant.Reading) string {
+	line := fmt.Sprintf("%g%s at %s", latest.Value, latest.Unit, latest.TakenAt.Format(stamp))
+	if !link.Role.RequiresCalibration() {
+		return line
+	}
+	line = fmt.Sprintf("%g raw%s at %s", latest.Value, latest.Unit, latest.TakenAt.Format(stamp))
 	if fraction, err := link.Fraction(latest.Value); err == nil {
 		line += fmt.Sprintf(", %.0f%% of its range", fraction*100)
 	} else {
@@ -315,9 +320,12 @@ func (d Deps) sensors(ctx context.Context, out io.Writer, args []string) error {
 		if link.PlantID != nil {
 			subject = names[*link.PlantID]
 		}
-		calibration := "NOT calibrated, so it cannot drive watering"
-		if link.Calibrated() {
-			calibration = fmt.Sprintf("calibrated dry %g wet %g", *link.DryBaseline, *link.WetBaseline)
+		calibration := "uses its reported value directly"
+		if link.Role.RequiresCalibration() {
+			calibration = "NOT calibrated, so it cannot drive watering"
+			if link.Calibrated() {
+				calibration = fmt.Sprintf("calibrated dry %g wet %g", *link.DryBaseline, *link.WetBaseline)
+			}
 		}
 		_, _ = fmt.Fprintf(out, "%s (%s) watching %s; %s; latest: %s\n",
 			link.HAEntityID, link.Role, subject, calibration, d.readingLine(ctx, link))

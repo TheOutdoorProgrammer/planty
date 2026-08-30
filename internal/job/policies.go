@@ -323,7 +323,7 @@ func BuildPolicyInput(ctx context.Context, db *store.Store, subject plant.Plant,
 			return input, err
 		}
 		fact := policy.SensorFact{
-			ReadingID: reading.ID, Raw: reading.Value, Calibrated: link.Calibrated(),
+			ReadingID: reading.ID, Raw: reading.Value, Unit: reading.Unit, Calibrated: link.Calibrated(),
 			TakenAt: reading.TakenAt, AgeMinutes: now.Sub(reading.TakenAt).Minutes(),
 			Stale: now.Sub(reading.TakenAt) > plant.StaleAfter,
 		}

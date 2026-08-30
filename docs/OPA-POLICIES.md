@@ -72,8 +72,9 @@ Sensor roles are `soil_moisture`, `ambient_temp`, `ambient_humidity`, and `illum
 | --- | --- | --- |
 | `reading_id` | UUID | Durable reading record. |
 | `raw` | number | Home Assistant value. |
+| `unit` | string, optional | Home Assistant unit for the raw value. |
 | `fraction` | 0 through 1, optional | Probe-relative value between its own dry and wet calibration points. |
-| `calibrated` | boolean | Whether the fraction is safe to use for a decision. |
+| `calibrated` | boolean | Whether a soil fraction is safe to use. Raw temperature, humidity, and illuminance do not require calibration. |
 | `taken_at` | timestamp | Reading time. |
 | `age_minutes` | number | Reading age. |
 | `stale` | boolean | Older than Planty's 36-hour evidence freshness boundary. |

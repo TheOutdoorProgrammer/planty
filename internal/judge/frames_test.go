@@ -52,6 +52,22 @@ func TestDescribeFlagsUncalibratedProbes(t *testing.T) {
 	}
 }
 
+func TestDescribeTrustsTemperatureWithoutSoilCalibration(t *testing.T) {
+	got := describe(Evidence{
+		Plant: plant.Plant{CommonName: "Fern", WateringMethod: plant.WateringHand},
+		Sensors: []SensorState{{
+			Role: plant.RoleAmbientTemp, Raw: 68.5, Unit: "°F", TakenAt: time.Now(),
+		}},
+	})
+
+	if !strings.Contains(got, "ambient_temp: 68.5 °F") {
+		t.Errorf("temperature is missing from the evidence:\n%s", got)
+	}
+	if strings.Contains(got, "NOT CALIBRATED") {
+		t.Errorf("temperature was subjected to soil calibration:\n%s", got)
+	}
+}
+
 func TestDescribeSaysWhenNothingWasEverWatered(t *testing.T) {
 	got := describe(Evidence{
 		Plant: plant.Plant{CommonName: "New arrival", WateringMethod: plant.WateringHand},

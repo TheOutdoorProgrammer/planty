@@ -252,12 +252,12 @@ type PhotoEvidence struct {
 	Frame   Frame
 }
 
-// SensorState is one probe's latest reading, expressed against its own
-// baselines because two probes' absolute numbers are never comparable.
+// SensorState is one probe's latest reading and optional soil normalization.
 type SensorState struct {
 	ReadingID  uuid.UUID
 	Role       plant.SensorRole
 	Raw        float64
+	Unit       string
 	Fraction   *float64
 	Calibrated bool
 	TakenAt    time.Time
@@ -595,13 +595,21 @@ func describe(e Evidence) string {
 		b.WriteString("  none, this plant has no sensor\n")
 	}
 	for _, s := range e.Sensors {
-		if !s.Calibrated {
+		if s.Role.RequiresCalibration() && !s.Calibrated {
 			fmt.Fprintf(&b, "  %s: raw %.1f, NOT CALIBRATED so not trustworthy (%s ago)\n",
 				s.Role, s.Raw, ago(s.TakenAt))
 			continue
 		}
-		fmt.Fprintf(&b, "  %s: %.0f%% between its own dry and wet marks (%s ago)\n",
-			s.Role, *s.Fraction*100, ago(s.TakenAt))
+		if s.Role.RequiresCalibration() && s.Fraction != nil {
+			fmt.Fprintf(&b, "  %s: %.0f%% between its own dry and wet marks (%s ago)\n",
+				s.Role, *s.Fraction*100, ago(s.TakenAt))
+			continue
+		}
+		unit := strings.TrimSpace(s.Unit)
+		if unit != "" {
+			unit = " " + unit
+		}
+		fmt.Fprintf(&b, "  %s: %.1f%s (%s ago)\n", s.Role, s.Raw, unit, ago(s.TakenAt))
 	}
 	if e.AmbientTempF != nil {
 		fmt.Fprintf(&b, "  ambient: %.0fF", *e.AmbientTempF)

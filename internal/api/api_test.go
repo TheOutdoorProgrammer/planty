@@ -738,6 +738,20 @@ func TestSensorLinkAndCalibration(t *testing.T) {
 	if out["calibrated_at"] == nil {
 		t.Error("calibration should record when it happened")
 	}
+
+	rec, linked = do(t, h, http.MethodPost, "/v1/sensors", map[string]any{
+		"plant_id":     p.ID.String(),
+		"ha_entity_id": "sensor." + slug + "_temperature",
+		"role":         "ambient_temp",
+	})
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("link temperature: got %d, body %s", rec.Code, rec.Body.String())
+	}
+	id, _ = linked["id"].(string)
+	if rec, _ := do(t, h, http.MethodPatch, "/v1/sensors/"+id,
+		map[string]any{"dry_baseline": 20, "wet_baseline": 70}); rec.Code != http.StatusBadRequest {
+		t.Errorf("temperature calibration: got %d, want 400", rec.Code)
+	}
 }
 
 func TestPlantDetailReturnsSensorLinksWithContractReadings(t *testing.T) {

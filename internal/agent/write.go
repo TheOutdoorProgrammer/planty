@@ -491,7 +491,7 @@ func (d Deps) link(ctx context.Context, out io.Writer, args []string) error {
 		return err
 	}
 	line := fmt.Sprintf("linked %s as %s for %s", saved.HAEntityID, saved.Role, subject)
-	if !saved.Calibrated() {
+	if saved.Role.RequiresCalibration() && !saved.Calibrated() {
 		line += "; calibrate it before its readings can drive anything"
 	}
 	_, _ = fmt.Fprintln(out, line)

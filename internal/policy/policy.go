@@ -159,6 +159,7 @@ type SensorFacts struct {
 type SensorFact struct {
 	ReadingID  uuid.UUID `json:"reading_id"`
 	Raw        float64   `json:"raw"`
+	Unit       string    `json:"unit,omitempty"`
 	Fraction   *float64  `json:"fraction,omitempty"`
 	Calibrated bool      `json:"calibrated"`
 	TakenAt    time.Time `json:"taken_at"`

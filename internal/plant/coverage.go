@@ -43,7 +43,7 @@ func (c *EvidenceCoverage) Prioritize(now time.Time) {
 		c.Why = "The latest visual evidence is more than 30 days old."
 	case c.HasSoilSensor && !c.SoilCalibrated:
 		c.NextBestInput = "Calibrate the soil sensor"
-		c.Why = "An uncalibrated probe cannot support a watering decision."
+		c.Why = "An uncalibrated soil probe cannot support a watering decision."
 	case !c.HealthEstablished:
 		c.NextBestInput = "Establish health from current evidence"
 		c.Why = "Planty keeps health unknown until an evidence-backed baseline exists."

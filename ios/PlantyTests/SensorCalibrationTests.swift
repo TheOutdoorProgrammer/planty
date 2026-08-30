@@ -71,4 +71,12 @@ struct SensorCalibrationTests {
         #expect(!link.isCalibrated)
         #expect(link.fraction(of: 500) == nil)
     }
+
+    @Test("Only soil moisture requires calibration")
+    func calibrationIsRoleSpecific() {
+        #expect(SensorRole.soilMoisture.requiresCalibration)
+        #expect(!SensorRole.ambientTemp.requiresCalibration)
+        #expect(!SensorRole.ambientHumidity.requiresCalibration)
+        #expect(!SensorRole.illuminance.requiresCalibration)
+    }
 }

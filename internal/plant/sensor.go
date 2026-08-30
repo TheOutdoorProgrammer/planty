@@ -17,8 +17,13 @@ const (
 	RoleIlluminance     SensorRole = "illuminance"
 )
 
+// RequiresCalibration reports whether a role needs probe-relative baselines.
+func (r SensorRole) RequiresCalibration() bool {
+	return r == RoleSoilMoisture
+}
+
 // SensorLink ties a Home Assistant entity to a plant, or to a zone when PlantID
-// is nil. Calibration lives here because it belongs to a probe in a pot.
+// is nil. Soil calibration follows the probe when its plant changes.
 type SensorLink struct {
 	ID      uuid.UUID  `json:"id"`
 	PlantID *uuid.UUID `json:"plant_id,omitempty"`
@@ -34,9 +39,10 @@ type SensorLink struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Calibrated reports whether this link may drive an automated decision.
+// Calibrated reports whether a soil link has usable dry and wet baselines.
 func (s SensorLink) Calibrated() bool {
-	return s.DryBaseline != nil && s.WetBaseline != nil && *s.WetBaseline > *s.DryBaseline
+	return s.Role.RequiresCalibration() && s.DryBaseline != nil && s.WetBaseline != nil &&
+		*s.WetBaseline > *s.DryBaseline
 }
 
 // Fraction maps a raw reading onto 0..1 between this probe's own baselines.

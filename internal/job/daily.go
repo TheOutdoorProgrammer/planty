@@ -302,6 +302,7 @@ func (d Daily) gather(ctx context.Context, p plant.Plant) (judge.Evidence, error
 			ReadingID:  reading.ID,
 			Role:       link.Role,
 			Raw:        reading.Value,
+			Unit:       reading.Unit,
 			Calibrated: link.Calibrated(),
 			TakenAt:    reading.TakenAt,
 		}

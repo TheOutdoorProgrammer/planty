@@ -133,8 +133,6 @@ func (s *Server) linkSensor(w http.ResponseWriter, r *http.Request) {
 	s.ok(w, http.StatusCreated, created)
 }
 
-// calibrateSensor records this probe's own dry and wet marks. Nothing may drive
-// an automated watering decision until it has them.
 func (s *Server) calibrateSensor(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
