@@ -3,7 +3,7 @@ package plant
 import "testing"
 
 func TestOnlyTerminalStatusesCanArchiveAPlant(t *testing.T) {
-	for _, status := range []Status{StatusDead, StatusGone} {
+	for _, status := range []Status{StatusDead, StatusRemoved} {
 		if err := status.ValidateArchive(); err != nil {
 			t.Errorf("%s should archive: %v", status, err)
 		}

@@ -40,7 +40,7 @@ The split matters, so it is stated once.
 | `variety` | text null | Cultivar. Matters enormously for edibles, rarely for houseplants |
 | `domain` | enum | The three above |
 | `steward` | text | Who it belongs to. `self`, or a person's name |
-| `status` | enum | `alive`, `struggling`, `dormant`, `dead`, `gone` |
+| `status` | enum | `alive`, `struggling`, `dormant`, `dead`, `removed` |
 | `location` | text | Free text, because "top shelf, greenhouse cabinet" is more useful than an area id |
 | `ha_area` | text null | The Home Assistant area, when there is one |
 | `accessibility` | enum | `easy`, `awkward`, `hard` |
@@ -56,6 +56,14 @@ The split matters, so it is stated once.
 | `care_profile` | jsonb | Domain specific, below |
 | `acquired_at` | date null | |
 | `archived_at` | timestamptz null | Set instead of deleting; restore clears it and returns the plant to `alive` |
+
+`dead` records a confirmed death. `removed` means Planty stopped tracking the plant for another reason, such as transplanting one seedling into its own record. Neither state deletes history.
+
+## plant_lineage
+
+Creating a plant from an existing plant writes one immutable child-to-source relation with a derivation timestamp. The child copies the source's care facts, starts alive with its own identity, and inherits source observations and photos only through that timestamp. Later source events stay with the source. Sensor links and future readings are not inherited because a probe belongs to its current physical plant and pot.
+
+Inherited timeline entries name their source record in the API and app. Chained derivations walk the full ancestry while carrying the earliest applicable cutoff, so history remains correct when a seedling tray becomes a transplant and that transplant later produces another tracked plant.
 
 ### Why `accessibility` is a first-class column
 
@@ -93,8 +101,8 @@ An uncalibrated soil link produces readings but must never produce an automated 
 
 ## Plant-dedicated actuators
 
-`plant_actuators` is the explicit allowlist of Home Assistant `fan` and `switch` entities Planty may control.
-Discovery only offers those two domains for selection and never registers or actuates an entity by guessing from its name.
+`plant_actuators` is the explicit allowlist of Home Assistant `fan`, `switch`, and `light` entities Planty may control.
+Discovery only offers those three domains for selection and never registers or actuates an entity by guessing from its name.
 Every start and stop route takes the Planty actuator UUID, never a caller-supplied Home Assistant entity ID.
 `plant_actuator_plants` assigns each registration to one or more living plants, and registration is refused without that explicit relationship.
 A shared room fan remains one actuator assigned to several plants rather than several registrations for one Home Assistant entity.
@@ -112,6 +120,8 @@ An active actuator cannot be removed until it has been stopped.
 
 Planty owns bounded ad hoc runs only.
 Recurring fan schedules remain Home Assistant automations because duplicating schedule ownership would create two controllers that can disagree about whether a device should be on.
+
+Grow lights use direct on/off commands and one optional daily schedule instead of leases. The schedule stores local start and end minutes plus an IANA timezone, supports windows that cross midnight, and is reconciled every minute. Disabled schedules enforce off. Planty reads Home Assistant state before acting so a correct light is not toggled repeatedly, records every command or failure in the actuator ledger, and never accepts a caller-supplied entity ID. The iOS app and assigned AI agents can create, change, disable, or manually override the schedule. Planty owns these grow-light schedules; a second Home Assistant automation for the same light would be a competing controller and should not exist.
 
 ## readings
 
@@ -281,7 +291,7 @@ Prompt settings cannot add model tools, expand trusted web hosts, weaken structu
 `POST /v1/plants/{slug}/health-events` accepts either a baseline or a signed delta with rationale, evidence, actor, and idempotency key.
 The agent exposes the same operations through `health` and `healthchange`; neither client can bypass the store's evidence, ownership, clamping, and retry rules.
 
-**Actuator discovery and actuation are separate capabilities.** `/v1/home-assistant/actuators` returns only fan and switch candidates, while `/v1/actuators` manages the persistent allowlist.
+**Actuator discovery and actuation are separate capabilities.** `/v1/home-assistant/actuators` returns only fan, switch, and light candidates, while `/v1/actuators` manages the persistent allowlist.
 Start, stop, and event-history routes are nested beneath `/v1/actuators/{id}` so no actuation request accepts an arbitrary Home Assistant entity ID.
 
 **Identification belongs to no plant, deliberately.** Nobody knows which plant it is yet, and it may not be one on record. The synchronous `POST /v1/identify` route remains for compatibility. The iOS app posts raw bytes or a multipart `photo` to `/v1/identifications/{id}`, receives an accepted status, and polls that same stable id until the durable job completes. Both return at most three candidates, most likely first. An empty list is a valid answer and a better one than a guessed name.

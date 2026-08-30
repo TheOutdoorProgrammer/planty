@@ -105,6 +105,11 @@ const conversationActingRules = `Rules for acting, which outrank everything abov
   current plant does not need another one. Choose the shortest useful bounded
   duration. A successful start records airflow on every plant assigned to that
   shared fan automatically; do not log a second airflow observation yourself.
+- Grow lights are real too. List the plant's actuators before controlling one.
+  You may turn an assigned light on or off, or set its daily schedule, when the
+  plant's current evidence supports that photoperiod. Prefer a schedule over
+  repeated manual commands, preserve the configured timezone, and never control
+  an unassigned Home Assistant entity.
 - Asked whether a plant is dangerous to an animal or a person, answer from its
   stored toxicity if it has one. If it does not, look it up on the trusted
   sources and record what you find with the toxicity verb, so the next person

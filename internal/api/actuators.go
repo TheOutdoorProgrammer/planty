@@ -70,7 +70,7 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if candidateDomain == "" {
-		s.fail(w, http.StatusBadRequest, errors.New("entity_id is not a discovered Home Assistant fan or switch"))
+		s.fail(w, http.StatusBadRequest, errors.New("entity_id is not a discovered Home Assistant fan, switch, or light"))
 		return
 	}
 	created, err := s.store.RegisterActuator(r.Context(), plant.Actuator{
@@ -82,6 +82,71 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.ok(w, http.StatusCreated, created)
+}
+
+func (s *Server) setActuatorState(w http.ResponseWriter, r *http.Request) {
+	if s.actuatorHA == nil {
+		s.fail(w, http.StatusServiceUnavailable, errors.New("Home Assistant actuation is not configured"))
+		return
+	}
+	id, ok := actuatorID(w, r, s)
+	if !ok {
+		return
+	}
+	var request struct {
+		On     bool         `json:"on"`
+		Actor  string       `json:"actor"`
+		Source plant.Source `json:"source,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	if err := s.actuatorControl().SetLight(r.Context(), id, request.On, request.Actor, sourceOrApp(request.Source)); err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, map[string]any{"on": request.On})
+}
+
+func (s *Server) setLightSchedule(w http.ResponseWriter, r *http.Request) {
+	id, ok := actuatorID(w, r, s)
+	if !ok {
+		return
+	}
+	var request struct {
+		StartMinute int          `json:"start_minute"`
+		EndMinute   int          `json:"end_minute"`
+		Timezone    string       `json:"timezone"`
+		Enabled     bool         `json:"enabled"`
+		Actor       string       `json:"actor"`
+		Source      plant.Source `json:"source,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	schedule, err := s.store.SetLightSchedule(r.Context(), plant.LightSchedule{
+		ActuatorID: id, StartMinute: request.StartMinute, EndMinute: request.EndMinute,
+		Timezone: request.Timezone, Enabled: request.Enabled,
+	}, request.Actor, sourceOrApp(request.Source))
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, schedule)
+}
+
+func (s *Server) deleteLightSchedule(w http.ResponseWriter, r *http.Request) {
+	id, ok := actuatorID(w, r, s)
+	if !ok {
+		return
+	}
+	if err := s.store.DeleteLightSchedule(r.Context(), id, "owner", plant.SourceApp); err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (s *Server) updateActuator(w http.ResponseWriter, r *http.Request) {

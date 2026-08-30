@@ -10,6 +10,7 @@ struct Actuator: Codable, Sendable, Hashable, Identifiable {
     let createdAt: Date
     let updatedAt: Date
     var activeLease: ActuatorLease?
+    var lightSchedule: LightSchedule?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -21,6 +22,7 @@ struct Actuator: Codable, Sendable, Hashable, Identifiable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case activeLease = "active_lease"
+        case lightSchedule = "light_schedule"
     }
 }
 
@@ -36,6 +38,65 @@ extension Actuator {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         activeLease = try container.decodeIfPresent(ActuatorLease.self, forKey: .activeLease)
+        lightSchedule = try container.decodeIfPresent(LightSchedule.self, forKey: .lightSchedule)
+    }
+}
+
+struct LightSchedule: Codable, Sendable, Hashable {
+    let actuatorID: UUID
+    let startMinute: Int
+    let endMinute: Int
+    let timezone: String
+    let enabled: Bool
+    let lastAppliedState: Bool?
+    let lastAppliedAt: Date?
+    let lastError: String?
+    let createdAt: Date
+    let updatedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case actuatorID = "actuator_id"
+        case startMinute = "start_minute"
+        case endMinute = "end_minute"
+        case timezone
+        case enabled
+        case lastAppliedState = "last_applied_state"
+        case lastAppliedAt = "last_applied_at"
+        case lastError = "last_error"
+        case createdAt = "created_at"
+        case updatedAt = "updated_at"
+    }
+}
+
+struct LightScheduleRequest: Codable, Sendable, Equatable {
+    let startMinute: Int
+    let endMinute: Int
+    let timezone: String
+    let enabled: Bool
+    let actor: String
+
+    enum CodingKeys: String, CodingKey {
+        case startMinute = "start_minute"
+        case endMinute = "end_minute"
+        case timezone, enabled, actor
+    }
+}
+
+struct LightStateRequest: Codable, Sendable, Equatable {
+    let isOn: Bool
+    let actor: String
+
+    enum CodingKeys: String, CodingKey {
+        case isOn = "on"
+        case actor
+    }
+}
+
+struct LightStateResponse: Decodable, Sendable {
+    let isOn: Bool
+
+    enum CodingKeys: String, CodingKey {
+        case isOn = "on"
     }
 }
 

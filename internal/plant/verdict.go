@@ -69,7 +69,8 @@ type Photo struct {
 	VisionFindings string     `json:"vision_findings,omitempty"`
 	AnalyzedAt     *time.Time `json:"analyzed_at,omitempty"`
 
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt     time.Time      `json:"created_at"`
+	InheritedFrom *HistorySource `json:"inherited_from,omitempty"`
 }
 
 // DigestEntry is one line of what needs doing, as both clients render it.

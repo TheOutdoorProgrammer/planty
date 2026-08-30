@@ -240,8 +240,9 @@ private struct ActuatorDetailScreen: View {
                     ForEach(session.library.plants.filter { !$0.status.isRetired }) { plant in
                         Toggle(plant.commonName, isOn: plantBinding(plant.id))
                     }
-                    Toggle("Allow enforcing policies", isOn: $policyControlEnabled)
-                        .disabled(actuator.kind != .fan)
+                    if actuator.kind == .fan {
+                        Toggle("Allow enforcing policies", isOn: $policyControlEnabled)
+                    }
                     Button("Save registration") { Task { await save(actuator) } }
                         .disabled(
                             name.cleaned.isEmpty || selectedPlantIDs.isEmpty ||
@@ -258,7 +259,8 @@ private struct ActuatorDetailScreen: View {
                     )
                 }
 
-                Section {
+                if actuator.kind != .light {
+                    Section {
                     if let lease, lease.isActive {
                         LabeledContent("Current lease", value: "Running")
                         LabeledContent("Deadline") {
@@ -284,13 +286,14 @@ private struct ActuatorDetailScreen: View {
                         .disabled(session.actuators.controlling.contains(actuator.id) || lease?.isActive == true)
                     Button("Stop now") { Task { failure = await session.actuators.stop(actuator) } }
                         .disabled(session.actuators.controlling.contains(actuator.id))
-                } header: {
-                    Text("Manual control")
-                } footer: {
+                    } header: {
+                        Text("Manual control")
+                    } footer: {
                     Text(
                         "Every start has a deadline. Stop is safe to repeat and addresses this " +
                         "Planty actuator ID. Recurring schedules remain Home Assistant-owned."
                     )
+                    }
                 }
 
                 if let failure {
@@ -391,10 +394,18 @@ private extension ActuatorKind {
         switch self {
         case .fan: "Fan"
         case .switch: "Switch"
+        case .light: "Light"
         case .unknown: "Unknown"
         }
     }
-    var symbol: String { self == .fan ? "fan.fill" : "powerplug.fill" }
+    var symbol: String {
+        switch self {
+        case .fan: "fan.fill"
+        case .switch: "powerplug.fill"
+        case .light: "lightbulb.led.fill"
+        case .unknown: "questionmark.circle"
+        }
+    }
 }
 
 private extension ActuatorEventAction {

@@ -278,7 +278,7 @@ func (d Deps) update(ctx context.Context, out io.Writer, args []string) error {
 func (d Deps) archive(ctx context.Context, out io.Writer, args []string) error {
 	set := newFlags("archive")
 	slug := set.String("plant", "", "the plant's slug")
-	status := set.String("status", string(plant.StatusGone), "dead or gone")
+	status := set.String("status", string(plant.StatusRemoved), "dead or removed")
 	if err := parse(set, args); err != nil {
 		return err
 	}

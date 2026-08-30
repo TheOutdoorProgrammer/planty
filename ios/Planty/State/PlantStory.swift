@@ -10,6 +10,7 @@ struct StoryEvent: Sendable, Hashable, Identifiable {
     let symbol: String
     let photo: Photo?
     let careState: CareState?
+    let historySource: HistorySource?
 
     /// "Watered at 10:19" beats "Watered" when the question is whether you
     /// already did it this morning.
@@ -63,7 +64,8 @@ enum StoryBuilder {
                 detail: photo.visionFindings ?? photo.caption,
                 symbol: "camera.fill",
                 photo: photo,
-                careState: nil
+                careState: nil,
+                historySource: photo.inheritedFrom
             )
         }
 
@@ -75,7 +77,8 @@ enum StoryBuilder {
                 detail: observation.body,
                 symbol: observation.kind.symbol,
                 photo: nil,
-                careState: nil
+                careState: nil,
+                historySource: observation.inheritedFrom
             )
         }
 
@@ -87,7 +90,8 @@ enum StoryBuilder {
                 detail: verdict.reasoning,
                 symbol: CareState.from(action: verdict.action).symbol,
                 photo: nil,
-                careState: CareState.from(action: verdict.action)
+                careState: CareState.from(action: verdict.action),
+                historySource: nil
             )
         }
 

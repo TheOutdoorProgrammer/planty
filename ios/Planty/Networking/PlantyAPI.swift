@@ -8,6 +8,7 @@ protocol PlantyAPI: Sendable {
     func plants(filter: PlantFilter) async throws -> [Plant]
     func plant(slug: String) async throws -> PlantDetail
     func createPlant(_ draft: NewPlant) async throws -> Plant
+    func derivePlant(from slug: String, draft: DerivedPlantDraft) async throws -> DerivedPlantResponse
     func updatePlant(slug: String, patch: PlantPatch) async throws -> Plant
     func archivePlant(slug: String, status: PlantStatus) async throws
     func restorePlant(slug: String) async throws -> Plant
@@ -58,6 +59,9 @@ protocol PlantyAPI: Sendable {
     func actuatorEvents(id: UUID) async throws -> [ActuatorEvent]
     func startActuator(id: UUID, request: ActuatorStartRequest) async throws -> ActuatorLease
     func stopActuator(id: UUID, request: ActuatorStopRequest) async throws -> ActuatorStopResponse
+    func setLightState(id: UUID, request: LightStateRequest) async throws
+    func setLightSchedule(id: UUID, request: LightScheduleRequest) async throws -> LightSchedule
+    func deleteLightSchedule(id: UUID) async throws
     func proposeRecheck(slug: String, proposal: RecheckProposal) async throws -> EvidenceWindow
     func rechecks(slug: String) async throws -> [EvidenceWindow]
     func evidenceWindow(id: UUID) async throws -> EvidenceWindow
@@ -135,6 +139,9 @@ protocol PlantyAPI: Sendable {
 }
 
 extension PlantyAPI {
+    func derivePlant(from slug: String, draft: DerivedPlantDraft) async throws -> DerivedPlantResponse {
+        throw PlantyError.server(status: 503, message: "Plant derivation is unavailable from this client.")
+    }
     func policies() async throws -> [OPAPolicy] { [] }
     func policyEvaluations() async throws -> [PolicyEvaluation] { [] }
     func policyReference() async throws -> PolicyReference {
@@ -257,6 +264,18 @@ extension PlantyAPI {
 
     func discoverActuators() async throws -> [HomeAssistantEntity] { [] }
     func actuators() async throws -> [Actuator] { [] }
+
+    func setLightState(id: UUID, request: LightStateRequest) async throws {
+        throw PlantyError.server(status: 503, message: "Light control is unavailable from this client.")
+    }
+
+    func setLightSchedule(id: UUID, request: LightScheduleRequest) async throws -> LightSchedule {
+        throw PlantyError.server(status: 503, message: "Light schedules are unavailable from this client.")
+    }
+
+    func deleteLightSchedule(id: UUID) async throws {
+        throw PlantyError.server(status: 503, message: "Light schedules are unavailable from this client.")
+    }
 
     func registerActuator(_ registration: ActuatorRegistration) async throws -> Actuator {
         throw PlantyError.server(status: 503, message: "Actuator registration is unavailable from this client.")

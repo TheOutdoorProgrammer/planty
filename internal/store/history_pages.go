@@ -31,11 +31,22 @@ func (s *Store) ObservationsPage(ctx context.Context, plantID uuid.UUID, before 
 		at, id = before.At, before.ID
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, plant_id, kind, body, occurred_at, source, coalesce(actor,''), created_at
-		FROM observations
-		WHERE plant_id = $1
-		  AND ($2::timestamptz IS NULL OR (occurred_at, id) < ($2, $3::uuid))
-		ORDER BY occurred_at DESC, id DESC
+		WITH RECURSIVE ancestry AS (
+			SELECT $1::uuid AS plant_id, 'infinity'::timestamptz AS cutoff, 0 AS depth
+			UNION ALL
+			SELECT lineage.source_plant_id, least(ancestry.cutoff, lineage.derived_at), ancestry.depth + 1
+			FROM ancestry
+			JOIN plant_lineage lineage ON lineage.child_plant_id = ancestry.plant_id
+		)
+		SELECT observation.id, observation.plant_id, observation.kind, observation.body,
+		       observation.occurred_at, observation.source, coalesce(observation.actor,''),
+		       observation.created_at, source.slug, source.common_name, ancestry.depth
+		FROM observations observation
+		JOIN ancestry ON ancestry.plant_id = observation.plant_id
+		JOIN plants source ON source.id = observation.plant_id
+		WHERE observation.occurred_at <= ancestry.cutoff
+		  AND ($2::timestamptz IS NULL OR (observation.occurred_at, observation.id) < ($2, $3::uuid))
+		ORDER BY observation.occurred_at DESC, observation.id DESC
 		LIMIT $4`, plantID, at, id, limit+1)
 	if err != nil {
 		return nil, nil, err
@@ -45,9 +56,15 @@ func (s *Store) ObservationsPage(ctx context.Context, plantID uuid.UUID, before 
 	out := make([]plant.Observation, 0, limit+1)
 	for rows.Next() {
 		var o plant.Observation
+		var sourceSlug, sourceName string
+		var depth int
 		if err := rows.Scan(&o.ID, &o.PlantID, &o.Kind, &o.Body,
-			&o.OccurredAt, &o.Source, &o.Actor, &o.CreatedAt); err != nil {
+			&o.OccurredAt, &o.Source, &o.Actor, &o.CreatedAt,
+			&sourceSlug, &sourceName, &depth); err != nil {
 			return nil, nil, err
+		}
+		if depth > 0 {
+			o.InheritedFrom = &plant.HistorySource{PlantID: o.PlantID, Slug: sourceSlug, CommonName: sourceName}
 		}
 		out = append(out, o)
 	}
@@ -77,13 +94,23 @@ func (s *Store) PhotosPage(ctx context.Context, plantID uuid.UUID, before *Histo
 		at, id = before.At, before.ID
 	}
 	rows, err := s.pool.Query(ctx, `
-		SELECT id, plant_id, storage_key, taken_at, coalesce(caption,''),
-		       coalesce(vision_findings,''), analyzed_at, created_at
-		FROM photos
-		WHERE plant_id = $1
-		  AND deletion_requested_at IS NULL
-		  AND ($2::timestamptz IS NULL OR (taken_at, id) < ($2, $3::uuid))
-		ORDER BY taken_at DESC, id DESC
+		WITH RECURSIVE ancestry AS (
+			SELECT $1::uuid AS plant_id, 'infinity'::timestamptz AS cutoff, 0 AS depth
+			UNION ALL
+			SELECT lineage.source_plant_id, least(ancestry.cutoff, lineage.derived_at), ancestry.depth + 1
+			FROM ancestry
+			JOIN plant_lineage lineage ON lineage.child_plant_id = ancestry.plant_id
+		)
+		SELECT photo.id, photo.plant_id, photo.storage_key, photo.taken_at, coalesce(photo.caption,''),
+		       coalesce(photo.vision_findings,''), photo.analyzed_at, photo.created_at,
+		       source.slug, source.common_name, ancestry.depth
+		FROM photos photo
+		JOIN ancestry ON ancestry.plant_id = photo.plant_id
+		JOIN plants source ON source.id = photo.plant_id
+		WHERE photo.taken_at <= ancestry.cutoff
+		  AND photo.deletion_requested_at IS NULL
+		  AND ($2::timestamptz IS NULL OR (photo.taken_at, photo.id) < ($2, $3::uuid))
+		ORDER BY photo.taken_at DESC, photo.id DESC
 		LIMIT $4`, plantID, at, id, limit+1)
 	if err != nil {
 		return nil, nil, err
@@ -93,9 +120,15 @@ func (s *Store) PhotosPage(ctx context.Context, plantID uuid.UUID, before *Histo
 	out := make([]plant.Photo, 0, limit+1)
 	for rows.Next() {
 		var p plant.Photo
+		var sourceSlug, sourceName string
+		var depth int
 		if err := rows.Scan(&p.ID, &p.PlantID, &p.StorageKey, &p.TakenAt,
-			&p.Caption, &p.VisionFindings, &p.AnalyzedAt, &p.CreatedAt); err != nil {
+			&p.Caption, &p.VisionFindings, &p.AnalyzedAt, &p.CreatedAt,
+			&sourceSlug, &sourceName, &depth); err != nil {
 			return nil, nil, err
+		}
+		if depth > 0 {
+			p.InheritedFrom = &plant.HistorySource{PlantID: p.PlantID, Slug: sourceSlug, CommonName: sourceName}
 		}
 		out = append(out, p)
 	}

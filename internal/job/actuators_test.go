@@ -5,17 +5,25 @@ import (
 	"testing"
 	"time"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/pgtest"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 	"github.com/google/uuid"
 )
 
-type actuatorHA struct{ calls []string }
+type actuatorHA struct {
+	calls []string
+	state string
+}
 
 func (h *actuatorHA) CallService(_ context.Context, domain, service string, data map[string]any) error {
 	h.calls = append(h.calls, domain+"/"+service+":"+data["entity_id"].(string))
 	return nil
+}
+
+func (h *actuatorHA) State(_ context.Context, entityID string) (ha.State, error) {
+	return ha.State{EntityID: entityID, State: h.state}, nil
 }
 
 func TestActuatorControlUsesRegisteredEntityAndReconcilesDeadline(t *testing.T) {
@@ -106,6 +114,47 @@ func TestActuatorControlRejectsAPlantOutsideTheAssignment(t *testing.T) {
 	}
 	if len(ha.calls) != 0 {
 		t.Fatalf("Home Assistant calls = %#v", ha.calls)
+	}
+}
+
+func TestActuatorControlEnforcesLightScheduleWithoutCreatingALease(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, pgtest.DSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(db.Close)
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	subject := createActuatorTestPlant(t, ctx, db, "Light schedule plant")
+	actuator, err := db.RegisterActuator(ctx, plant.Actuator{
+		EntityID: "light.schedule_test", Name: "Schedule test", Kind: plant.ActuatorLight,
+		PlantIDs: []uuid.UUID{subject.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.SetLightSchedule(ctx, plant.LightSchedule{
+		ActuatorID: actuator.ID, StartMinute: 8 * 60, EndMinute: 20 * 60,
+		Timezone: "UTC", Enabled: true,
+	}, "tester", plant.SourceApp); err != nil {
+		t.Fatal(err)
+	}
+	ha := &actuatorHA{state: "off"}
+	control := ActuatorControl{Store: db, HA: ha, Log: quietLog()}
+	changed, err := control.Reconcile(ctx, time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC))
+	if err != nil || changed != 1 {
+		t.Fatalf("reconcile changed=%d err=%v", changed, err)
+	}
+	if len(ha.calls) != 1 || ha.calls[0] != "light/turn_on:light.schedule_test" {
+		t.Fatalf("Home Assistant calls = %#v", ha.calls)
+	}
+	if _, _, err := control.Start(ctx, actuator.ID, 60, "tester", plant.SourceApp, uuid.New()); err == nil {
+		t.Fatal("created a bounded lease for a light")
+	}
+	if len(ha.calls) != 1 {
+		t.Fatalf("light lease reached Home Assistant: %#v", ha.calls)
 	}
 }
 

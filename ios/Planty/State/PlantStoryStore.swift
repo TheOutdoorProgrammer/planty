@@ -242,6 +242,15 @@ final class PlantStoryStore {
         }
     }
 
+    func derive(_ draft: DerivedPlantDraft) async -> Result<Plant, PlantyError> {
+        do {
+            let response = try await api.derivePlant(from: plant.slug, draft: draft)
+            return .success(response.plant)
+        } catch {
+            return .failure(PlantyError.from(error))
+        }
+    }
+
     func markDead() async -> PlantyError? {
         await archive(as: .dead)
     }

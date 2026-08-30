@@ -12,6 +12,7 @@ struct PlantDetail: Decodable, Sendable, Hashable {
     var photos: [Photo]?
     var sensors: [SensorLink]?
     var readings: [Reading]?
+    var lineage: PlantLineage?
 
     /// Read from the envelope as well as from the plant inside it, because the
     /// endpoint may hang it off either and reading only one would show nothing.
@@ -27,8 +28,41 @@ struct PlantDetail: Decodable, Sendable, Hashable {
         case photos
         case sensors
         case readings
+        case lineage
         case toxicity
     }
+}
+
+struct PlantLineage: Codable, Sendable, Hashable {
+    let sourcePlantID: UUID
+    let sourceSlug: String
+    let sourceCommonName: String
+    let derivedAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case sourcePlantID = "source_plant_id"
+        case sourceSlug = "source_slug"
+        case sourceCommonName = "source_common_name"
+        case derivedAt = "derived_at"
+    }
+}
+
+struct DerivedPlantDraft: Codable, Sendable, Hashable {
+    let commonName: String
+    let botanicalName: String?
+    let variety: String?
+    let location: String?
+
+    enum CodingKeys: String, CodingKey {
+        case commonName = "common_name"
+        case botanicalName = "botanical_name"
+        case variety, location
+    }
+}
+
+struct DerivedPlantResponse: Decodable, Sendable {
+    let plant: Plant
+    let lineage: PlantLineage
 }
 
 /// GET /v1/plants/{slug}/timeline. Each page contains photos plus a cursor for

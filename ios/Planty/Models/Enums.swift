@@ -37,7 +37,9 @@ extension AIJob {
 
     var explanation: String {
         switch self {
-        case .assess: "Runs once a day for every plant, can control an assigned fan when the evidence supports it, and accounts for nearly all usage."
+        case .assess:
+            "Runs once a day for every plant, can control assigned equipment "
+                + "when evidence supports it, and accounts for nearly all usage."
         case .identify: "Reads a photograph and names the plant. A wrong name here gets a plant watered wrongly."
         case .consult: "Answers questions about one plant, and can look things up and record what it finds."
         case .ask: "Answers questions about a plant you do not own yet, and can look things up."
@@ -61,7 +63,7 @@ extension PlantDomain {
 
 extension PlantStatus {
     /// Archived plants stay in the record but drop out of the daily rounds.
-    var isRetired: Bool { self == .dead || self == .gone }
+    var isRetired: Bool { self == .dead || self == .removed }
 
     var editLabel: String {
         switch self {
@@ -69,7 +71,7 @@ extension PlantStatus {
         case .struggling: "Struggling"
         case .dormant: "Dormant"
         case .dead: "Dead"
-        case .gone: "Gone"
+        case .removed: "Removed"
         case .unknown: "Unrecorded"
         }
     }

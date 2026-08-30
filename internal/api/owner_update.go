@@ -56,7 +56,7 @@ func (s *Server) createOwnerUpdate(w http.ResponseWriter, r *http.Request) {
 	}
 	active := plants[:0]
 	for _, p := range plants {
-		if p.Status != plant.StatusDead && p.Status != plant.StatusGone {
+		if p.Status != plant.StatusDead && p.Status != plant.StatusRemoved {
 			active = append(active, p)
 		}
 	}

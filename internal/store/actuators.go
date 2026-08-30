@@ -163,12 +163,18 @@ func (s *Store) hydrateActuator(ctx context.Context, actuator *plant.Actuator) e
 	lease, err := s.ActiveActuatorLease(ctx, actuator.ID)
 	if err == nil {
 		actuator.ActiveLease = &lease
-		return nil
+	} else if !errors.Is(err, ErrNotFound) {
+		return err
 	}
-	if errors.Is(err, ErrNotFound) {
-		return nil
+	if actuator.Kind == plant.ActuatorLight {
+		schedule, err := s.LightSchedule(ctx, actuator.ID)
+		if err == nil {
+			actuator.LightSchedule = &schedule
+		} else if !errors.Is(err, ErrNotFound) {
+			return err
+		}
 	}
-	return err
+	return nil
 }
 
 func (s *Store) DeleteActuator(ctx context.Context, id uuid.UUID) error {
@@ -220,6 +226,9 @@ func (s *Store) beginActuatorLease(ctx context.Context, lease plant.ActuatorLeas
 	}
 	if err != nil {
 		return plant.Actuator{}, plant.ActuatorLease{}, false, err
+	}
+	if actuator.Kind == plant.ActuatorLight {
+		return plant.Actuator{}, plant.ActuatorLease{}, false, fmt.Errorf("%w: light actuators use direct state control and schedules", plant.ErrInvalid)
 	}
 	existing, err := scanActuatorLease(tx.QueryRow(ctx, `SELECT `+actuatorLeaseColumns+`
 		FROM plant_actuator_leases WHERE idempotency_key = $1`, lease.IdempotencyKey))

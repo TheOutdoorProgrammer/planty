@@ -45,7 +45,7 @@ func tender(t *testing.T, s *store.Store, ctx context.Context, name, steward str
 	if err != nil {
 		t.Fatalf("create %s: %v", name, err)
 	}
-	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusGone) })
+	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusRemoved) })
 	return p
 }
 
@@ -225,7 +225,7 @@ func TestAPlantWithNoThresholdIsNotWarnedAbout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
-	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusGone) })
+	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusRemoved) })
 
 	f := newFakeHA(t, weatherEntity)
 	f.forecast(50, 20)

@@ -42,6 +42,10 @@ struct PlantyClient: PlantyAPI {
         try await send("POST", APIPath.createPlant, body: draft)
     }
 
+    func derivePlant(from slug: String, draft: DerivedPlantDraft) async throws -> DerivedPlantResponse {
+        try await send("POST", APIPath.derivePlant(slug: escaped(slug)), body: draft)
+    }
+
     func updatePlant(slug: String, patch: PlantPatch) async throws -> Plant {
         try await send("PATCH", APIPath.updatePlant(slug: escaped(slug)), body: patch)
     }

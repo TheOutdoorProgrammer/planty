@@ -10,6 +10,8 @@ struct PlantStoryScreen: View {
     @State private var isEditingToxicity = false
     @State private var isLoggingCare = false
     @State private var isManagingAirflow = false
+    @State private var isManagingLights = false
+    @State private var isCreatingDerivedPlant = false
     @State private var isHarvesting = false
     @State private var isConfirmingDeath = false
     @State private var isConfirmingArchive = false
@@ -28,6 +30,7 @@ struct PlantStoryScreen: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
+                lineageCard
                 currentState
                 PlantSensorSection(series: store.series)
                 PlantHealthSection(plant: store.plant)
@@ -103,11 +106,16 @@ struct PlantStoryScreen: View {
                     } label: {
                         Label("Print QR label", systemImage: "qrcode")
                     }
+                    Button {
+                        isCreatingDerivedPlant = true
+                    } label: {
+                        Label("Create plant from this one…", systemImage: "arrow.triangle.branch")
+                    }
                     if !store.plant.status.isRetired {
                         Button {
                             isConfirmingArchive = true
                         } label: {
-                            Label("Archive plant…", systemImage: "archivebox")
+                            Label("Stop tracking…", systemImage: "archivebox")
                         }
                         Button(role: .destructive) {
                             isConfirmingDeath = true
@@ -160,6 +168,21 @@ struct PlantStoryScreen: View {
             }
             .presentationDetents([.medium, .large])
         }
+        .sheet(isPresented: $isManagingLights) {
+            LightControlSheet(plant: store.plant)
+                .presentationDetents([.large])
+        }
+        .sheet(isPresented: $isCreatingDerivedPlant) {
+            DerivedPlantSheet(source: store.plant) { draft in
+                switch await store.derive(draft) {
+                case .success(let created):
+                    session.library.apply(created)
+                    return nil
+                case .failure(let failure):
+                    return failure
+                }
+            }
+        }
         .sheet(isPresented: $isHarvesting) {
             HarvestSheet(plantName: store.plant.commonName) { quantity, unit, notes in
                 await store.logHarvest(quantity: quantity, unit: unit, notes: notes)
@@ -179,15 +202,16 @@ struct PlantStoryScreen: View {
             Text("The story and photos stay. You can restore the plant later if this was a mistake.")
         }
         .confirmationDialog(
-            "Archive \(store.plant.commonName)?",
+            "Stop tracking \(store.plant.commonName)?",
             isPresented: $isConfirmingArchive,
             titleVisibility: .visible
         ) {
-            Button("Archive") { Task { await archivePlant() } }
+            Button("Mark as removed") { Task { await removePlant() } }
             Button("Keep active", role: .cancel) {}
         } message: {
             Text(
-                "This removes the plant from the active garden without deleting its story or photos. "
+                "Removed is different from dead. This takes the plant out of the active garden "
+                    + "without deleting its story or photos. "
                     + "You can restore it later."
             )
         }
@@ -212,8 +236,8 @@ struct PlantStoryScreen: View {
         if actionError == nil { session.library.apply(store.plant) }
     }
 
-    private func archivePlant() async {
-        actionError = await store.archive(as: .gone)
+    private func removePlant() async {
+        actionError = await store.archive(as: .removed)
         if actionError == nil { session.library.apply(store.plant) }
     }
 
@@ -348,6 +372,22 @@ struct PlantStoryScreen: View {
                     .accessibilityLabel("Control airflow for \(store.plant.commonName)")
                 }
 
+                if !plantLights.isEmpty {
+                    Button {
+                        isManagingLights = true
+                    } label: {
+                        ActionFace(
+                            "Grow lights",
+                            icon: "lightbulb.led.fill",
+                            detail: plantLights.contains { $0.lightSchedule?.enabled == true }
+                                ? "Schedule active"
+                                : "Control or schedule"
+                        )
+                    }
+                    .buttonStyle(SecondaryButtonStyle())
+                    .accessibilityLabel("Control grow lights for \(store.plant.commonName)")
+                }
+
                 NavigationLink {
                     RemindersScreen(store: session.remindersStore(for: store.plant))
                 } label: {
@@ -376,7 +416,11 @@ struct PlantStoryScreen: View {
     }
 
     private var plantActuators: [Actuator] {
-        session.actuators.registered.assigned(to: store.plant.id)
+        session.actuators.registered.assigned(to: store.plant.id).filter { $0.kind != .light }
+    }
+
+    private var plantLights: [Actuator] {
+        session.actuators.registered.assigned(to: store.plant.id).filter { $0.kind == .light }
     }
 
     private var activePlantActuator: Actuator? {
@@ -419,6 +463,29 @@ struct PlantStoryScreen: View {
         case .needsCare: "One thing needs doing"
         case .urgent: "This needs attention now"
         case .unknown: "Planty cannot say yet"
+        }
+    }
+
+    @ViewBuilder
+    private var lineageCard: some View {
+        if let lineage = store.detail?.lineage {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "arrow.triangle.branch")
+                    .foregroundStyle(PlantyColor.green)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Started in \(lineage.sourceCommonName)")
+                        .font(.subheadline.weight(.semibold))
+                    Text(
+                        "History through "
+                            + lineage.derivedAt.formatted(date: .abbreviated, time: .shortened)
+                            + " is shared from the source record."
+                    )
+                        .font(.caption)
+                        .foregroundStyle(PlantyColor.secondaryText)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .plantyCard(border: PlantyColor.green.opacity(0.2))
         }
     }
 
@@ -514,6 +581,11 @@ struct ChapterRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Eyebrow(text: chapter.dateLabel, color: PlantyColor.secondaryText)
+            if let source = chapter.events.compactMap(\.historySource).first {
+                Label("From \(source.commonName)", systemImage: "arrow.triangle.branch")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PlantyColor.green)
+            }
             Text(chapter.title)
                 .font(.headline)
 
@@ -549,5 +621,95 @@ struct ChapterRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .plantyCard()
         .accessibilityElement(children: .contain)
+    }
+}
+
+private struct DerivedPlantSheet: View {
+    let source: Plant
+    let create: (DerivedPlantDraft) async -> PlantyError?
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var commonName = ""
+    @State private var botanicalName = ""
+    @State private var variety = ""
+    @State private var location: String
+    @State private var confirmsCreation = false
+    @State private var isSaving = false
+    @State private var failure: PlantyError?
+
+    init(source: Plant, create: @escaping (DerivedPlantDraft) async -> PlantyError?) {
+        self.source = source
+        self.create = create
+        _location = State(initialValue: source.location)
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("New plant") {
+                    TextField("Name", text: $commonName)
+                    TextField("Botanical name", text: $botanicalName)
+                    TextField("Variety", text: $variety)
+                    TextField("Location", text: $location)
+                }
+                Section {
+                    Label(
+                        "Keeps \(source.commonName)'s earlier history",
+                        systemImage: "clock.arrow.trianglehead.branch"
+                    )
+                } footer: {
+                    Text(
+                        "The new record gets its own future care, photos, sensors, and light assignments. "
+                            + "The source is not removed automatically."
+                    )
+                }
+                if let failure {
+                    Section { SheetErrorRow(headline: "The plant was not created.", error: failure) }
+                }
+            }
+            .scrollContentBackground(.hidden)
+            .plantyPage()
+            .navigationTitle("Create from \(source.commonName)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(isSaving ? "Creating…" : "Review") { confirmsCreation = true }
+                        .disabled(commonName.cleaned.isEmpty || isSaving)
+                }
+            }
+            .confirmationDialog(
+                "Create \(commonName.cleaned) from \(source.commonName)?",
+                isPresented: $confirmsCreation,
+                titleVisibility: .visible
+            ) {
+                Button("Create plant") { Task { await save() } }
+                Button("Keep editing", role: .cancel) {}
+            } message: {
+                Text(
+                    "Its timeline will include \(source.commonName)'s history up to now. "
+                        + "Future records stay separate."
+                )
+            }
+        }
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+        failure = await create(DerivedPlantDraft(
+            commonName: commonName.cleaned,
+            botanicalName: optional(botanicalName),
+            variety: optional(variety),
+            location: optional(location)
+        ))
+        if failure == nil { dismiss() }
+    }
+
+    private func optional(_ value: String) -> String? {
+        let cleaned = value.cleaned
+        return cleaned.isEmpty ? nil : cleaned
     }
 }

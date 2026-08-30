@@ -74,7 +74,7 @@ final class ActuatorStore {
         defer { if startedGeneration == generation { isDiscovering = false } }
         do {
             let loaded = try await client.discoverActuators()
-                .filter { $0.domain == "fan" || $0.domain == "switch" }
+                .filter { $0.domain == "fan" || $0.domain == "switch" || $0.domain == "light" }
                 .sorted {
                     if $0.available != $1.available { return $0.available }
                     return $0.friendlyName.localizedCaseInsensitiveCompare($1.friendlyName) == .orderedAscending
@@ -90,8 +90,8 @@ final class ActuatorStore {
 
     func register(entity: HomeAssistantEntity, name: String, plantIDs: [UUID]) async -> PlantyError? {
         guard discovered.contains(where: { $0.entityID == entity.entityID }),
-              entity.domain == "fan" || entity.domain == "switch"
-        else { return .transport("Choose a discovered Home Assistant fan or switch.") }
+              entity.domain == "fan" || entity.domain == "switch" || entity.domain == "light"
+        else { return .transport("Choose a discovered Home Assistant fan, switch, or light.") }
         let cleanedName = name.cleaned
         guard !cleanedName.isEmpty else { return .transport("Give the actuator a name.") }
         guard !plantIDs.isEmpty else { return .transport("Choose at least one plant this actuator serves.") }
@@ -191,6 +191,61 @@ final class ActuatorStore {
             stopKeys[actuator.id] = UUID()
             error = nil
             await loadEvents(for: actuator)
+            return nil
+        } catch {
+            return record(error)
+        }
+    }
+
+    func setLight(_ actuator: Actuator, isOn: Bool) async -> PlantyError? {
+        guard actuator.kind == .light else { return .transport("Choose a registered light.") }
+        do {
+            try await api.setLightState(
+                id: actuator.id,
+                request: LightStateRequest(isOn: isOn, actor: "owner")
+            )
+            error = nil
+            return nil
+        } catch {
+            return record(error)
+        }
+    }
+
+    func setSchedule(
+        _ actuator: Actuator,
+        startMinute: Int,
+        endMinute: Int,
+        timezone: String,
+        enabled: Bool
+    ) async -> PlantyError? {
+        do {
+            let schedule = try await api.setLightSchedule(
+                id: actuator.id,
+                request: LightScheduleRequest(
+                    startMinute: startMinute,
+                    endMinute: endMinute,
+                    timezone: timezone,
+                    enabled: enabled,
+                    actor: "owner"
+                )
+            )
+            if let index = registered.firstIndex(where: { $0.id == actuator.id }) {
+                registered[index].lightSchedule = schedule
+            }
+            error = nil
+            return nil
+        } catch {
+            return record(error)
+        }
+    }
+
+    func deleteSchedule(_ actuator: Actuator) async -> PlantyError? {
+        do {
+            try await api.deleteLightSchedule(id: actuator.id)
+            if let index = registered.firstIndex(where: { $0.id == actuator.id }) {
+                registered[index].lightSchedule = nil
+            }
+            error = nil
             return nil
         } catch {
             return record(error)

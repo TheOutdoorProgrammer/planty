@@ -34,7 +34,7 @@ const usage = `planty <command>
   serve    run the HTTP API
   ingest   pull current sensor values from Home Assistant
   verify-water  verify completed manual watering attempts after probes settle
-  reconcile-actuators  turn off plant actuators whose durable lease expired
+  reconcile-actuators  reconcile bounded leases and grow-light schedules
   prune-photos  delete expired scratch photos and finish pending deletions
   daily    judge every plant and send the digest
   retry    rerun only the plants that failed the latest daily judgment

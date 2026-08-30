@@ -337,8 +337,8 @@ const assessmentActingRules = `Rules for acting during this scheduled assessment
 - This assessment is about the plant whose slug is %q. An actuator command must
   name that plant, and may use only an actuator assigned to it.
 - The complete reference also describes features reserved for conversations.
-  This job's enforced command set is read-only garden inspection plus
-  actuatorstart and actuatorstop; every other write is unavailable here.
+  This job's enforced command set is read-only garden inspection plus fan and
+  grow-light control; every other write is unavailable here.
 - Read before writing. Use the plant record and list its actuators before any
   physical command. Do not create, rename, archive, or otherwise maintain plant
   records during a scheduled assessment.
@@ -353,6 +353,11 @@ const assessmentActingRules = `Rules for acting during this scheduled assessment
   the plant currently being assessed does not need another run.
 - A successful start automatically records airflow on every plant assigned to
   the shared fan. Do not log a second airflow observation.
+- You may turn an assigned grow light on or off, or change its daily schedule,
+  when current plant-specific evidence supports the photoperiod. List the
+  actuator first. Prefer a schedule over repeated manual commands, preserve the
+  configured timezone, and do not change a schedule from generic species advice
+  alone.
 - Perform any justified fan command before returning the required verdict JSON.
   The verdict must still describe the single most useful action for the person;
   mention completed airflow plainly so it is not presented as an undone chore.`
@@ -361,6 +366,7 @@ var assessmentAgentVerbs = []string{
 	"plants", "show", "observations", "health", "actuators", "reminders",
 	"sensors", "today", "questions", "coldwatch", "notes",
 	"actuatorstart", "actuatorstop",
+	"lightstate", "lightschedule",
 }
 
 func assessmentActing(acting *Acting) *Acting {

@@ -13,6 +13,7 @@ struct PlantObservation: Codable, Sendable, Hashable, Identifiable {
     var actor: String?
 
     let createdAt: Date
+    var inheritedFrom: HistorySource?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -23,11 +24,24 @@ struct PlantObservation: Codable, Sendable, Hashable, Identifiable {
         case source
         case actor
         case createdAt = "created_at"
+        case inheritedFrom = "inherited_from"
     }
 
     /// Dry soil goes hydrophobic, so a watering claim is worth verifying
     /// against what the probe did afterwards.
     var isVerifiable: Bool { kind == .watered }
+}
+
+struct HistorySource: Codable, Sendable, Hashable {
+    let plantID: UUID
+    let slug: String
+    let commonName: String
+
+    enum CodingKeys: String, CodingKey {
+        case plantID = "plant_id"
+        case slug
+        case commonName = "common_name"
+    }
 }
 
 /// What the app posts to record something. The server fills in the rest.
@@ -63,8 +77,8 @@ struct NewObservation: Codable, Sendable, Hashable {
 
 /// Kept out of the observation log: yield per season has to aggregate.
 struct Harvest: Codable, Sendable, Hashable, Identifiable {
-    var slug: String? = nil
-    var commonName: String? = nil
+    var slug: String?
+    var commonName: String?
     let id: UUID
     let plantID: UUID
     let occurredAt: Date
@@ -72,7 +86,7 @@ struct Harvest: Codable, Sendable, Hashable, Identifiable {
     let unit: String
     var notes: String?
     let createdAt: Date
-    var updatedAt: Date? = nil
+    var updatedAt: Date?
 
     enum CodingKeys: String, CodingKey {
         case id

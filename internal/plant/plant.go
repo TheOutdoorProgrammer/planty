@@ -31,13 +31,13 @@ const (
 	StatusStruggling Status = "struggling"
 	StatusDormant    Status = "dormant"
 	StatusDead       Status = "dead"
-	StatusGone       Status = "gone"
+	StatusRemoved    Status = "removed"
 )
 
 // ValidateArchive rejects states that contradict an archived record.
 func (s Status) ValidateArchive() error {
-	if s != StatusDead && s != StatusGone {
-		return invalid("archiving records dead or gone, not %q", s)
+	if s != StatusDead && s != StatusRemoved {
+		return invalid("retiring records dead or removed, not %q", s)
 	}
 	return nil
 }
@@ -192,7 +192,7 @@ func (p Plant) Valid() error {
 		return invalid("unknown domain %q", p.Domain)
 	}
 	switch p.Status {
-	case StatusAlive, StatusStruggling, StatusDormant, StatusDead, StatusGone:
+	case StatusAlive, StatusStruggling, StatusDormant, StatusDead, StatusRemoved:
 	default:
 		return invalid("unknown status %q", p.Status)
 	}
@@ -215,6 +215,31 @@ func (p Plant) Valid() error {
 		return invalid("hand-watered plant cannot hold a LetPot dripper number")
 	}
 	if strings.TrimSpace(p.CommonName) == "" {
+		return invalid("common_name is required")
+	}
+	return nil
+}
+
+// PlantLineage names the source record whose earlier history belongs to a
+// derived plant. The relation is immutable once the child exists.
+type PlantLineage struct {
+	SourcePlantID    uuid.UUID `json:"source_plant_id"`
+	SourceSlug       string    `json:"source_slug"`
+	SourceCommonName string    `json:"source_common_name"`
+	DerivedAt        time.Time `json:"derived_at"`
+}
+
+// DerivePlantRequest contains the identity that differs from the source.
+// Everything else starts from the source's current plant facts.
+type DerivePlantRequest struct {
+	CommonName    string `json:"common_name"`
+	BotanicalName string `json:"botanical_name,omitempty"`
+	Variety       string `json:"variety,omitempty"`
+	Location      string `json:"location,omitempty"`
+}
+
+func (r DerivePlantRequest) Valid() error {
+	if strings.TrimSpace(r.CommonName) == "" {
 		return invalid("common_name is required")
 	}
 	return nil

@@ -104,6 +104,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeUpdatePlant, s.updatePlant)
 	mux.HandleFunc(routeArchivePlant, s.archivePlant)
 	mux.HandleFunc(routeRestorePlant, s.restorePlant)
+	mux.HandleFunc(routeDerivePlant, s.derivePlant)
 
 	mux.HandleFunc(routeListObservations, s.listObservations)
 	mux.HandleFunc(routeAddObservation, s.addObservation)
@@ -196,6 +197,9 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeListActuatorEvents, s.actuatorEvents)
 	mux.HandleFunc(routeStartActuator, s.startActuator)
 	mux.HandleFunc(routeStopActuator, s.stopActuator)
+	mux.HandleFunc(routeSetActuatorState, s.setActuatorState)
+	mux.HandleFunc(routeSetLightSchedule, s.setLightSchedule)
+	mux.HandleFunc(routeDeleteLightSchedule, s.deleteLightSchedule)
 
 	mux.HandleFunc(routeListSensors, s.listSensors)
 	mux.HandleFunc(routeLinkSensor, s.linkSensor)

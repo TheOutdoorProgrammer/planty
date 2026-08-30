@@ -15,6 +15,7 @@ type ActuatorKind string
 const (
 	ActuatorFan    ActuatorKind = "fan"
 	ActuatorSwitch ActuatorKind = "switch"
+	ActuatorLight  ActuatorKind = "light"
 )
 
 type Actuator struct {
@@ -25,6 +26,7 @@ type Actuator struct {
 	PlantIDs             []uuid.UUID    `json:"plant_ids"`
 	PolicyControlEnabled bool           `json:"policy_control_enabled"`
 	ActiveLease          *ActuatorLease `json:"active_lease,omitempty"`
+	LightSchedule        *LightSchedule `json:"light_schedule,omitempty"`
 	CreatedAt            time.Time      `json:"created_at"`
 	UpdatedAt            time.Time      `json:"updated_at"`
 }
@@ -34,8 +36,8 @@ func (a Actuator) Valid() error {
 		return invalid("actuator name is required")
 	}
 	domain, _, ok := strings.Cut(strings.TrimSpace(a.EntityID), ".")
-	if !ok || (domain != string(ActuatorFan) && domain != string(ActuatorSwitch)) {
-		return invalid("actuator entity_id must be a fan or switch entity")
+	if !ok || (domain != string(ActuatorFan) && domain != string(ActuatorSwitch) && domain != string(ActuatorLight)) {
+		return invalid("actuator entity_id must be a fan, switch, or light entity")
 	}
 	if a.Kind != ActuatorKind(domain) {
 		return invalid("actuator kind must match its entity_id domain")
@@ -57,6 +59,51 @@ func (a Actuator) Valid() error {
 		seen[id] = struct{}{}
 	}
 	return nil
+}
+
+type LightSchedule struct {
+	ActuatorID       uuid.UUID  `json:"actuator_id"`
+	StartMinute      int        `json:"start_minute"`
+	EndMinute        int        `json:"end_minute"`
+	Timezone         string     `json:"timezone"`
+	Enabled          bool       `json:"enabled"`
+	LastAppliedState *bool      `json:"last_applied_state,omitempty"`
+	LastAppliedAt    *time.Time `json:"last_applied_at,omitempty"`
+	LastError        string     `json:"last_error,omitempty"`
+	CreatedAt        time.Time  `json:"created_at"`
+	UpdatedAt        time.Time  `json:"updated_at"`
+}
+
+func (s LightSchedule) Valid() error {
+	if s.ActuatorID == uuid.Nil {
+		return invalid("actuator_id is required")
+	}
+	if s.StartMinute < 0 || s.StartMinute > 1439 || s.EndMinute < 0 || s.EndMinute > 1439 {
+		return invalid("light schedule minutes must be between 0 and 1439")
+	}
+	if s.StartMinute == s.EndMinute {
+		return invalid("light schedule start and end must differ")
+	}
+	if _, err := time.LoadLocation(strings.TrimSpace(s.Timezone)); err != nil {
+		return invalid("unknown light schedule timezone %q", s.Timezone)
+	}
+	return nil
+}
+
+func (s LightSchedule) WantsOn(at time.Time) (bool, error) {
+	if err := s.Valid(); err != nil {
+		return false, err
+	}
+	if !s.Enabled {
+		return false, nil
+	}
+	location, _ := time.LoadLocation(s.Timezone)
+	local := at.In(location)
+	minute := local.Hour()*60 + local.Minute()
+	if s.StartMinute < s.EndMinute {
+		return minute >= s.StartMinute && minute < s.EndMinute, nil
+	}
+	return minute >= s.StartMinute || minute < s.EndMinute, nil
 }
 
 type ActuatorLease struct {

@@ -46,8 +46,49 @@ func newPlant(t *testing.T, s *Store, ctx context.Context, name string) plant.Pl
 	if err != nil {
 		t.Fatalf("create %s: %v", name, err)
 	}
-	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusGone) })
+	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusRemoved) })
 	return p
+}
+
+func TestDerivedPlantInheritsOnlySourceHistoryBeforeDerivation(t *testing.T) {
+	s, ctx := testStore(t)
+	source := newPlant(t, s, ctx, "Seedling source")
+	before := time.Now().UTC().Add(-time.Hour)
+	observation, err := s.AddObservation(ctx, plant.Observation{
+		PlantID: source.ID, Kind: plant.ObservedWatered, Body: "seedling tray watered",
+		OccurredAt: before, Source: plant.SourceApp,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	photo, err := s.SavePhoto(ctx, plant.Photo{
+		PlantID: source.ID, StorageKey: t.Name() + ".jpg", TakenAt: before,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	child, lineage, err := s.DerivePlant(ctx, source.Slug, plant.DerivePlantRequest{CommonName: "Seedling child"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.ArchivePlant(ctx, child.Slug, plant.StatusRemoved) })
+	if lineage.SourcePlantID != source.ID || child.Status != plant.StatusAlive {
+		t.Fatalf("child=%#v lineage=%#v", child, lineage)
+	}
+	if _, err := s.AddObservation(ctx, plant.Observation{
+		PlantID: source.ID, Kind: plant.ObservedNote, Body: "source-only later note",
+		OccurredAt: lineage.DerivedAt.Add(time.Second), Source: plant.SourceApp,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	observations, _, err := s.ObservationsPage(ctx, child.ID, nil, 10)
+	if err != nil || len(observations) != 1 || observations[0].ID != observation.ID || observations[0].InheritedFrom == nil {
+		t.Fatalf("inherited observations=%#v err=%v", observations, err)
+	}
+	photos, _, err := s.PhotosPage(ctx, child.ID, nil, 10)
+	if err != nil || len(photos) != 1 || photos[0].ID != photo.ID || photos[0].InheritedFrom == nil {
+		t.Fatalf("inherited photos=%#v err=%v", photos, err)
+	}
 }
 
 // The regression test for the bug that shipped: the digest joins plants to
@@ -760,5 +801,5 @@ func claim(t *testing.T, s *Store, ctx context.Context, slug, name string) {
 	if err != nil {
 		t.Fatalf("claim %s: %v", slug, err)
 	}
-	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusGone) })
+	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusRemoved) })
 }

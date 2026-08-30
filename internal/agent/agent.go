@@ -54,7 +54,7 @@ Reading the garden:
               planty agent plants [--status <status>] [--domain <domain>]
                 [--steward <name>] [--watering letpot|hand] [--archived]
               domains: houseplant, edible_indoor, edible_outdoor
-              statuses: alive, struggling, dormant, dead, gone
+              statuses: alive, struggling, dormant, dead, removed
               example: planty agent plants --status struggling
 
   show        one plant in full: record, care notes, last watered, probe
@@ -71,7 +71,7 @@ Reading the garden:
               planty agent health --plant <slug> [--limit N]
               example: planty agent health --plant golden-pothos
 
-  actuators   list the explicitly allowlisted plant fans and smart plugs by
+  actuators   list the explicitly allowlisted plant fans, smart plugs, and lights by
               Planty actuator id, optionally only those assigned to one plant;
               never discovers or guesses
               planty agent actuators [--plant <slug>]
@@ -160,7 +160,7 @@ The plants themselves:
               example: planty agent update --plant golden-pothos --location "bedroom shelf" --light medium
 
   archive     retire a plant, keeping its whole history; never a delete
-              planty agent archive --plant <slug> [--status dead|gone]
+              planty agent archive --plant <slug> [--status dead|removed]
               example: planty agent archive --plant basil --status dead
 
 Physical controls and cold:
@@ -173,6 +173,17 @@ Physical controls and cold:
   actuatorstop  idempotently turn off an actuator assigned to the named plant
               planty agent actuatorstop --plant <slug> --id <uuid> --key <uuid>
               example: planty agent actuatorstop --plant golden-pothos --id 2c658779-4967-4831-b579-a6ed2584769c --key 24a1e903-4b71-4ca2-8621-f0d37a8f0401
+
+  lightstate  turn an assigned Home Assistant light on or off now
+              planty agent lightstate --plant <slug> --id <uuid> --state on|off
+              example: planty agent lightstate --plant seedlings --id 2c658779-4967-4831-b579-a6ed2584769c --state on
+
+  lightschedule  create or replace an assigned light's daily schedule. Times
+              are local HH:MM and --timezone is an IANA name. Overnight
+              intervals are supported. Use --enabled=false to pause it.
+              planty agent lightschedule --plant <slug> --id <uuid>
+                --start <HH:MM> --end <HH:MM> [--timezone <name>] [--enabled=true|false]
+              example: planty agent lightschedule --plant seedlings --id 2c658779-4967-4831-b579-a6ed2584769c --start 07:00 --end 21:00 --timezone America/New_York
 
   water       run the LetPot watering pass, exactly as the manual command
               does: survey the calibrated probes, pump only if something reads
@@ -313,6 +324,8 @@ var verbs = map[string]func(Deps, context.Context, io.Writer, []string) error{
 	"water":         Deps.water,
 	"actuatorstart": Deps.actuatorStart,
 	"actuatorstop":  Deps.actuatorStop,
+	"lightstate":    Deps.lightState,
+	"lightschedule": Deps.lightSchedule,
 	"shelter":       Deps.shelter,
 	"unshelter":     Deps.unshelter,
 

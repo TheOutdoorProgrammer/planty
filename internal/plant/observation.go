@@ -47,7 +47,14 @@ type Observation struct {
 	Source     Source    `json:"source"`
 	Actor      string    `json:"actor,omitempty"`
 
-	CreatedAt time.Time `json:"created_at"`
+	CreatedAt     time.Time      `json:"created_at"`
+	InheritedFrom *HistorySource `json:"inherited_from,omitempty"`
+}
+
+type HistorySource struct {
+	PlantID    uuid.UUID `json:"plant_id"`
+	Slug       string    `json:"slug"`
+	CommonName string    `json:"common_name"`
 }
 
 // Verifiable: dry soil goes hydrophobic, so water can miss the roots entirely.

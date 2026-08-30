@@ -50,4 +50,23 @@ extension PlantyClient {
     func stopActuator(id: UUID, request: ActuatorStopRequest) async throws -> ActuatorStopResponse {
         try await send("POST", APIPath.stopActuator(id: id.uuidString), body: request)
     }
+
+    func setLightState(id: UUID, request: LightStateRequest) async throws {
+        let _: LightStateResponse = try await send(
+            "POST",
+            APIPath.setActuatorState(id: id.uuidString),
+            body: request
+        )
+    }
+
+    func setLightSchedule(id: UUID, request: LightScheduleRequest) async throws -> LightSchedule {
+        try await send("PUT", APIPath.setLightSchedule(id: id.uuidString), body: request)
+    }
+
+    func deleteLightSchedule(id: UUID) async throws {
+        _ = try await perform(try makeRequest(
+            "DELETE",
+            APIPath.deleteLightSchedule(id: id.uuidString)
+        ))
+    }
 }

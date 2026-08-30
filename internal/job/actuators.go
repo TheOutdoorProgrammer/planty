@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
+	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
 	"github.com/google/uuid"
@@ -14,6 +16,10 @@ import (
 
 type ActuatorHomeAssistant interface {
 	CallService(context.Context, string, string, map[string]any) error
+}
+
+type lightStateReader interface {
+	State(context.Context, string) (ha.State, error)
 }
 
 type ActuatorControl struct {
@@ -120,7 +126,73 @@ func (c ActuatorControl) Reconcile(ctx context.Context, now time.Time) (int, err
 		}
 		stopped++
 	}
-	return stopped, errors.Join(failures...)
+	changed, err := c.reconcileLights(ctx, now)
+	if err != nil {
+		failures = append(failures, err)
+	}
+	return stopped + changed, errors.Join(failures...)
+}
+
+func (c ActuatorControl) SetLight(ctx context.Context, actuatorID uuid.UUID, on bool, actor string, source plant.Source) error {
+	if c.HA == nil {
+		return errors.New("Home Assistant actuation is not configured")
+	}
+	if strings.TrimSpace(actor) == "" {
+		return fmt.Errorf("%w: actuator actor is required", plant.ErrInvalid)
+	}
+	switch source {
+	case plant.SourceApp, plant.SourceAgent, plant.SourceAutomation:
+	default:
+		return fmt.Errorf("%w: unknown actuator source %q", plant.ErrInvalid, source)
+	}
+	actuator, err := c.Store.Actuator(ctx, actuatorID)
+	if err != nil {
+		return err
+	}
+	if actuator.Kind != plant.ActuatorLight {
+		return fmt.Errorf("%w: direct state control is only available for lights", plant.ErrInvalid)
+	}
+	service := "turn_off"
+	if on {
+		service = "turn_on"
+	}
+	controlErr := c.HA.CallService(ctx, "light", service, map[string]any{"entity_id": actuator.EntityID})
+	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	defer cancel()
+	recordErr := c.Store.RecordLightState(recordCtx, actuatorID, on, actor, source, controlErr)
+	return errors.Join(controlErr, recordErr)
+}
+
+func (c ActuatorControl) reconcileLights(ctx context.Context, now time.Time) (int, error) {
+	actuators, err := c.Store.Actuators(ctx)
+	if err != nil {
+		return 0, err
+	}
+	reader, canRead := c.HA.(lightStateReader)
+	changed := 0
+	var failures []error
+	for _, actuator := range actuators {
+		if actuator.Kind != plant.ActuatorLight || actuator.LightSchedule == nil {
+			continue
+		}
+		desired, err := actuator.LightSchedule.WantsOn(now)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("light %s schedule: %w", actuator.ID, err))
+			continue
+		}
+		if canRead {
+			state, err := reader.State(ctx, actuator.EntityID)
+			if err == nil && (state.State == "on") == desired {
+				continue
+			}
+		}
+		if err := c.SetLight(ctx, actuator.ID, desired, "planty light schedule", plant.SourceAutomation); err != nil {
+			failures = append(failures, fmt.Errorf("light %s: %w", actuator.ID, err))
+			continue
+		}
+		changed++
+	}
+	return changed, errors.Join(failures...)
 }
 
 func (c ActuatorControl) stop(ctx context.Context, actuator plant.Actuator, lease plant.ActuatorLease, reason, actor string, source plant.Source, key *uuid.UUID) error {

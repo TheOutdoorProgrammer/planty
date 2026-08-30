@@ -19,6 +19,7 @@
       "delete": {"operationId": "archivePlant"}
     },
     "/v1/plants/{slug}/restore": {"post": {"operationId": "restorePlant"}},
+    "/v1/plants/{slug}/derive": {"post": {"operationId": "derivePlant"}},
     "/v1/plants/{slug}/observations": {
       "get": {"operationId": "listObservations"},
       "post": {"operationId": "addObservation"}
@@ -110,6 +111,11 @@
     "/v1/actuators/{id}/events": {"get": {"operationId": "listActuatorEvents"}},
     "/v1/actuators/{id}/start": {"post": {"operationId": "startActuator"}},
     "/v1/actuators/{id}/stop": {"post": {"operationId": "stopActuator"}},
+    "/v1/actuators/{id}/state": {"post": {"operationId": "setActuatorState"}},
+    "/v1/actuators/{id}/light-schedule": {
+      "put": {"operationId": "setLightSchedule"},
+      "delete": {"operationId": "deleteLightSchedule"}
+    },
     "/v1/sensors": {
       "get": {"operationId": "listSensors"},
       "post": {"operationId": "linkSensor"}
@@ -165,7 +171,7 @@
   "components": {
     "schemas": {
       "PlantDomain": {"type": "string", "enum": ["houseplant", "edible_indoor", "edible_outdoor"]},
-      "PlantStatus": {"type": "string", "enum": ["alive", "struggling", "dormant", "dead", "gone"]},
+      "PlantStatus": {"type": "string", "enum": ["alive", "struggling", "dormant", "dead", "removed"]},
       "WateringMethod": {"type": "string", "enum": ["letpot", "hand"]},
       "PlantAccessibility": {"type": "string", "enum": ["easy", "awkward", "hard"]},
       "LightExposure": {"type": "string", "enum": ["direct", "bright_indirect", "medium", "low"]},
@@ -174,8 +180,8 @@
       "ObservationSource": {"type": "string", "enum": ["app", "agent", "automation"]},
       "ReminderDisposition": {"type": "string", "enum": ["completed", "missed"]},
       "HealthChangeKind": {"type": "string", "enum": ["baseline", "delta"]},
-      "ActuatorKind": {"type": "string", "enum": ["fan", "switch"]},
-      "ActuatorEventAction": {"type": "string", "enum": ["start_requested", "started", "start_failed", "stop_requested", "stopped", "stop_failed", "stop_noop"]},
+      "ActuatorKind": {"type": "string", "enum": ["fan", "switch", "light"]},
+      "ActuatorEventAction": {"type": "string", "enum": ["start_requested", "started", "start_failed", "stop_requested", "stopped", "stop_failed", "stop_noop", "state_changed", "schedule_updated", "schedule_disabled", "schedule_failed"]},
       "EvidenceWindowKind": {"type": "string", "enum": ["recheck", "experiment"]},
       "EvidenceWindowStatus": {"type": "string", "enum": ["proposed", "active", "ready", "completed", "cancelled"]},
       "EvidenceKind": {"type": "string", "enum": ["observation", "photo", "reading"]},

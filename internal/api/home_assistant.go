@@ -29,7 +29,7 @@ func filterDiscoveredActuators(entities []ha.Entity, query string) []ha.Entity {
 	query = strings.ToLower(strings.TrimSpace(query))
 	filtered := make([]ha.Entity, 0, len(entities))
 	for _, entity := range entities {
-		if entity.Domain != "fan" && entity.Domain != "switch" {
+		if entity.Domain != "fan" && entity.Domain != "switch" && entity.Domain != "light" {
 			continue
 		}
 		if query != "" && !entityMatchesQuery(entity, query) {

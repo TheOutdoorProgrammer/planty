@@ -116,6 +116,12 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 		"risk":         p.Risk(),
 		"observations": history,
 	}
+	if lineage, err := s.store.PlantLineage(r.Context(), p.ID); err == nil {
+		body["lineage"] = lineage
+	} else if !errors.Is(err, store.ErrNotFound) {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
 	if cursor := encodeHistoryCursor(next); cursor != "" {
 		body["observations_next_cursor"] = cursor
 	}
@@ -200,7 +206,7 @@ func (s *Server) updatePlant(w http.ResponseWriter, r *http.Request) {
 func (s *Server) archivePlant(w http.ResponseWriter, r *http.Request) {
 	status := plant.Status(r.URL.Query().Get("status"))
 	if status == "" {
-		status = plant.StatusGone
+		status = plant.StatusRemoved
 	}
 	if err := status.ValidateArchive(); err != nil {
 		s.fail(w, http.StatusBadRequest, err)
@@ -211,6 +217,20 @@ func (s *Server) archivePlant(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]string{"archived": r.PathValue("slug")})
+}
+
+func (s *Server) derivePlant(w http.ResponseWriter, r *http.Request) {
+	var request plant.DerivePlantRequest
+	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	created, lineage, err := s.store.DerivePlant(r.Context(), r.PathValue("slug"), request)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusCreated, map[string]any{"plant": created, "lineage": lineage})
 }
 
 func (s *Server) restorePlant(w http.ResponseWriter, r *http.Request) {

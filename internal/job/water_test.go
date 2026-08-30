@@ -195,7 +195,7 @@ func onTheLine(t *testing.T, s *store.Store, ctx context.Context, name string) p
 	if err != nil {
 		t.Fatalf("create %s: %v", name, err)
 	}
-	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusGone) })
+	t.Cleanup(func() { _ = s.ArchivePlant(ctx, p.Slug, plant.StatusRemoved) })
 	return p
 }
 

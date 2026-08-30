@@ -32,10 +32,12 @@ enum APIPath {
     static func deleteActuator(id: String) -> String { "/v1/actuators/\(id)" }
     static func deleteAway(id: String) -> String { "/v1/away/\(id)" }
     static func deleteHarvest(id: String) -> String { "/v1/harvests/\(id)" }
+    static func deleteLightSchedule(id: String) -> String { "/v1/actuators/\(id)/light-schedule" }
     static func deleteNote(id: String) -> String { "/v1/notes/\(id)" }
     static func deletePhoto(id: String) -> String { "/v1/photos/\(id)" }
     static func deletePolicy(id: String) -> String { "/v1/policies/\(id)" }
     static func deleteReminder(slug: String, kind: String) -> String { "/v1/plants/\(slug)/reminders/\(kind)" }
+    static func derivePlant(slug: String) -> String { "/v1/plants/\(slug)/derive" }
     static let discoverActuators = "/v1/home-assistant/actuators"
     static func enqueueIdentification(id: String) -> String { "/v1/identifications/\(id)" }
     static func enqueuePlantMessage(slug: String, id: String) -> String { "/v1/plants/\(slug)/conversations/\(id)/messages" }
@@ -96,6 +98,8 @@ enum APIPath {
     static func restorePlant(slug: String) -> String { "/v1/plants/\(slug)/restore" }
     static func reviewEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)/review" }
     static func runScheduledJob(job: String) -> String { "/v1/scheduled-jobs/\(job)/runs" }
+    static func setActuatorState(id: String) -> String { "/v1/actuators/\(id)/state" }
+    static func setLightSchedule(id: String) -> String { "/v1/actuators/\(id)/light-schedule" }
     static func setModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
     static func setPromptInstruction(job: String) -> String { "/v1/prompt-instructions/\(job)" }
     static func setReminder(slug: String) -> String { "/v1/plants/\(slug)/reminders" }
@@ -147,6 +151,10 @@ enum ActuatorEventAction: String, FallbackDecodable, CaseIterable {
     case stopped
     case stopFailed = "stop_failed"
     case stopNoop = "stop_noop"
+    case stateChanged = "state_changed"
+    case scheduleUpdated = "schedule_updated"
+    case scheduleDisabled = "schedule_disabled"
+    case scheduleFailed = "schedule_failed"
     case unknown
 
     static let fallback = ActuatorEventAction.unknown
@@ -155,6 +163,7 @@ enum ActuatorEventAction: String, FallbackDecodable, CaseIterable {
 enum ActuatorKind: String, FallbackDecodable, CaseIterable {
     case fan
     case `switch` = "switch"
+    case light
     case unknown
 
     static let fallback = ActuatorKind.unknown
@@ -308,7 +317,7 @@ enum PlantStatus: String, FallbackDecodable, CaseIterable {
     case struggling
     case dormant
     case dead
-    case gone
+    case removed
     case unknown
 
     static let fallback = PlantStatus.unknown

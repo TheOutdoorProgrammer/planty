@@ -43,10 +43,10 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 	server := api.New(db, slog.New(slog.NewTextHandler(io.Discard, nil))).WithHomeAssistant(fake).Handler()
 
 	discovered, body := do(t, server, http.MethodGet, "/v1/home-assistant/actuators", nil)
-	if discovered.Code != http.StatusOK || body["count"] != float64(2) {
+	if discovered.Code != http.StatusOK || body["count"] != float64(3) {
 		t.Fatalf("discovery = %d %#v", discovered.Code, body)
 	}
-	rejected, _ := do(t, server, http.MethodPost, "/v1/actuators", map[string]any{"entity_id": "light.grow", "name": "wrong"})
+	rejected, _ := do(t, server, http.MethodPost, "/v1/actuators", map[string]any{"entity_id": "sensor.humidity", "name": "wrong"})
 	if rejected.Code != http.StatusBadRequest {
 		t.Fatalf("registered non-actuator with status %d", rejected.Code)
 	}
@@ -78,5 +78,25 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 	events, history := do(t, server, http.MethodGet, "/v1/actuators/"+id+"/events", nil)
 	if events.Code != http.StatusOK || history["count"] != float64(4) {
 		t.Fatalf("events = %d %#v", events.Code, history)
+	}
+	lightCreated, light := do(t, server, http.MethodPost, "/v1/actuators", map[string]any{
+		"entity_id": "light.grow", "plant_ids": []string{grown.ID.String()},
+	})
+	if lightCreated.Code != http.StatusCreated {
+		t.Fatalf("light registration = %d %#v", lightCreated.Code, light)
+	}
+	lightID := light["id"].(string)
+	scheduled, schedule := do(t, server, http.MethodPut, "/v1/actuators/"+lightID+"/light-schedule", map[string]any{
+		"start_minute": 480, "end_minute": 1200, "timezone": "America/New_York",
+		"enabled": true, "actor": "Joey",
+	})
+	if scheduled.Code != http.StatusOK || schedule["timezone"] != "America/New_York" {
+		t.Fatalf("schedule = %d %#v", scheduled.Code, schedule)
+	}
+	controlled, _ := do(t, server, http.MethodPost, "/v1/actuators/"+lightID+"/state", map[string]any{
+		"on": true, "actor": "Joey",
+	})
+	if controlled.Code != http.StatusOK || fake.calls[len(fake.calls)-1] != "light/turn_on:light.grow" {
+		t.Fatalf("light state = %d calls=%#v", controlled.Code, fake.calls)
 	}
 }
