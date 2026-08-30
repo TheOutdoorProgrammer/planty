@@ -141,6 +141,11 @@ func TestActuatorControlEnforcesLightScheduleWithoutCreatingALease(t *testing.T)
 	}, "tester", plant.SourceApp); err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := db.DeleteLightSchedule(context.Background(), actuator.ID, "tester", plant.SourceApp); err != nil {
+			t.Errorf("delete light schedule: %v", err)
+		}
+	})
 	ha := &actuatorHA{state: "off"}
 	control := ActuatorControl{Store: db, HA: ha, Log: quietLog()}
 	changed, err := control.Reconcile(ctx, time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC))
@@ -155,6 +160,54 @@ func TestActuatorControlEnforcesLightScheduleWithoutCreatingALease(t *testing.T)
 	}
 	if len(ha.calls) != 1 {
 		t.Fatalf("light lease reached Home Assistant: %#v", ha.calls)
+	}
+}
+
+func TestActuatorControlEnforcesFanScheduleAndDefersToManualLease(t *testing.T) {
+	ctx := context.Background()
+	db, err := store.Open(ctx, pgtest.DSN(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(db.Close)
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatal(err)
+	}
+	subject := createActuatorTestPlant(t, ctx, db, "Fan schedule plant")
+	actuator, err := db.RegisterActuator(ctx, plant.Actuator{
+		EntityID: "switch.fan_schedule_test", Name: "Scheduled fan", Kind: plant.ActuatorFan,
+		PlantIDs: []uuid.UUID{subject.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.SetFanSchedule(ctx, plant.ActuatorSchedule{
+		ActuatorID: actuator.ID, StartMinute: 8 * 60, EndMinute: 20 * 60,
+		Timezone: "UTC", Enabled: true,
+	}, "tester", plant.SourceApp); err != nil {
+		t.Fatal(err)
+	}
+	ha := &actuatorHA{state: "off"}
+	control := ActuatorControl{Store: db, HA: ha, Log: quietLog()}
+	noon := time.Date(2026, 8, 30, 12, 0, 0, 0, time.UTC)
+	changed, err := control.Reconcile(ctx, noon)
+	if err != nil || changed != 1 || len(ha.calls) != 1 || ha.calls[0] != "switch/turn_on:switch.fan_schedule_test" {
+		t.Fatalf("scheduled reconcile changed=%d calls=%#v err=%v", changed, ha.calls, err)
+	}
+	if _, created, err := control.Start(ctx, actuator.ID, 60, "tester", plant.SourceApp, uuid.New()); err != nil || !created {
+		t.Fatalf("manual lease created=%t err=%v", created, err)
+	}
+	if _, err := db.SetFanSchedule(ctx, plant.ActuatorSchedule{
+		ActuatorID: actuator.ID, StartMinute: 8 * 60, EndMinute: 20 * 60,
+		Timezone: "UTC", Enabled: false,
+	}, "tester", plant.SourceApp); err != nil {
+		t.Fatal(err)
+	}
+	ha.calls = nil
+	ha.state = "on"
+	changed, err = control.Reconcile(ctx, time.Now().UTC())
+	if err != nil || changed != 0 || len(ha.calls) != 0 {
+		t.Fatalf("schedule fought active lease: changed=%d calls=%#v err=%v", changed, ha.calls, err)
 	}
 }
 

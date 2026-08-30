@@ -267,7 +267,7 @@ struct PlantLibraryRow: View {
         if plant.activeWatering == true { active.append(.watering) }
         let assigned = session.actuators.registered.assigned(to: plant.id)
         if assigned.contains(where: {
-            $0.kind == .fan && session.actuators.leases[$0.id]?.isActive == true
+            $0.kind == .fan && ($0.isOn == true || session.actuators.leases[$0.id]?.isActive == true)
         }) {
             active.append(.airflow)
         }

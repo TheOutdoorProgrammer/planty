@@ -155,6 +155,14 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 		body["sensors"] = links
 		body["readings"] = readings
 	}
+	proposals, err := s.store.PendingCalibrationProposals(r.Context(), p.ID)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	if len(proposals) > 0 {
+		body["calibration_proposals"] = proposals
+	}
 	if verdict, err := s.store.LatestVerdict(r.Context(), p.ID); err == nil {
 		body["verdict"] = verdict
 	} else if !errors.Is(err, store.ErrNotFound) {

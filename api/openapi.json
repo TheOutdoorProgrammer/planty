@@ -116,11 +116,17 @@
       "put": {"operationId": "setLightSchedule"},
       "delete": {"operationId": "deleteLightSchedule"}
     },
+    "/v1/actuators/{id}/fan-schedule": {
+      "put": {"operationId": "setFanSchedule"},
+      "delete": {"operationId": "deleteFanSchedule"}
+    },
     "/v1/sensors": {
       "get": {"operationId": "listSensors"},
       "post": {"operationId": "linkSensor"}
     },
     "/v1/sensors/{id}": {"patch": {"operationId": "calibrateSensor"}},
+    "/v1/calibration-proposals/{id}/approve": {"post": {"operationId": "approveCalibrationProposal"}},
+    "/v1/calibration-proposals/{id}/deny": {"post": {"operationId": "denyCalibrationProposal"}},
     "/v1/questions": {
       "get": {"operationId": "listQuestions"},
       "post": {"operationId": "createQuestion"}

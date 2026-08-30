@@ -71,4 +71,31 @@ extension PlantyClient {
             APIPath.deleteLightSchedule(id: id.uuidString)
         ))
     }
+
+    func setFanSchedule(id: UUID, request: ActuatorScheduleRequest) async throws -> ActuatorSchedule {
+        try await send("PUT", APIPath.setFanSchedule(id: id.uuidString), body: request)
+    }
+
+    func deleteFanSchedule(id: UUID) async throws {
+        _ = try await perform(try makeRequest(
+            "DELETE",
+            APIPath.deleteFanSchedule(id: id.uuidString)
+        ))
+    }
+
+    func approveCalibrationProposal(id: UUID) async throws -> CalibrationProposal {
+        try await send(
+            "POST",
+            APIPath.approveCalibrationProposal(id: id.uuidString),
+            body: CalibrationProposalResolution(actor: "owner")
+        )
+    }
+
+    func denyCalibrationProposal(id: UUID) async throws -> CalibrationProposal {
+        try await send(
+            "POST",
+            APIPath.denyCalibrationProposal(id: id.uuidString),
+            body: CalibrationProposalResolution(actor: "owner")
+        )
+    }
 }

@@ -1,5 +1,11 @@
 # Keep physical safety outside model prompts
 
+## Status
+
+Accepted. Ordinary recurring fan schedule ownership is superseded by [ADR-0030](0030-let-planty-own-explicit-daily-fan-schedules.md).
+
+The immutable prompt boundary, allowlist, bounded manual leases, audit ledger, and independent physical backstop still stand.
+
 ## Context and Problem Statement
 
 Planty needs editable scheduled-agent instructions, agent-initiated health changes, and bounded control of Home Assistant airflow devices.
@@ -40,4 +46,3 @@ Bad, and accepted:
 - Planty and Home Assistant must agree on the maximum runtime and configured entity.
 - A bounded override can temporarily diverge from the standing schedule and must be shown honestly in both systems.
 - Adding another actuator role requires explicit service behavior and safety rules rather than a freeform Home Assistant proxy.
-

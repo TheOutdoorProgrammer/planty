@@ -200,10 +200,14 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeSetActuatorState, s.setActuatorState)
 	mux.HandleFunc(routeSetLightSchedule, s.setLightSchedule)
 	mux.HandleFunc(routeDeleteLightSchedule, s.deleteLightSchedule)
+	mux.HandleFunc(routeSetFanSchedule, s.setFanSchedule)
+	mux.HandleFunc(routeDeleteFanSchedule, s.deleteFanSchedule)
 
 	mux.HandleFunc(routeListSensors, s.listSensors)
 	mux.HandleFunc(routeLinkSensor, s.linkSensor)
 	mux.HandleFunc(routeCalibrateSensor, s.calibrateSensor)
+	mux.HandleFunc(routeApproveCalibrationProposal, s.approveCalibrationProposal)
+	mux.HandleFunc(routeDenyCalibrationProposal, s.denyCalibrationProposal)
 
 	mux.HandleFunc(routeListQuestions, s.listQuestions)
 	mux.HandleFunc(routeCreateQuestion, s.askOwner)

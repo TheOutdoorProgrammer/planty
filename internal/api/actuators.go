@@ -132,6 +132,14 @@ func (s *Server) setActuatorState(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) setLightSchedule(w http.ResponseWriter, r *http.Request) {
+	s.setActuatorSchedule(w, r, plant.ActuatorLight)
+}
+
+func (s *Server) setFanSchedule(w http.ResponseWriter, r *http.Request) {
+	s.setActuatorSchedule(w, r, plant.ActuatorFan)
+}
+
+func (s *Server) setActuatorSchedule(w http.ResponseWriter, r *http.Request, kind plant.ActuatorKind) {
 	id, ok := actuatorID(w, r, s)
 	if !ok {
 		return
@@ -148,10 +156,17 @@ func (s *Server) setLightSchedule(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
-	schedule, err := s.store.SetLightSchedule(r.Context(), plant.LightSchedule{
+	input := plant.ActuatorSchedule{
 		ActuatorID: id, StartMinute: request.StartMinute, EndMinute: request.EndMinute,
 		Timezone: request.Timezone, Enabled: request.Enabled,
-	}, request.Actor, sourceOrApp(request.Source))
+	}
+	var schedule plant.ActuatorSchedule
+	var err error
+	if kind == plant.ActuatorFan {
+		schedule, err = s.store.SetFanSchedule(r.Context(), input, request.Actor, sourceOrApp(request.Source))
+	} else {
+		schedule, err = s.store.SetLightSchedule(r.Context(), input, request.Actor, sourceOrApp(request.Source))
+	}
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
@@ -160,11 +175,25 @@ func (s *Server) setLightSchedule(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) deleteLightSchedule(w http.ResponseWriter, r *http.Request) {
+	s.deleteActuatorSchedule(w, r, plant.ActuatorLight)
+}
+
+func (s *Server) deleteFanSchedule(w http.ResponseWriter, r *http.Request) {
+	s.deleteActuatorSchedule(w, r, plant.ActuatorFan)
+}
+
+func (s *Server) deleteActuatorSchedule(w http.ResponseWriter, r *http.Request, kind plant.ActuatorKind) {
 	id, ok := actuatorID(w, r, s)
 	if !ok {
 		return
 	}
-	if err := s.store.DeleteLightSchedule(r.Context(), id, "owner", plant.SourceApp); err != nil {
+	var err error
+	if kind == plant.ActuatorFan {
+		err = s.store.DeleteFanSchedule(r.Context(), id, "owner", plant.SourceApp)
+	} else {
+		err = s.store.DeleteLightSchedule(r.Context(), id, "owner", plant.SourceApp)
+	}
+	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}

@@ -75,8 +75,15 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 	if stopped.Code != http.StatusOK || len(fake.calls) != 2 || fake.calls[1] != "switch/turn_off:switch.plant_fan" {
 		t.Fatalf("stop = %d calls=%#v", stopped.Code, fake.calls)
 	}
+	fanScheduled, fanSchedule := do(t, server, http.MethodPut, "/v1/actuators/"+id+"/fan-schedule", map[string]any{
+		"start_minute": 540, "end_minute": 1020, "timezone": "America/New_York",
+		"enabled": true, "actor": "Joey",
+	})
+	if fanScheduled.Code != http.StatusOK || fanSchedule["start_minute"] != float64(540) {
+		t.Fatalf("fan schedule = %d %#v", fanScheduled.Code, fanSchedule)
+	}
 	events, history := do(t, server, http.MethodGet, "/v1/actuators/"+id+"/events", nil)
-	if events.Code != http.StatusOK || history["count"] != float64(4) {
+	if events.Code != http.StatusOK || history["count"] != float64(5) {
 		t.Fatalf("events = %d %#v", events.Code, history)
 	}
 	lightCreated, light := do(t, server, http.MethodPost, "/v1/actuators", map[string]any{

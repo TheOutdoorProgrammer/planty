@@ -55,7 +55,7 @@ func (r IncidentRadar) Run(ctx context.Context, runID uuid.UUID) (incidents []pl
 				label = "Home Assistant area"
 			}
 			candidates = append(candidates, incidentCandidate(runID, factor, ref, members,
-				fmt.Sprintf("Shared factor worth checking: %d plants in %s %q have new check or urgent actions from the same complete run.", len(members), label, ref), nil, nil))
+				fmt.Sprintf("Dire shared condition: %d plants in %s %q have new urgent actions from the same complete run.", len(members), label, ref), nil, nil))
 		}
 	}
 
@@ -90,7 +90,7 @@ func (r IncidentRadar) Run(ctx context.Context, runID uuid.UUID) (incidents []pl
 			ids = append(ids, failure.SensorLinkID)
 		}
 		candidates = append(candidates, incidentCandidate(runID, plant.FactorEnvironmentFailure, area,
-			members, fmt.Sprintf("Shared factor worth checking: a plant in Home Assistant area %q has a new action while independent environmental sensors have no reading for this run.", area), nil, ids))
+			members, fmt.Sprintf("Dire condition with missing evidence: a plant in Home Assistant area %q has a new urgent action while independent environmental sensors have no reading for this run.", area), nil, ids))
 	}
 
 	actuatorFailures, err := r.Store.IncidentActuatorFailures(ctx, run, plantIDs)
@@ -129,7 +129,7 @@ func (r IncidentRadar) Run(ctx context.Context, runID uuid.UUID) (incidents []pl
 			eventIDs = append(eventIDs, eventID)
 		}
 		candidate := incidentCandidate(runID, plant.FactorActuatorFailure, actuatorID.String(), members,
-			fmt.Sprintf("Shared factor worth checking: %d affected plant entries are assigned to an actuator with a failed command near this complete run.", len(members)), nil, nil)
+			fmt.Sprintf("Dire condition with failed automation: %d urgently affected plants are assigned to an actuator with a failed command near this complete run.", len(members)), nil, nil)
 		candidate.Evidence.ActuatorEventIDs = eventIDs
 		candidates = append(candidates, candidate)
 	}
@@ -246,7 +246,7 @@ func commonCareCandidates(runID uuid.UUID, signals []store.IncidentSignal, care 
 				sort.Slice(members, func(i, j int) bool { return members[i].Plant.ID.String() < members[j].Plant.ID.String() })
 				ref := fmt.Sprintf("%s:%s", kind, events[start].OccurredAt.UTC().Truncate(time.Minute).Format(time.RFC3339))
 				out = append(out, incidentCandidate(runID, plant.FactorCommonCare, ref, members,
-					fmt.Sprintf("Shared factor worth checking: %d plants received %s care within %s before new check or urgent actions.", len(members), kind, CommonCareWindow), ids, nil))
+					fmt.Sprintf("Dire shared condition: %d plants received %s care within %s before new urgent actions.", len(members), kind, CommonCareWindow), ids, nil))
 			}
 			start = max(end, start+1)
 		}

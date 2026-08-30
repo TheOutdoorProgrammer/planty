@@ -12,6 +12,7 @@ struct Actuator: Codable, Sendable, Hashable, Identifiable {
     let updatedAt: Date
     var activeLease: ActuatorLease?
     var lightSchedule: LightSchedule?
+    var fanSchedule: ActuatorSchedule?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -25,6 +26,7 @@ struct Actuator: Codable, Sendable, Hashable, Identifiable {
         case updatedAt = "updated_at"
         case activeLease = "active_lease"
         case lightSchedule = "light_schedule"
+        case fanSchedule = "fan_schedule"
     }
 }
 
@@ -42,6 +44,7 @@ extension Actuator {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         activeLease = try container.decodeIfPresent(ActuatorLease.self, forKey: .activeLease)
         lightSchedule = try container.decodeIfPresent(LightSchedule.self, forKey: .lightSchedule)
+        fanSchedule = try container.decodeIfPresent(ActuatorSchedule.self, forKey: .fanSchedule)
     }
 }
 
@@ -64,7 +67,7 @@ extension Actuator {
     }
 }
 
-struct LightSchedule: Codable, Sendable, Hashable {
+struct ActuatorSchedule: Codable, Sendable, Hashable {
     let actuatorID: UUID
     let startMinute: Int
     let endMinute: Int
@@ -90,6 +93,8 @@ struct LightSchedule: Codable, Sendable, Hashable {
     }
 }
 
+typealias LightSchedule = ActuatorSchedule
+
 struct LightScheduleRequest: Codable, Sendable, Equatable {
     let startMinute: Int
     let endMinute: Int
@@ -110,7 +115,7 @@ struct LightScheduleDraft: Equatable {
     var timezone: String
     var enabled: Bool
 
-    init(schedule: LightSchedule?, defaultTimezone: String = TimeZone.current.identifier) {
+    init(schedule: ActuatorSchedule?, defaultTimezone: String = TimeZone.current.identifier) {
         startMinute = schedule?.startMinute ?? 7 * 60
         endMinute = schedule?.endMinute ?? 21 * 60
         timezone = schedule?.timezone ?? defaultTimezone
@@ -124,6 +129,9 @@ struct LightScheduleDraft: Equatable {
             && !timezone.isEmpty
     }
 }
+
+typealias ActuatorScheduleRequest = LightScheduleRequest
+typealias ActuatorScheduleDraft = LightScheduleDraft
 
 struct LightStateRequest: Codable, Sendable, Equatable {
     let isOn: Bool

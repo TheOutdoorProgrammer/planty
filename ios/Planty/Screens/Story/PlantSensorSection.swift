@@ -2,6 +2,11 @@ import SwiftUI
 
 struct PlantSensorSection: View {
     let series: [SensorSeries]
+    let proposals: [CalibrationProposal]
+    let onResolve: (CalibrationProposal, Bool) async -> PlantyError?
+
+    @State private var resolving: Set<UUID> = []
+    @State private var failure: PlantyError?
 
     private var soilSeries: [SensorSeries] {
         series.filter { $0.link.role == .soilMoisture || $0.link.role == .ambientTemp }
@@ -26,6 +31,18 @@ struct PlantSensorSection: View {
                         .background(PlantyColor.cyan.opacity(0.12), in: Capsule())
                 }
 
+                ForEach(proposals) { proposal in
+                    CalibrationProposalCard(
+                        proposal: proposal,
+                        isWorking: resolving.contains(proposal.id),
+                        onResolve: resolve
+                    )
+                }
+
+                if let failure {
+                    SheetErrorRow(headline: "The calibration proposal was not changed.", error: failure)
+                }
+
                 ForEach(soilSeries) { sensor in
                     PlantSensorReadingRow(series: sensor)
                     if sensor.id != soilSeries.last?.id {
@@ -47,6 +64,70 @@ struct PlantSensorSection: View {
             .plantyCard(border: PlantyColor.cyan.opacity(0.3))
         }
     }
+
+    private func resolve(_ proposal: CalibrationProposal, approve: Bool) async {
+        guard !resolving.contains(proposal.id) else { return }
+        resolving.insert(proposal.id)
+        defer { resolving.remove(proposal.id) }
+        failure = await onResolve(proposal, approve)
+    }
+}
+
+private struct CalibrationProposalCard: View {
+    let proposal: CalibrationProposal
+    let isWorking: Bool
+    let onResolve: (CalibrationProposal, Bool) async -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("Planty suggests recalibrating", systemImage: "scope")
+                .font(.subheadline.weight(.bold))
+                .foregroundStyle(PlantyColor.orange)
+            Text(proposal.reason)
+                .font(.subheadline)
+                .foregroundStyle(PlantyColor.secondaryText)
+            LabeledContent("Probe now", value: actualValue)
+            LabeledContent(
+                "Relative now",
+                value: percent(proposal.currentRelative) + " → " + percent(proposal.proposedRelative)
+            )
+            LabeledContent(
+                "Dry / wet",
+                value: values(proposal.currentDry, proposal.currentWet)
+                    + " → " + values(proposal.proposedDry, proposal.proposedWet)
+            )
+            HStack(spacing: 10) {
+                Button("Deny", role: .destructive) {
+                    Task { await onResolve(proposal, false) }
+                }
+                .buttonStyle(.bordered)
+                .disabled(isWorking)
+                Button("Approve") {
+                    Task { await onResolve(proposal, true) }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(PlantyColor.green)
+                .disabled(isWorking)
+            }
+        }
+        .padding(12)
+        .background(PlantyColor.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 14))
+    }
+
+    private var actualValue: String {
+        let number = proposal.actualValue.formatted(.number.precision(.fractionLength(0...1)))
+        guard let unit = proposal.unit?.nilIfBlank else { return number }
+        return ["%", "°F", "°C"].contains(unit) ? number + unit : number + " " + unit
+    }
+
+    private func percent(_ value: Double) -> String {
+        value.formatted(.percent.precision(.fractionLength(0)))
+    }
+
+    private func values(_ dry: Double, _ wet: Double) -> String {
+        let format = FloatingPointFormatStyle<Double>.number.precision(.fractionLength(0...1))
+        return dry.formatted(format) + " / " + wet.formatted(format)
+    }
 }
 
 private struct PlantSensorReadingRow: View {
@@ -62,10 +143,17 @@ private struct PlantSensorReadingRow: View {
                     .foregroundStyle(PlantyColor.secondaryText)
             }
             Spacer(minLength: 12)
-            Text(value)
-                .font(.title3.monospacedDigit().weight(.bold))
-                .foregroundStyle(PlantyColor.foreground)
-                .multilineTextAlignment(.trailing)
+            VStack(alignment: .trailing, spacing: 3) {
+                Text(value)
+                    .font(.title3.monospacedDigit().weight(.bold))
+                    .foregroundStyle(PlantyColor.foreground)
+                if let probeValue {
+                    Text("Probe \(probeValue)")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(PlantyColor.secondaryText)
+                }
+            }
+            .multilineTextAlignment(.trailing)
         }
         .accessibilityElement(children: .combine)
     }
@@ -74,8 +162,16 @@ private struct PlantSensorReadingRow: View {
         guard let reading = series.latest else { return "No reading" }
         if series.link.role == .soilMoisture,
            let fraction = series.link.fraction(of: reading.value) {
-            return fraction.formatted(.percent.precision(.fractionLength(0)))
+            return "Relative " + fraction.formatted(.percent.precision(.fractionLength(0)))
         }
+        return rawValue(reading)
+    }
+
+    private var probeValue: String? {
+        guard series.link.role == .soilMoisture,
+              series.link.isCalibrated,
+              let reading = series.latest
+        else { return nil }
         return rawValue(reading)
     }
 
@@ -83,7 +179,7 @@ private struct PlantSensorReadingRow: View {
         guard let reading = series.latest else { return "Waiting for the first sample" }
         let when = RelativeAge.dayAndTime(reading.takenAt, now: Date())
         if series.link.role == .soilMoisture, series.link.isCalibrated {
-            return "Probe-relative moisture, \(when)"
+            return "Calibrated from this probe's dry and wet values, \(when)"
         }
         if series.link.role == .soilMoisture {
             return "Raw probe reading, \(when)"

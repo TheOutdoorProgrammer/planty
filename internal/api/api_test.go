@@ -18,6 +18,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
+	"github.com/google/uuid"
 )
 
 // The handlers are tested against a real Postgres for the same reason the store
@@ -738,6 +739,33 @@ func TestSensorLinkAndCalibration(t *testing.T) {
 	if out["calibrated_at"] == nil {
 		t.Error("calibration should record when it happened")
 	}
+	sensorID := uuid.MustParse(id)
+	if err := db.RecordReading(ctx, plant.Reading{
+		SensorLinkID: sensorID, Value: 40, Unit: "%", TakenAt: time.Now().UTC(),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	reading, err := db.LatestReading(ctx, sensorID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposal, created, err := db.ProposeCalibration(ctx, plant.CalibrationProposal{
+		SensorLinkID: sensorID, ReadingID: reading.ID, ProposedDry: 10, ProposedWet: 80,
+		Reason: "Recorded endpoints support a wider range.", ModelVersion: "test",
+	})
+	if err != nil || !created {
+		t.Fatalf("proposal created=%t err=%v", created, err)
+	}
+	rec, detail := do(t, h, http.MethodGet, "/v1/plants/"+slug, nil)
+	if rec.Code != http.StatusOK || len(detail["calibration_proposals"].([]any)) != 1 {
+		t.Fatalf("plant calibration proposals = %d %#v", rec.Code, detail)
+	}
+	rec, approved := do(t, h, http.MethodPost, "/v1/calibration-proposals/"+proposal.ID.String()+"/approve", map[string]any{
+		"actor": "Joey",
+	})
+	if rec.Code != http.StatusOK || approved["status"] != "approved" || approved["resolved_by"] != "Joey" {
+		t.Fatalf("approve calibration = %d %#v", rec.Code, approved)
+	}
 
 	rec, linked = do(t, h, http.MethodPost, "/v1/sensors", map[string]any{
 		"plant_id":     p.ID.String(),
@@ -815,12 +843,19 @@ func TestPlantDetailReturnsSensorLinksWithContractReadings(t *testing.T) {
 		t.Fatalf("list sensors: got %d, body %s", rec.Code, rec.Body.String())
 	}
 	listedReadings, ok := out["readings"].([]any)
-	if !ok || len(listedReadings) != 1 {
-		t.Fatalf("listed readings = %#v, want one latest reading", out["readings"])
+	if !ok {
+		t.Fatalf("listed readings = %#v", out["readings"])
 	}
-	listedReading := listedReadings[0].(map[string]any)
-	if listedReading["sensor_link_id"] != moisture.ID.String() || listedReading["value"] != 42.5 {
-		t.Errorf("sensor list reading = %#v, want moisture's latest reading", listedReading)
+	var listedReading map[string]any
+	for _, candidate := range listedReadings {
+		reading := candidate.(map[string]any)
+		if reading["sensor_link_id"] == moisture.ID.String() {
+			listedReading = reading
+			break
+		}
+	}
+	if listedReading == nil || listedReading["value"] != 42.5 {
+		t.Errorf("sensor list readings = %#v, want moisture's latest reading", listedReadings)
 	}
 }
 

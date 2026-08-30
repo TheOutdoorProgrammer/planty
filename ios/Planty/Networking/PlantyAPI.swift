@@ -63,6 +63,10 @@ protocol PlantyAPI: Sendable {
     func setLightState(id: UUID, request: LightStateRequest) async throws
     func setLightSchedule(id: UUID, request: LightScheduleRequest) async throws -> LightSchedule
     func deleteLightSchedule(id: UUID) async throws
+    func setFanSchedule(id: UUID, request: ActuatorScheduleRequest) async throws -> ActuatorSchedule
+    func deleteFanSchedule(id: UUID) async throws
+    func approveCalibrationProposal(id: UUID) async throws -> CalibrationProposal
+    func denyCalibrationProposal(id: UUID) async throws -> CalibrationProposal
     func proposeRecheck(slug: String, proposal: RecheckProposal) async throws -> EvidenceWindow
     func rechecks(slug: String) async throws -> [EvidenceWindow]
     func evidenceWindow(id: UUID) async throws -> EvidenceWindow
@@ -276,6 +280,22 @@ extension PlantyAPI {
 
     func deleteLightSchedule(id: UUID) async throws {
         throw PlantyError.server(status: 503, message: "Light schedules are unavailable from this client.")
+    }
+
+    func setFanSchedule(id: UUID, request: ActuatorScheduleRequest) async throws -> ActuatorSchedule {
+        throw PlantyError.server(status: 503, message: "Fan schedules are unavailable from this client.")
+    }
+
+    func deleteFanSchedule(id: UUID) async throws {
+        throw PlantyError.server(status: 503, message: "Fan schedules are unavailable from this client.")
+    }
+
+    func approveCalibrationProposal(id: UUID) async throws -> CalibrationProposal {
+        throw PlantyError.server(status: 503, message: "Calibration review is unavailable from this client.")
+    }
+
+    func denyCalibrationProposal(id: UUID) async throws -> CalibrationProposal {
+        throw PlantyError.server(status: 503, message: "Calibration review is unavailable from this client.")
     }
 
     func registerActuator(_ registration: ActuatorRegistration) async throws -> Actuator {

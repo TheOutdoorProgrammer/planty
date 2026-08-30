@@ -32,7 +32,13 @@ struct PlantStoryScreen: View {
                 header
                 lineageCard
                 currentState
-                PlantSensorSection(series: store.series)
+                PlantSensorSection(
+                    series: store.series,
+                    proposals: store.calibrationProposals,
+                    onResolve: { proposal, approve in
+                        await store.resolveCalibrationProposal(proposal, approve: approve)
+                    }
+                )
                 PlantHealthSection(plant: store.plant)
                 EvidenceWorkflowSection(
                     plant: store.plant,
@@ -422,7 +428,9 @@ struct PlantStoryScreen: View {
     }
 
     private var activePlantActuator: Actuator? {
-        plantActuators.first { session.actuators.leases[$0.id]?.isActive == true }
+        plantActuators.first {
+            $0.isOn == true || session.actuators.leases[$0.id]?.isActive == true
+        }
     }
 
     private var lightStatus: String {

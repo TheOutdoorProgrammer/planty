@@ -167,7 +167,29 @@ func (d Daily) judgeOne(ctx context.Context, runID uuid.UUID, p plant.Plant, pol
 	if err := d.recordHealth(ctx, runID, evidence, result); err != nil {
 		return result, fmt.Errorf("record health: %w", err)
 	}
+	if result.Calibration != nil {
+		_, _, proposalErr := d.Store.ProposeCalibration(ctx, plant.CalibrationProposal{
+			SensorLinkID: result.Calibration.SensorLinkID,
+			ReadingID:    calibrationReadingID(evidence, result.Calibration.SensorLinkID),
+			ProposedDry:  result.Calibration.DryBaseline,
+			ProposedWet:  result.Calibration.WetBaseline,
+			Reason:       result.Calibration.Reason,
+			ModelVersion: result.Model,
+		})
+		if proposalErr != nil {
+			d.Log.Warn("calibration proposal rejected", "plant", p.Slug, "error", proposalErr)
+		}
+	}
 	return result, nil
+}
+
+func calibrationReadingID(evidence judge.Evidence, sensorLinkID uuid.UUID) uuid.UUID {
+	for _, sensor := range evidence.Sensors {
+		if sensor.SensorLinkID == sensorLinkID {
+			return sensor.ReadingID
+		}
+	}
+	return uuid.Nil
 }
 
 func (d Daily) verdictEvidence(evidence judge.Evidence, result judge.Result) plant.Evidence {
@@ -299,12 +321,15 @@ func (d Daily) gather(ctx context.Context, p plant.Plant) (judge.Evidence, error
 		}
 
 		state := judge.SensorState{
-			ReadingID:  reading.ID,
-			Role:       link.Role,
-			Raw:        reading.Value,
-			Unit:       reading.Unit,
-			Calibrated: link.Calibrated(),
-			TakenAt:    reading.TakenAt,
+			SensorLinkID: link.ID,
+			ReadingID:    reading.ID,
+			Role:         link.Role,
+			Raw:          reading.Value,
+			Unit:         reading.Unit,
+			Calibrated:   link.Calibrated(),
+			DryBaseline:  link.DryBaseline,
+			WetBaseline:  link.WetBaseline,
+			TakenAt:      reading.TakenAt,
 		}
 		if state.Calibrated {
 			if f, err := link.Fraction(reading.Value); err == nil {

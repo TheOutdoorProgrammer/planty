@@ -72,7 +72,7 @@ func (s *Store) IncidentSignalsForRun(ctx context.Context, runID uuid.UUID) (Jud
 			ORDER BY created_at DESC LIMIT 1
 		) v ON true
 		WHERE jr.run_id = $1 AND jr.succeeded = true
-		  AND v.action IN ('check', 'urgent')
+		  AND v.action = 'urgent'
 		  AND p.archived_at IS NULL
 		ORDER BY p.id`, runID, run.StartedAt, *run.CompletedAt)
 	if err != nil {

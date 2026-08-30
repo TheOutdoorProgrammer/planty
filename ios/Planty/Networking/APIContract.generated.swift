@@ -10,6 +10,7 @@ enum APIPath {
     static func addObservation(slug: String) -> String { "/v1/plants/\(slug)/observations" }
     static func addPlantNote(slug: String) -> String { "/v1/plants/\(slug)/notes" }
     static func answerQuestion(id: String) -> String { "/v1/questions/\(id)/answer" }
+    static func approveCalibrationProposal(id: String) -> String { "/v1/calibration-proposals/\(id)/approve" }
     static func archivePlant(slug: String) -> String { "/v1/plants/\(slug)" }
     static let ask = "/v1/ask"
     static func askPlant(slug: String) -> String { "/v1/plants/\(slug)/ask" }
@@ -31,12 +32,14 @@ enum APIPath {
     static let createQuestion = "/v1/questions"
     static func deleteActuator(id: String) -> String { "/v1/actuators/\(id)" }
     static func deleteAway(id: String) -> String { "/v1/away/\(id)" }
+    static func deleteFanSchedule(id: String) -> String { "/v1/actuators/\(id)/fan-schedule" }
     static func deleteHarvest(id: String) -> String { "/v1/harvests/\(id)" }
     static func deleteLightSchedule(id: String) -> String { "/v1/actuators/\(id)/light-schedule" }
     static func deleteNote(id: String) -> String { "/v1/notes/\(id)" }
     static func deletePhoto(id: String) -> String { "/v1/photos/\(id)" }
     static func deletePolicy(id: String) -> String { "/v1/policies/\(id)" }
     static func deleteReminder(slug: String, kind: String) -> String { "/v1/plants/\(slug)/reminders/\(kind)" }
+    static func denyCalibrationProposal(id: String) -> String { "/v1/calibration-proposals/\(id)/deny" }
     static func derivePlant(slug: String) -> String { "/v1/plants/\(slug)/derive" }
     static let discoverActuators = "/v1/home-assistant/actuators"
     static func enqueueIdentification(id: String) -> String { "/v1/identifications/\(id)" }
@@ -99,6 +102,7 @@ enum APIPath {
     static func reviewEvidenceWindow(id: String) -> String { "/v1/evidence-windows/\(id)/review" }
     static func runScheduledJob(job: String) -> String { "/v1/scheduled-jobs/\(job)/runs" }
     static func setActuatorState(id: String) -> String { "/v1/actuators/\(id)/state" }
+    static func setFanSchedule(id: String) -> String { "/v1/actuators/\(id)/fan-schedule" }
     static func setLightSchedule(id: String) -> String { "/v1/actuators/\(id)/light-schedule" }
     static func setModelAssignment(job: String) -> String { "/v1/model-assignments/\(job)" }
     static func setPromptInstruction(job: String) -> String { "/v1/prompt-instructions/\(job)" }

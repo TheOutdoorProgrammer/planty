@@ -52,6 +52,23 @@ func TestDescribeFlagsUncalibratedProbes(t *testing.T) {
 	}
 }
 
+func TestDescribeGivesAIActualAndRelativeSoilValues(t *testing.T) {
+	fraction := 0.3
+	got := describe(Evidence{
+		Plant: plant.Plant{CommonName: "Tomato", WateringMethod: plant.WateringHand},
+		Sensors: []SensorState{{
+			Role: plant.RoleSoilMoisture, Raw: 417, Unit: "raw", Fraction: &fraction,
+			Calibrated: true, TakenAt: time.Now(),
+		}},
+	})
+
+	for _, want := range []string{"actual probe reading 417.0 raw", "relative value 30%", "TRUSTED SENSOR EVIDENCE"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the AI evidence drops %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestDescribeTrustsTemperatureWithoutSoilCalibration(t *testing.T) {
 	got := describe(Evidence{
 		Plant: plant.Plant{CommonName: "Fern", WateringMethod: plant.WateringHand},
@@ -60,11 +77,24 @@ func TestDescribeTrustsTemperatureWithoutSoilCalibration(t *testing.T) {
 		}},
 	})
 
-	if !strings.Contains(got, "ambient_temp: 68.5 °F") {
+	if !strings.Contains(got, "ambient_temp: 68.5 °F, TRUSTED SENSOR EVIDENCE") {
 		t.Errorf("temperature is missing from the evidence:\n%s", got)
 	}
 	if strings.Contains(got, "NOT CALIBRATED") {
 		t.Errorf("temperature was subjected to soil calibration:\n%s", got)
+	}
+}
+
+func TestDescribeDoesNotTrustAStaleSensor(t *testing.T) {
+	got := describe(Evidence{
+		Plant: plant.Plant{CommonName: "Fern", WateringMethod: plant.WateringHand},
+		Sensors: []SensorState{{
+			Role: plant.RoleAmbientHumidity, Raw: 61, Unit: "%", TakenAt: time.Now().Add(-2 * plant.StaleAfter),
+		}},
+	})
+
+	if !strings.Contains(got, "STALE SENSOR READING, not current evidence") {
+		t.Errorf("stale sensor was presented as trusted:\n%s", got)
 	}
 }
 

@@ -61,7 +61,7 @@ On simulators or devices without an available camera, the Photos path remains fu
 
 The library is searchable and visual.
 Rows show the current photograph when available, name, location, ownership, and plain-language care state rather than sensor gauges.
-Small activity glyphs appear only while Planty can prove that watering or a fan is running, or that an assigned grow light is on.
+Small activity glyphs appear only while Planty can prove that watering or a fan is running, or that an assigned grow light is on. Fan state includes scheduled runs reported by Home Assistant, not only bounded leases.
 
 A plant story combines:
 
@@ -79,10 +79,11 @@ The follow-up flow explains that its later-photo instruction is guidance for the
 Photograph comparison becomes available when at least two photos exist.
 Unknown toxicity is labeled “Not checked” and is never styled as safe.
 An assigned fan appears as an Airflow action on the plant story.
-The sheet offers bounded duration choices, names every other plant sharing the fan before start, shows the active countdown, and provides an explicit stop.
+The sheet offers bounded duration choices, names every other plant sharing the fan before start, shows the active countdown, and provides an explicit stop. It also edits one persisted daily on/off schedule, including overnight windows, timezone, enabled state, and the last reconciliation result.
 An assigned grow light shows its current Home Assistant state on the plant story and opens direct on/off controls.
 Its daily on/off window, enabled state, and timezone are editable both there and on the registered light in Settings.
 Soil calibration shows the latest raw probe reading and timestamp, and loads any saved dry and wet baselines into the editable fields.
+The plant dashboard shows the actual soil probe value beside its calibrated relative value. Pending AI baseline proposals show the before and after values, the resulting relative change, and Approve and Deny controls.
 
 ## Consultation
 

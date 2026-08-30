@@ -14,33 +14,7 @@ Planty does not call Home Assistant notification services or `script.announce`.
 
 ## Greenhouse airflow
 
-The greenhouse fan belongs in Home Assistant because it is a simple bounded equipment schedule rather than a garden judgment.
-It gives a mushroom kit fresh-air exchange and agitates indoor tomato flowers for pollination.
-
-```yaml
-alias: Planty - greenhouse airflow
-description: >-
-  Fresh air exchange for the mushroom kit and pollination agitation for the tomatoes.
-triggers:
-  - trigger: time_pattern
-    hours: /3
-conditions:
-  - condition: time
-    after: "06:00:00"
-    before: "22:00:00"
-actions:
-  - action: switch.turn_on
-    target:
-      entity_id: switch.greenhouse_fan
-  - delay: "00:15:00"
-  - action: switch.turn_off
-    target:
-      entity_id: switch.greenhouse_fan
-mode: single
-```
-
-`mode: single` prevents overlapping runs.
-An independent maximum-on backstop is still appropriate for physical equipment because no automation process can guarantee cleanup after host loss.
+Planty owns daily on/off schedules for registered semantic fans. Disable any recurring Home Assistant automation for the same entity so two controllers cannot fight. Home Assistant may retain an independent maximum-on watchdog sized beyond the intended Planty schedule window, because a physical backstop is not a second source of recurring intent.
 
 ## Mushroom care
 
@@ -49,7 +23,7 @@ An RH threshold cannot see that distinction and encourages over-misting, which c
 
 The correct automation is a Planty reminder, not a Home Assistant misting rule.
 Create a `misted` reminder for the active kit, record the action when it is done, and deactivate the reminder after the final flush.
-The fan schedule remains independent because long thin stems indicate insufficient fresh air, not insufficient mist.
+The fan schedule remains independent from mushroom misting because long thin stems indicate insufficient fresh air, not insufficient mist.
 
 ## LetPot
 

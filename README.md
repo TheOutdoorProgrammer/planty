@@ -43,7 +43,7 @@ Scheduled work is one command per Kubernetes CronJob:
 | `planty ingest` | Every 20 minutes | Import current sensor readings from Home Assistant. |
 | `planty verify-water` | Every 15 minutes | Close completed manual watering attempts after sensor evidence has settled. |
 | `planty prune-photos` | 03:30 | Finish requested deletions and expire unowned consultation photos after 30 days. |
-| `planty reconcile-actuators` | Every minute | Turn off expired fan and smart-plug leases and enforce grow-light schedules. |
+| `planty reconcile-actuators` | Every minute | Turn off expired fan leases and enforce owner-configured fan and grow-light schedules. |
 | `planty daily` | 08:00 | Judge active plants, optionally run an evidence-justified assigned fan, persist the garden-wide run, sweep for postmortems, and send a digest. |
 | `planty away` | 08:30 | Send the pre-departure pass or return briefing. |
 | `planty thirst` | 09:00 and 18:00 | Report calibrated plants that appear dry without moving water. |
@@ -78,6 +78,7 @@ The Claude Code CLI and OpenAI-compatible harness can selectively open offered h
 
 Home Assistant supplies sensor readings, a forecast, the optional LetPot watering line, and explicitly registered plant fans, smart plugs, or grow lights.
 Planty can run a registered actuator for at most one hour from a plant page or an evidence-driven assessment, records successful shared airflow against every assigned plant, and persists the shutdown deadline before Home Assistant receives `turn_on`.
+Owner-configured daily fan and grow-light schedules are persisted separately, restored after restarts, and defer to an active bounded fan run.
 Grow lights instead use direct state control and a Planty-owned, timezone-aware daily schedule that the app or an assigned AI agent can change.
 It is not a notification transport.
 Planty sends scheduled alerts directly to registered iOS devices through APNs and fails the job when native delivery is unavailable.

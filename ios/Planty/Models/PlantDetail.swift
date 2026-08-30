@@ -13,6 +13,7 @@ struct PlantDetail: Decodable, Sendable, Hashable {
     var sensors: [SensorLink]?
     var readings: [Reading]?
     var lineage: PlantLineage?
+    var calibrationProposals: [CalibrationProposal]?
 
     /// Read from the envelope as well as from the plant inside it, because the
     /// endpoint may hang it off either and reading only one would show nothing.
@@ -29,6 +30,7 @@ struct PlantDetail: Decodable, Sendable, Hashable {
         case sensors
         case readings
         case lineage
+        case calibrationProposals = "calibration_proposals"
         case toxicity
     }
 }

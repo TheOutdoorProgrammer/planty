@@ -18,7 +18,7 @@ type ActuatorHomeAssistant interface {
 	CallService(context.Context, string, string, map[string]any) error
 }
 
-type lightStateReader interface {
+type actuatorStateReader interface {
 	State(context.Context, string) (ha.State, error)
 }
 
@@ -134,7 +134,7 @@ func (c ActuatorControl) Reconcile(ctx context.Context, now time.Time) (int, err
 		}
 		stopped++
 	}
-	changed, err := c.reconcileLights(ctx, now)
+	changed, err := c.reconcileSchedules(ctx, now)
 	if err != nil {
 		failures = append(failures, err)
 	}
@@ -142,6 +142,14 @@ func (c ActuatorControl) Reconcile(ctx context.Context, now time.Time) (int, err
 }
 
 func (c ActuatorControl) SetLight(ctx context.Context, actuatorID uuid.UUID, on bool, actor string, source plant.Source) error {
+	return c.setScheduledActuator(ctx, actuatorID, on, actor, source, plant.ActuatorLight)
+}
+
+func (c ActuatorControl) SetFanScheduleState(ctx context.Context, actuatorID uuid.UUID, on bool, actor string, source plant.Source) error {
+	return c.setScheduledActuator(ctx, actuatorID, on, actor, source, plant.ActuatorFan)
+}
+
+func (c ActuatorControl) setScheduledActuator(ctx context.Context, actuatorID uuid.UUID, on bool, actor string, source plant.Source, kind plant.ActuatorKind) error {
 	if c.HA == nil {
 		return errors.New("Home Assistant actuation is not configured")
 	}
@@ -157,8 +165,8 @@ func (c ActuatorControl) SetLight(ctx context.Context, actuatorID uuid.UUID, on 
 	if err != nil {
 		return err
 	}
-	if actuator.Kind != plant.ActuatorLight {
-		return fmt.Errorf("%w: direct state control is only available for lights", plant.ErrInvalid)
+	if actuator.Kind != kind {
+		return fmt.Errorf("%w: direct state control requires a %s actuator", plant.ErrInvalid, kind)
 	}
 	service := "turn_off"
 	if on {
@@ -171,25 +179,32 @@ func (c ActuatorControl) SetLight(ctx context.Context, actuatorID uuid.UUID, on 
 	controlErr := c.HA.CallService(ctx, domain, service, map[string]any{"entity_id": actuator.EntityID})
 	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
-	recordErr := c.Store.RecordLightState(recordCtx, actuatorID, on, actor, source, controlErr)
+	recordErr := c.Store.RecordScheduledState(recordCtx, actuatorID, on, actor, source, controlErr)
 	return errors.Join(controlErr, recordErr)
 }
 
-func (c ActuatorControl) reconcileLights(ctx context.Context, now time.Time) (int, error) {
+func (c ActuatorControl) reconcileSchedules(ctx context.Context, now time.Time) (int, error) {
 	actuators, err := c.Store.Actuators(ctx)
 	if err != nil {
 		return 0, err
 	}
-	reader, canRead := c.HA.(lightStateReader)
+	reader, canRead := c.HA.(actuatorStateReader)
 	changed := 0
 	var failures []error
 	for _, actuator := range actuators {
-		if actuator.Kind != plant.ActuatorLight || actuator.LightSchedule == nil {
+		schedule := actuator.LightSchedule
+		if actuator.Kind == plant.ActuatorFan {
+			schedule = actuator.FanSchedule
+			if actuator.ActiveLease != nil {
+				continue
+			}
+		}
+		if schedule == nil || (actuator.Kind != plant.ActuatorLight && actuator.Kind != plant.ActuatorFan) {
 			continue
 		}
-		desired, err := actuator.LightSchedule.WantsOn(now)
+		desired, err := schedule.WantsOn(now)
 		if err != nil {
-			failures = append(failures, fmt.Errorf("light %s schedule: %w", actuator.ID, err))
+			failures = append(failures, fmt.Errorf("%s %s schedule: %w", actuator.Kind, actuator.ID, err))
 			continue
 		}
 		if canRead {
@@ -198,8 +213,14 @@ func (c ActuatorControl) reconcileLights(ctx context.Context, now time.Time) (in
 				continue
 			}
 		}
-		if err := c.SetLight(ctx, actuator.ID, desired, "planty light schedule", plant.SourceAutomation); err != nil {
-			failures = append(failures, fmt.Errorf("light %s: %w", actuator.ID, err))
+		var controlErr error
+		if actuator.Kind == plant.ActuatorLight {
+			controlErr = c.SetLight(ctx, actuator.ID, desired, "planty light schedule", plant.SourceAutomation)
+		} else {
+			controlErr = c.SetFanScheduleState(ctx, actuator.ID, desired, "planty fan schedule", plant.SourceAutomation)
+		}
+		if controlErr != nil {
+			failures = append(failures, fmt.Errorf("%s %s: %w", actuator.Kind, actuator.ID, controlErr))
 			continue
 		}
 		changed++

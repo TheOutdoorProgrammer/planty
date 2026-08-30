@@ -238,19 +238,28 @@ final class ActuatorStore {
         timezone: String,
         enabled: Bool
     ) async -> PlantyError? {
+        guard actuator.kind == .light || actuator.kind == .fan else {
+            return .transport("Daily schedules are only available for lights and fans.")
+        }
         do {
-            let schedule = try await api.setLightSchedule(
-                id: actuator.id,
-                request: LightScheduleRequest(
-                    startMinute: startMinute,
-                    endMinute: endMinute,
-                    timezone: timezone,
-                    enabled: enabled,
-                    actor: "owner"
-                )
+            let request = ActuatorScheduleRequest(
+                startMinute: startMinute,
+                endMinute: endMinute,
+                timezone: timezone,
+                enabled: enabled,
+                actor: "owner"
             )
+            let schedule = if actuator.kind == .fan {
+                try await api.setFanSchedule(id: actuator.id, request: request)
+            } else {
+                try await api.setLightSchedule(id: actuator.id, request: request)
+            }
             if let index = registered.firstIndex(where: { $0.id == actuator.id }) {
-                registered[index].lightSchedule = schedule
+                if actuator.kind == .fan {
+                    registered[index].fanSchedule = schedule
+                } else {
+                    registered[index].lightSchedule = schedule
+                }
             }
             error = nil
             await loadEvents(for: actuator)
@@ -262,9 +271,17 @@ final class ActuatorStore {
 
     func deleteSchedule(_ actuator: Actuator) async -> PlantyError? {
         do {
-            try await api.deleteLightSchedule(id: actuator.id)
+            if actuator.kind == .fan {
+                try await api.deleteFanSchedule(id: actuator.id)
+            } else {
+                try await api.deleteLightSchedule(id: actuator.id)
+            }
             if let index = registered.firstIndex(where: { $0.id == actuator.id }) {
-                registered[index].lightSchedule = nil
+                if actuator.kind == .fan {
+                    registered[index].fanSchedule = nil
+                } else {
+                    registered[index].lightSchedule = nil
+                }
             }
             error = nil
             await loadEvents(for: actuator)

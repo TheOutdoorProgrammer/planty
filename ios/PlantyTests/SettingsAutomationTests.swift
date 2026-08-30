@@ -278,6 +278,39 @@ struct SettingsAutomationTests {
         #expect(!loaded.enabled)
     }
 
+    @Test("Fan schedules use the fan route and preserve daily window")
+    func fanScheduleUsesSemanticRoute() async throws {
+        let stub = IsolatedStubTransport()
+        stub.respond(json: scheduleJSON)
+        let schedule = try await stub.client().setFanSchedule(
+            id: actuatorID,
+            request: ActuatorScheduleRequest(
+                startMinute: 540,
+                endMinute: 1_020,
+                timezone: "America/New_York",
+                enabled: true,
+                actor: "owner"
+            )
+        )
+
+        #expect(schedule.startMinute == 540)
+        #expect(schedule.endMinute == 1_020)
+        #expect(stub.requests.first?.url?.path == "/v1/actuators/\(actuatorID.uuidString)/fan-schedule")
+    }
+
+    @Test("Calibration approval addresses the durable proposal")
+    func calibrationProposalApprovalUsesReviewRoute() async throws {
+        let stub = IsolatedStubTransport()
+        stub.respond(json: calibrationProposalJSON)
+
+        let proposal = try await stub.client().approveCalibrationProposal(id: leaseID)
+
+        #expect(proposal.status == "pending")
+        #expect(proposal.actualValue == 417)
+        #expect(proposal.currentRelative == 0.3)
+        #expect(stub.requests.first?.url?.path == "/v1/calibration-proposals/\(leaseID.uuidString)/approve")
+    }
+
     @Test("A successful light command updates the dashboard immediately")
     @MainActor
     func lightControlUpdatesState() async throws {
@@ -314,6 +347,25 @@ struct SettingsAutomationTests {
          "deadline":"2026-08-25T12:10:00Z","actor":"owner","source":"app",
          "idempotency_key":"55555555-5555-5555-5555-555555555555","started_at":"2026-08-25T12:00:00Z",
          "created_at":"2026-08-25T12:00:00Z"}
+        """
+    }
+
+    private var scheduleJSON: String {
+        """
+        {"actuator_id":"\(actuatorID.uuidString)","start_minute":540,"end_minute":1020,
+         "timezone":"America/New_York","enabled":true,"created_at":"2026-08-30T12:00:00Z",
+         "updated_at":"2026-08-30T12:00:00Z"}
+        """
+    }
+
+    private var calibrationProposalJSON: String {
+        """
+        {"id":"\(leaseID.uuidString)","sensor_link_id":"\(actuatorID.uuidString)",
+         "plant_id":"\(actuatorID.uuidString)","reading_id":"\(leaseID.uuidString)",
+         "actual_value":417,"unit":"raw","current_dry":300,"current_wet":690,
+         "proposed_dry":280,"proposed_wet":720,"current_relative":0.3,
+         "proposed_relative":0.311,"reason":"Repeated endpoints shifted.","model_version":"test",
+         "status":"pending","created_at":"2026-08-30T12:00:00Z"}
         """
     }
 

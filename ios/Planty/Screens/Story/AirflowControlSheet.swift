@@ -48,6 +48,8 @@ struct AirflowControlSheet: View {
 
                 if let actuator = selectedActuator {
                     airflowSection(actuator)
+                    ActuatorScheduleSections(actuator: actuator)
+                        .id(actuator.id)
                 } else {
                     ContentUnavailableView(
                         "No fan assigned",
@@ -110,7 +112,13 @@ struct AirflowControlSheet: View {
 
     private func stoppedSection(_ actuator: Actuator) -> some View {
         Section {
-            Label(actuator.name, systemImage: "fan.fill").font(.headline)
+            HStack {
+                Label(actuator.name, systemImage: "fan.fill").font(.headline)
+                Spacer()
+                Text(actuator.stateLabel)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(actuator.isOn == true ? PlantyColor.green : PlantyColor.secondaryText)
+            }
             Picker("Run for", selection: $duration) {
                 ForEach(ActuatorRunDuration.allCases) { duration in
                     Text(duration.label).tag(duration)
@@ -132,7 +140,12 @@ struct AirflowControlSheet: View {
         } header: {
             Text("Run fan")
         } footer: {
-            Text(sharedImpact(for: actuator, alreadyRecorded: false))
+            Text(
+                sharedImpact(for: actuator, alreadyRecorded: false)
+                    + (actuator.isOn == true && actuator.fanSchedule?.enabled == true
+                        ? " The daily schedule currently has it on."
+                        : "")
+            )
         }
     }
 

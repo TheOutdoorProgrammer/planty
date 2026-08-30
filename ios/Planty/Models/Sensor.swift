@@ -180,6 +180,48 @@ struct SensorCalibrationDraft: Equatable {
     }
 }
 
+struct CalibrationProposal: Codable, Sendable, Hashable, Identifiable {
+    let id: UUID
+    let sensorLinkID: UUID
+    let plantID: UUID
+    let readingID: UUID
+    let actualValue: Double
+    let unit: String?
+    let currentDry: Double
+    let currentWet: Double
+    let proposedDry: Double
+    let proposedWet: Double
+    let currentRelative: Double
+    let proposedRelative: Double
+    let reason: String
+    let modelVersion: String?
+    let status: String
+    let createdAt: Date
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case sensorLinkID = "sensor_link_id"
+        case plantID = "plant_id"
+        case readingID = "reading_id"
+        case actualValue = "actual_value"
+        case unit
+        case currentDry = "current_dry"
+        case currentWet = "current_wet"
+        case proposedDry = "proposed_dry"
+        case proposedWet = "proposed_wet"
+        case currentRelative = "current_relative"
+        case proposedRelative = "proposed_relative"
+        case reason
+        case modelVersion = "model_version"
+        case status
+        case createdAt = "created_at"
+    }
+}
+
+struct CalibrationProposalResolution: Encodable, Sendable {
+    let actor: String
+}
+
 struct Reading: Codable, Sendable, Hashable, Identifiable {
     let id: UUID
     let sensorLinkID: UUID

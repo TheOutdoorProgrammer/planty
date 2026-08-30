@@ -51,7 +51,7 @@ var definitions = []Definition{
 	{Away, "planty-away", "Run away-mode check", "Prepare departure care or a return briefing.", "Care", "Daily at 8:30 AM"},
 	{Chase, "planty-chase", "Chase overdue care", "Escalate unacknowledged findings within the existing cap.", "Care", "Daily at 1:00 PM and 8:00 PM"},
 	{VerifyWater, "planty-verify-water", "Verify watering evidence", "Check whether recent manual watering reached the soil.", "Care", "Every 15 minutes"},
-	{ReconcileActuators, "planty-reconcile-actuators", "Reconcile fan deadlines", "Stop any actuator whose durable run deadline passed.", "Maintenance", "Every minute"},
+	{ReconcileActuators, "planty-reconcile-actuators", "Reconcile actuator schedules", "Stop expired fan runs and enforce fan and light schedules.", "Maintenance", "Every minute"},
 	{PrunePhotos, "planty-prune-photos", "Clean expired photos", "Remove expired scratch photos and finish pending deletions.", "Maintenance", "Daily at 3:30 AM"},
 }
 

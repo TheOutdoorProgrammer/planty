@@ -20,17 +20,18 @@ const (
 )
 
 type Actuator struct {
-	ID                   uuid.UUID      `json:"id"`
-	EntityID             string         `json:"entity_id"`
-	Name                 string         `json:"name"`
-	Kind                 ActuatorKind   `json:"kind"`
-	PlantIDs             []uuid.UUID    `json:"plant_ids"`
-	PolicyControlEnabled bool           `json:"policy_control_enabled"`
-	CurrentState         string         `json:"current_state,omitempty"`
-	ActiveLease          *ActuatorLease `json:"active_lease,omitempty"`
-	LightSchedule        *LightSchedule `json:"light_schedule,omitempty"`
-	CreatedAt            time.Time      `json:"created_at"`
-	UpdatedAt            time.Time      `json:"updated_at"`
+	ID                   uuid.UUID         `json:"id"`
+	EntityID             string            `json:"entity_id"`
+	Name                 string            `json:"name"`
+	Kind                 ActuatorKind      `json:"kind"`
+	PlantIDs             []uuid.UUID       `json:"plant_ids"`
+	PolicyControlEnabled bool              `json:"policy_control_enabled"`
+	CurrentState         string            `json:"current_state,omitempty"`
+	ActiveLease          *ActuatorLease    `json:"active_lease,omitempty"`
+	LightSchedule        *ActuatorSchedule `json:"light_schedule,omitempty"`
+	FanSchedule          *ActuatorSchedule `json:"fan_schedule,omitempty"`
+	CreatedAt            time.Time         `json:"created_at"`
+	UpdatedAt            time.Time         `json:"updated_at"`
 }
 
 func (a Actuator) Valid() error {
@@ -72,7 +73,7 @@ func (a Actuator) EntityDomain() (string, error) {
 	return domain, nil
 }
 
-type LightSchedule struct {
+type ActuatorSchedule struct {
 	ActuatorID       uuid.UUID  `json:"actuator_id"`
 	StartMinute      int        `json:"start_minute"`
 	EndMinute        int        `json:"end_minute"`
@@ -85,23 +86,23 @@ type LightSchedule struct {
 	UpdatedAt        time.Time  `json:"updated_at"`
 }
 
-func (s LightSchedule) Valid() error {
+func (s ActuatorSchedule) Valid() error {
 	if s.ActuatorID == uuid.Nil {
 		return invalid("actuator_id is required")
 	}
 	if s.StartMinute < 0 || s.StartMinute > 1439 || s.EndMinute < 0 || s.EndMinute > 1439 {
-		return invalid("light schedule minutes must be between 0 and 1439")
+		return invalid("actuator schedule minutes must be between 0 and 1439")
 	}
 	if s.StartMinute == s.EndMinute {
-		return invalid("light schedule start and end must differ")
+		return invalid("actuator schedule start and end must differ")
 	}
 	if _, err := time.LoadLocation(strings.TrimSpace(s.Timezone)); err != nil {
-		return invalid("unknown light schedule timezone %q", s.Timezone)
+		return invalid("unknown actuator schedule timezone %q", s.Timezone)
 	}
 	return nil
 }
 
-func (s LightSchedule) WantsOn(at time.Time) (bool, error) {
+func (s ActuatorSchedule) WantsOn(at time.Time) (bool, error) {
 	if err := s.Valid(); err != nil {
 		return false, err
 	}
@@ -116,6 +117,8 @@ func (s LightSchedule) WantsOn(at time.Time) (bool, error) {
 	}
 	return minute >= s.StartMinute || minute < s.EndMinute, nil
 }
+
+type LightSchedule = ActuatorSchedule
 
 type ActuatorLease struct {
 	ID               uuid.UUID  `json:"id"`

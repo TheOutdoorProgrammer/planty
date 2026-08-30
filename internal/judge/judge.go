@@ -254,13 +254,23 @@ type PhotoEvidence struct {
 
 // SensorState is one probe's latest reading and optional soil normalization.
 type SensorState struct {
-	ReadingID  uuid.UUID
-	Role       plant.SensorRole
-	Raw        float64
-	Unit       string
-	Fraction   *float64
-	Calibrated bool
-	TakenAt    time.Time
+	SensorLinkID uuid.UUID
+	ReadingID    uuid.UUID
+	Role         plant.SensorRole
+	Raw          float64
+	Unit         string
+	Fraction     *float64
+	Calibrated   bool
+	DryBaseline  *float64
+	WetBaseline  *float64
+	TakenAt      time.Time
+}
+
+type CalibrationSuggestion struct {
+	SensorLinkID uuid.UUID `json:"sensor_link_id"`
+	DryBaseline  float64   `json:"dry_baseline"`
+	WetBaseline  float64   `json:"wet_baseline"`
+	Reason       string    `json:"reason"`
 }
 
 // Result is the model's answer, shaped to fit a plant.Verdict.
@@ -270,9 +280,10 @@ type Result struct {
 	Confidence float64      `json:"confidence"`
 	Summary    string       `json:"sensor_summary"`
 
-	HealthMode      plant.HealthMode `json:"health_mode"`
-	HealthValue     float64          `json:"health_value"`
-	HealthReasoning string           `json:"health_reasoning"`
+	HealthMode      plant.HealthMode       `json:"health_mode"`
+	HealthValue     float64                `json:"health_value"`
+	HealthReasoning string                 `json:"health_reasoning"`
+	Calibration     *CalibrationSuggestion `json:"calibration_proposal,omitempty"`
 
 	// Model is what answered. Filled in after decoding, not by it.
 	Model string `json:"-"`
@@ -315,6 +326,20 @@ Rules that matter more than anything else you know about plants:
 - Overwatering kills far more houseplants than drought. When the evidence is
   ambiguous, waiting a day is nearly always safer than watering.
 - An uncalibrated soil sensor is not evidence. Say so rather than guessing.
+- Fresh assigned sensors are primary evidence, not a hint. Trust calibrated
+  soil moisture and direct temperature, humidity, and illuminance readings.
+  Do not ask the owner to manually verify a condition a fresh trusted sensor
+  already answers, and do not contradict it without stronger current evidence.
+- Reserve "urgent" for a dire condition with credible evidence of imminent
+  death, irreversible damage, or immediate danger to a person or animal.
+  Routine care, uncertainty, a due task, mild symptoms, ordinary dryness, and
+  preventative advice are "check", "water", or "none", never "urgent".
+- A calibrated soil probe may have its baselines drift. Propose replacement
+  dry and wet baselines only when fresh readings plus recorded care provide
+  strong evidence that the current range is materially wrong. Never propose
+  from ordinary moisture movement, one surprising reading, or generic species
+  advice. A proposal is owner-reviewed and never applies itself. Return null
+  when the existing calibration remains plausible.
 - The owner's own instructions outrank general species advice. If a care
   profile records what the owner said, follow it.
 - A plant that is hard to reach and watered by hand is the one most likely to
@@ -477,6 +502,22 @@ func (r Result) valid(evidence Evidence) error {
 	if strings.TrimSpace(r.HealthReasoning) == "" {
 		return fmt.Errorf("health reasoning is empty")
 	}
+	if r.Calibration != nil {
+		if r.Calibration.SensorLinkID == uuid.Nil || r.Calibration.WetBaseline <= r.Calibration.DryBaseline ||
+			strings.TrimSpace(r.Calibration.Reason) == "" {
+			return fmt.Errorf("calibration proposal needs a sensor, increasing dry and wet baselines, and a reason")
+		}
+		found := false
+		for _, sensor := range evidence.Sensors {
+			if sensor.SensorLinkID == r.Calibration.SensorLinkID && sensor.Role == plant.RoleSoilMoisture && sensor.Calibrated {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("calibration proposal must name a calibrated soil sensor in this assessment")
+		}
+	}
 	switch r.HealthMode {
 	case plant.HealthUnchanged:
 		if r.HealthValue != 0 {
@@ -514,12 +555,12 @@ func resultSchema() (map[string]any, error) {
 	raw := `{
 		"type": "object",
 		"additionalProperties": false,
-		"required": ["action", "reasoning", "confidence", "sensor_summary", "health_mode", "health_value", "health_reasoning"],
+		"required": ["action", "reasoning", "confidence", "sensor_summary", "health_mode", "health_value", "health_reasoning", "calibration_proposal"],
 		"properties": {
 			"action": {
 				"type": "string",
 				"enum": ["none", "water", "check", "urgent", "harvest"],
-				"description": "The single action to take, or none"
+				"description": "The single action to take, or none. Urgent is only for a dire condition with credible evidence of imminent death, irreversible damage, or immediate danger."
 			},
 			"reasoning": {
 				"type": "string",
@@ -545,6 +586,18 @@ func resultSchema() (map[string]any, error) {
 			"health_reasoning": {
 				"type": "string",
 				"description": "One sentence naming the evidence for the health decision"
+			},
+			"calibration_proposal": {
+				"type": ["object", "null"],
+				"additionalProperties": false,
+				"required": ["sensor_link_id", "dry_baseline", "wet_baseline", "reason"],
+				"properties": {
+					"sensor_link_id": {"type": "string", "format": "uuid"},
+					"dry_baseline": {"type": "number"},
+					"wet_baseline": {"type": "number"},
+					"reason": {"type": "string"}
+				},
+				"description": "Null unless fresh evidence strongly supports an owner-reviewed soil calibration change"
 			}
 		}
 	}`
@@ -601,21 +654,34 @@ func describe(e Evidence) string {
 		b.WriteString("  none, this plant has no sensor\n")
 	}
 	for _, s := range e.Sensors {
+		fresh := time.Since(s.TakenAt) <= plant.StaleAfter
+		evidenceLabel := "TRUSTED SENSOR EVIDENCE"
+		if !fresh {
+			evidenceLabel = "STALE SENSOR READING, not current evidence"
+		}
 		if s.Role.RequiresCalibration() && !s.Calibrated {
 			fmt.Fprintf(&b, "  %s: raw %.1f, NOT CALIBRATED so not trustworthy (%s ago)\n",
 				s.Role, s.Raw, ago(s.TakenAt))
 			continue
 		}
 		if s.Role.RequiresCalibration() && s.Fraction != nil {
-			fmt.Fprintf(&b, "  %s: %.0f%% between its own dry and wet marks (%s ago)\n",
-				s.Role, *s.Fraction*100, ago(s.TakenAt))
+			unit := strings.TrimSpace(s.Unit)
+			if unit != "" {
+				unit = " " + unit
+			}
+			baselines := "its own dry and wet marks"
+			if s.DryBaseline != nil && s.WetBaseline != nil {
+				baselines = fmt.Sprintf("dry %.1f and wet %.1f", *s.DryBaseline, *s.WetBaseline)
+			}
+			fmt.Fprintf(&b, "  %s (sensor link %s): actual probe reading %.1f%s; relative value %.0f%% between %s, %s (%s ago)\n",
+				s.Role, s.SensorLinkID, s.Raw, unit, *s.Fraction*100, baselines, evidenceLabel, ago(s.TakenAt))
 			continue
 		}
 		unit := strings.TrimSpace(s.Unit)
 		if unit != "" {
 			unit = " " + unit
 		}
-		fmt.Fprintf(&b, "  %s: %.1f%s (%s ago)\n", s.Role, s.Raw, unit, ago(s.TakenAt))
+		fmt.Fprintf(&b, "  %s: %.1f%s, %s (%s ago)\n", s.Role, s.Raw, unit, evidenceLabel, ago(s.TakenAt))
 	}
 	if e.AmbientTempF != nil {
 		fmt.Fprintf(&b, "  ambient: %.0fF", *e.AmbientTempF)

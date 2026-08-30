@@ -115,8 +115,8 @@ func (s *Store) UpdateActuator(ctx context.Context, id uuid.UUID, name string, k
 		WHERE id = $1`, id, name, kind, policyControlEnabled); err != nil {
 		return plant.Actuator{}, err
 	}
-	if actuator.Kind != plant.ActuatorLight {
-		if _, err := tx.Exec(ctx, `DELETE FROM plant_light_schedules WHERE actuator_id = $1`, id); err != nil {
+	if actuator.Kind != plant.ActuatorLight && actuator.Kind != plant.ActuatorFan {
+		if _, err := tx.Exec(ctx, `DELETE FROM plant_actuator_schedules WHERE actuator_id = $1`, id); err != nil {
 			return plant.Actuator{}, err
 		}
 	}
@@ -179,6 +179,13 @@ func (s *Store) hydrateActuator(ctx context.Context, actuator *plant.Actuator) e
 		schedule, err := s.LightSchedule(ctx, actuator.ID)
 		if err == nil {
 			actuator.LightSchedule = &schedule
+		} else if !errors.Is(err, ErrNotFound) {
+			return err
+		}
+	} else if actuator.Kind == plant.ActuatorFan {
+		schedule, err := s.FanSchedule(ctx, actuator.ID)
+		if err == nil {
+			actuator.FanSchedule = &schedule
 		} else if !errors.Is(err, ErrNotFound) {
 			return err
 		}

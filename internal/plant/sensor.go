@@ -84,3 +84,32 @@ type Reading struct {
 	Unit         string    `json:"unit,omitempty"`
 	TakenAt      time.Time `json:"taken_at"`
 }
+
+type CalibrationProposalStatus string
+
+const (
+	CalibrationPending  CalibrationProposalStatus = "pending"
+	CalibrationApproved CalibrationProposalStatus = "approved"
+	CalibrationDenied   CalibrationProposalStatus = "denied"
+)
+
+type CalibrationProposal struct {
+	ID               uuid.UUID                 `json:"id"`
+	SensorLinkID     uuid.UUID                 `json:"sensor_link_id"`
+	PlantID          uuid.UUID                 `json:"plant_id"`
+	ReadingID        uuid.UUID                 `json:"reading_id"`
+	ActualValue      float64                   `json:"actual_value"`
+	Unit             string                    `json:"unit,omitempty"`
+	CurrentDry       float64                   `json:"current_dry"`
+	CurrentWet       float64                   `json:"current_wet"`
+	ProposedDry      float64                   `json:"proposed_dry"`
+	ProposedWet      float64                   `json:"proposed_wet"`
+	CurrentRelative  float64                   `json:"current_relative"`
+	ProposedRelative float64                   `json:"proposed_relative"`
+	Reason           string                    `json:"reason"`
+	ModelVersion     string                    `json:"model_version,omitempty"`
+	Status           CalibrationProposalStatus `json:"status"`
+	CreatedAt        time.Time                 `json:"created_at"`
+	ResolvedAt       *time.Time                `json:"resolved_at,omitempty"`
+	ResolvedBy       string                    `json:"resolved_by,omitempty"`
+}

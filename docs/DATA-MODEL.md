@@ -97,7 +97,9 @@ A plant is watched by zero or more Home Assistant entities.
 
 **Soil calibration belongs here, not on the plant.** A raw moisture percentage is meaningless until dry and saturated are recorded for that probe in that soil in that pot. Two soil sensors' absolute numbers are never comparable, so every moisture threshold is expressed relative to that link's own baselines. Temperature, humidity, and illuminance use their reported values directly.
 
-An uncalibrated soil link produces readings but must never produce an automated watering decision. Confident wrong alerts are worse than no alerts.
+An uncalibrated soil link produces readings but must never produce an automated watering decision. A calibrated reading is presented as both the actual probe value and its relative position between that probe's dry and wet baselines.
+
+The daily AI may propose replacement baselines only from a fresh reading and a currently calibrated soil link. Proposals preserve the actual reading, old and proposed baselines, old and proposed relative values, model, and reason. They never apply themselves. The plant dashboard requires an owner to approve or deny each proposal, and the store accepts at most one proposal per probe in any 72-hour window.
 
 ## Plant-dedicated actuators
 
@@ -121,9 +123,7 @@ Deleting an actuator only removes it from the active allowlist; historical lease
 An active actuator cannot be removed until it has been stopped.
 
 Planty owns bounded ad hoc runs only.
-Recurring fan schedules remain Home Assistant automations because duplicating schedule ownership would create two controllers that can disagree about whether a device should be on.
-
-Grow lights use direct on/off commands and one optional daily schedule instead of leases. The schedule stores local start and end minutes plus an IANA timezone, supports windows that cross midnight, and is reconciled every minute. Disabled schedules enforce off. Planty reads Home Assistant state before acting so a correct light is not toggled repeatedly, records every command or failure in the actuator ledger, and never accepts a caller-supplied entity ID. The iOS app and assigned AI agents can create, change, disable, or manually override the schedule. Planty owns these grow-light schedules; a second Home Assistant automation for the same light would be a competing controller and should not exist.
+Fans and grow lights each support one optional daily schedule. The schedule stores local start and end minutes plus an IANA timezone, supports windows that cross midnight, and is reconciled every minute. Disabled schedules enforce off. Planty reads Home Assistant state before acting so a correct device is not toggled repeatedly, records every command or failure in the actuator ledger, and never accepts a caller-supplied entity ID. A bounded manual or agent fan lease takes priority over its schedule. Planty owns these schedules; a second Home Assistant automation for the same actuator would be a competing controller and should not exist.
 
 ## readings
 
@@ -175,14 +175,14 @@ One row per plant per day, the output of the daily judgment run.
 
 `garden_incidents` is a lifecycle record for a suspected shared factor across otherwise independent plant verdicts.
 The deterministic detector runs only after a judgment run completed successfully for every expected plant.
-It may open or refresh an incident only for at least two affected plants, or for one affected plant plus an independent environmental or actuator failure record.
+It considers only `urgent` verdicts, where urgent is reserved for credible imminent death, irreversible damage, or immediate danger. Routine `check`, watering, uncertainty, and preventative advice cannot open an incident. An urgent incident may open or refresh only for at least two affected plants, or for one affected plant plus an independent environmental or actuator failure record.
 Every incident has a required `reason` that explains both the correlation and the agent findings that caused each affected plant to be flagged. Existing incidents are backfilled from their preserved verdict reasoning, and the API and app surface the reason as the primary explanation.
 
 Typed factor membership names a shared Home Assistant area, current location, registered actuator, tightly timed common-care batch, or environmental failure.
 `garden_incident_plants` keeps plant membership normalized while each row retains its verdict and action evidence.
 `garden_incident_detections` append-only records every complete judgment run that refreshed the candidate, so a later update cannot erase the evidence that originally opened it.
 
-An incident says “shared factor worth checking,” never that the factor caused the symptoms.
+An incident says that dire findings share a factor, never that the factor caused the symptoms.
 It does not acknowledge or hide the plants' individual verdicts, and it cannot actuate equipment, quarantine plants, spray anything, or change care.
 Acknowledgement only records that a person saw the candidate.
 Resolution preserves the actor, conclusion, and one of `confirmed_common_cause`, `unrelated`, `contained`, or `inconclusive`.

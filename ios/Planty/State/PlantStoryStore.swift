@@ -40,6 +40,7 @@ final class PlantStoryStore {
     var chapters: [StoryChapter] { StoryBuilder.chapters(from: timeline) }
     var latestPhoto: Photo? { timeline.photos.max { $0.takenAt < $1.takenAt } }
     var series: [SensorSeries] { timeline.series }
+    var calibrationProposals: [CalibrationProposal] { detail?.calibrationProposals ?? [] }
 
     /// The envelope wins over the plant inside it, and either will do: reading
     /// only one would show nothing if the service moved it.
@@ -118,6 +119,25 @@ final class PlantStoryStore {
             guard generation == loadGeneration, isSessionCurrent() else { return }
             guard !PlantyError.isCancellation(error) else { return }
             self.error = PlantyError.from(error)
+        }
+    }
+
+    @discardableResult
+    func resolveCalibrationProposal(_ proposal: CalibrationProposal, approve: Bool) async -> PlantyError? {
+        do {
+            if approve {
+                _ = try await api.approveCalibrationProposal(id: proposal.id)
+            } else {
+                _ = try await api.denyCalibrationProposal(id: proposal.id)
+            }
+            detail?.calibrationProposals?.removeAll { $0.id == proposal.id }
+            if approve { await load() }
+            error = nil
+            return nil
+        } catch {
+            let failure = PlantyError.from(error)
+            self.error = failure
+            return failure
         }
     }
 
