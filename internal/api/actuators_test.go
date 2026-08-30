@@ -36,7 +36,7 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 	}
 	fake := &actuatorAPIHA{entities: []ha.Entity{
 		{EntityID: "sensor.humidity", Domain: "sensor", FriendlyName: "Humidity", Available: true},
-		{EntityID: "light.grow", Domain: "light", FriendlyName: "Grow light", State: "on", Available: true},
+		{EntityID: "switch.grow", Domain: "switch", FriendlyName: "Grow light", State: "on", Available: true},
 		{EntityID: "fan.cabinet", Domain: "fan", FriendlyName: "Cabinet fan", Available: true},
 		{EntityID: "switch.plant_fan", Domain: "switch", FriendlyName: "Plant fan plug", Available: true},
 	}}
@@ -51,9 +51,9 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 		t.Fatalf("registered non-actuator with status %d", rejected.Code)
 	}
 	created, actuator := do(t, server, http.MethodPost, "/v1/actuators", map[string]any{
-		"entity_id": "switch.plant_fan", "plant_ids": []string{grown.ID.String()},
+		"entity_id": "switch.plant_fan", "kind": "fan", "plant_ids": []string{grown.ID.String()},
 	})
-	if created.Code != http.StatusCreated || actuator["entity_id"] != "switch.plant_fan" {
+	if created.Code != http.StatusCreated || actuator["entity_id"] != "switch.plant_fan" || actuator["kind"] != "fan" {
 		t.Fatalf("created = %d %#v", created.Code, actuator)
 	}
 	id := actuator["id"].(string)
@@ -80,7 +80,7 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 		t.Fatalf("events = %d %#v", events.Code, history)
 	}
 	lightCreated, light := do(t, server, http.MethodPost, "/v1/actuators", map[string]any{
-		"entity_id": "light.grow", "plant_ids": []string{grown.ID.String()},
+		"entity_id": "switch.grow", "kind": "light", "plant_ids": []string{grown.ID.String()},
 	})
 	if lightCreated.Code != http.StatusCreated || light["current_state"] != "on" {
 		t.Fatalf("light registration = %d %#v", lightCreated.Code, light)
@@ -110,7 +110,13 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 	controlled, _ := do(t, server, http.MethodPost, "/v1/actuators/"+lightID+"/state", map[string]any{
 		"on": true, "actor": "Joey",
 	})
-	if controlled.Code != http.StatusOK || fake.calls[len(fake.calls)-1] != "light/turn_on:light.grow" {
+	if controlled.Code != http.StatusOK || fake.calls[len(fake.calls)-1] != "switch/turn_on:switch.grow" {
 		t.Fatalf("light state = %d calls=%#v", controlled.Code, fake.calls)
+	}
+	updated, updatedActuator := do(t, server, http.MethodPatch, "/v1/actuators/"+lightID, map[string]any{
+		"name": "Grow light", "kind": "water", "plant_ids": []string{grown.ID.String()},
+	})
+	if updated.Code != http.StatusOK || updatedActuator["kind"] != "water" {
+		t.Fatalf("updated classification = %d %#v", updated.Code, updatedActuator)
 	}
 }

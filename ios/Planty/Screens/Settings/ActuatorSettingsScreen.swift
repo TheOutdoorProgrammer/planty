@@ -11,8 +11,8 @@ struct ActuatorSettingsScreen: View {
                     .font(.headline)
                     .foregroundStyle(PlantyColor.cyan)
                 Text(
-                    "Fans and switches use bounded runs. Registered grow lights can be " +
-                    "controlled now or put on a timezone-aware daily schedule."
+                    "Device type controls Planty behavior, even when Home Assistant exposes " +
+                    "the hardware as a switch. Fans use bounded runs and lights can be scheduled."
                 )
                     .font(.subheadline)
                     .foregroundStyle(PlantyColor.secondaryText)
@@ -26,7 +26,7 @@ struct ActuatorSettingsScreen: View {
                 if !session.actuators.hasLoaded {
                     HStack { ProgressView(); Text("Loading registered actuators…") }
                 } else if session.actuators.registered.isEmpty {
-                    Text("No fan, switch, or light has been explicitly registered.")
+                    Text("No fan, light, watering device, or other actuator has been registered.")
                         .foregroundStyle(PlantyColor.secondaryText)
                 }
                 ForEach(session.actuators.registered) { actuator in
@@ -63,7 +63,7 @@ private struct ActuatorSummaryRow: View {
             Text(actuator.entityID)
                 .font(.caption.monospaced())
                 .foregroundStyle(PlantyColor.secondaryText)
-            if let lease, lease.isActive {
+            if actuator.kind == .fan, let lease, lease.isActive {
                 Text("Lease ends \(lease.deadline.formatted(date: .omitted, time: .shortened))")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(PlantyColor.green)
@@ -84,6 +84,7 @@ private struct ActuatorRegistrationSheet: View {
     @State private var selected: HomeAssistantEntity?
     @State private var selectedPlantIDs: Set<UUID> = []
     @State private var name = ""
+    @State private var kind = ActuatorKind.unknown
     @State private var failure: PlantyError?
 
     private var matches: [HomeAssistantEntity] {
@@ -105,9 +106,21 @@ private struct ActuatorRegistrationSheet: View {
                     Section { SheetErrorRow(headline: "Nothing was registered.", error: failure) }
                 }
                 if let selected {
-                    Section("Registration name") {
+                    Section {
                         TextField("Name", text: $name)
                         LabeledContent("Entity", value: selected.entityID)
+                        Picker("Type", selection: $kind) {
+                            ForEach(ActuatorKind.configurable, id: \.self) { option in
+                                Label(option.label, systemImage: option.symbol).tag(option)
+                            }
+                        }
+                    } header: {
+                        Text("Registration")
+                    } footer: {
+                        Text(
+                            "Type describes what the device does. It does not need to match " +
+                            "the Home Assistant entity domain."
+                        )
                     }
                 }
                 Section("Plants served") {
@@ -159,6 +172,13 @@ private struct ActuatorRegistrationSheet: View {
                         Button {
                             selected = entity
                             name = entity.friendlyName
+                            if entity.domain == "fan" {
+                                kind = .fan
+                            } else if entity.domain == "light" {
+                                kind = .light
+                            } else {
+                                kind = .unknown
+                            }
                         } label: {
                             HStack(alignment: .top, spacing: 10) {
                                 VStack(alignment: .leading, spacing: 3) {
@@ -196,7 +216,10 @@ private struct ActuatorRegistrationSheet: View {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Register") { Task { await register() } }
-                        .disabled(selected == nil || name.cleaned.isEmpty || selectedPlantIDs.isEmpty)
+                        .disabled(
+                            selected == nil || kind == .unknown || name.cleaned.isEmpty ||
+                            selectedPlantIDs.isEmpty
+                        )
                 }
             }
             .task {
@@ -212,6 +235,7 @@ private struct ActuatorRegistrationSheet: View {
         failure = await session.actuators.register(
             entity: selected,
             name: name,
+            kind: kind,
             plantIDs: Array(selectedPlantIDs)
         )
         if failure == nil { dismiss() }
@@ -225,6 +249,7 @@ private struct ActuatorDetailScreen: View {
     @Environment(\.dismiss) private var dismiss
     @State private var duration = ActuatorRunDuration.tenMinutes
     @State private var name = ""
+    @State private var kind = ActuatorKind.unknown
     @State private var selectedPlantIDs: Set<UUID> = []
     @State private var policyControlEnabled = false
     @State private var failure: PlantyError?
@@ -240,62 +265,83 @@ private struct ActuatorDetailScreen: View {
                 Section {
                     TextField("Name", text: $name)
                     LabeledContent("Home Assistant entity", value: actuator.entityID)
-                    LabeledContent("Kind", value: actuator.kind.label)
+                    Picker("Type", selection: $kind) {
+                        ForEach(ActuatorKind.configurable, id: \.self) { option in
+                            Label(option.label, systemImage: option.symbol).tag(option)
+                        }
+                    }
                     ForEach(session.library.plants.filter { !$0.status.isRetired }) { plant in
                         Toggle(plant.commonName, isOn: plantBinding(plant.id))
                     }
-                    if actuator.kind == .fan {
+                    if kind == .fan {
                         Toggle("Allow enforcing policies", isOn: $policyControlEnabled)
                     }
                     Button("Save registration") { Task { await save(actuator) } }
                         .disabled(
                             name.cleaned.isEmpty || selectedPlantIDs.isEmpty ||
                             (name.cleaned == actuator.name &&
+                             kind == actuator.kind &&
                              selectedPlantIDs == Set(actuator.plantIDs) &&
-                             policyControlEnabled == actuator.policyControlEnabled)
+                             (kind == .fan && policyControlEnabled) == actuator.policyControlEnabled)
                         )
                 } header: {
                     Text("Registration")
                 } footer: {
-                    Text(registrationFooter(for: actuator))
+                    Text(registrationFooter(for: kind))
                 }
 
                 if actuator.kind == .light {
                     LightControlSections(actuator: actuator)
-                } else {
+                } else if actuator.kind == .fan {
                     Section {
-                    if let lease, lease.isActive {
-                        LabeledContent("Current lease", value: "Running")
-                        LabeledContent("Deadline") {
-                            Text(lease.deadline.formatted(date: .abbreviated, time: .shortened))
+                        if let lease, lease.isActive {
+                            LabeledContent("Current lease", value: "Running")
+                            LabeledContent("Deadline") {
+                                Text(lease.deadline.formatted(date: .abbreviated, time: .shortened))
+                            }
+                            LabeledContent("Requested by", value: lease.actor)
+                        } else {
+                            Text("No active lease is known.").foregroundStyle(PlantyColor.secondaryText)
                         }
-                        LabeledContent("Requested by", value: lease.actor)
-                    } else {
-                        Text("No active lease is known.").foregroundStyle(PlantyColor.secondaryText)
-                    }
-                    Picker("Bounded run time", selection: $duration) {
-                        ForEach(ActuatorRunDuration.allCases) { duration in
-                            Text(duration.label).tag(duration)
+                        Picker("Bounded run time", selection: $duration) {
+                            ForEach(ActuatorRunDuration.allCases) { duration in
+                                Text(duration.label).tag(duration)
+                            }
                         }
-                    }
-                    Button("Start bounded run") {
-                        Task {
-                            failure = await session.actuators.start(
-                                actuator,
-                                durationSeconds: duration.rawValue
-                            )
+                        Button("Start bounded run") {
+                            Task {
+                                failure = await session.actuators.start(
+                                    actuator,
+                                    durationSeconds: duration.rawValue
+                                )
+                            }
                         }
-                    }
                         .disabled(session.actuators.controlling.contains(actuator.id) || lease?.isActive == true)
-                    Button("Stop now") { Task { failure = await session.actuators.stop(actuator) } }
-                        .disabled(session.actuators.controlling.contains(actuator.id))
+                        Button("Stop now") { Task { failure = await session.actuators.stop(actuator) } }
+                            .disabled(session.actuators.controlling.contains(actuator.id))
                     } header: {
                         Text("Manual control")
                     } footer: {
-                    Text(
-                        "Every start has a deadline. Stop is safe to repeat and addresses this " +
-                        "Planty actuator ID. Recurring schedules remain Home Assistant-owned."
-                    )
+                        Text(
+                            "Every start has a deadline. Stop is safe to repeat and addresses this " +
+                            "Planty actuator ID. Recurring schedules remain Home Assistant-owned."
+                        )
+                    }
+                } else {
+                    Section {
+                        Label(
+                            actuator.kind == .water ? "Watering control is guarded" : "No control behavior assigned",
+                            systemImage: actuator.kind.symbol
+                        )
+                    } header: {
+                        Text("Manual control")
+                    } footer: {
+                        Text(
+                            actuator.kind == .water
+                                ? "Planty recognizes this as watering hardware. Direct pump runs stay " +
+                                    "disabled until their duration and safety checks are configured."
+                                : "Choose Fan or Light above to enable the matching safe controls."
+                        )
                     }
                 }
 
@@ -327,6 +373,7 @@ private struct ActuatorDetailScreen: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             name = actuator?.name ?? ""
+            kind = actuator?.kind ?? .unknown
             selectedPlantIDs = Set(actuator?.plantIDs ?? [])
             policyControlEnabled = actuator?.policyControlEnabled ?? false
         }
@@ -351,17 +398,24 @@ private struct ActuatorDetailScreen: View {
         failure = await session.actuators.update(
             actuator,
             name: name,
+            kind: kind,
             plantIDs: Array(selectedPlantIDs),
-            policyControlEnabled: policyControlEnabled
+            policyControlEnabled: kind == .fan && policyControlEnabled
         )
     }
 
-    private func registrationFooter(for actuator: Actuator) -> String {
-        if actuator.kind == .light {
+    private func registrationFooter(for kind: ActuatorKind) -> String {
+        if kind == .light {
             return "Plant assignments decide where this light appears. " +
                 "Its manual controls and daily schedule live below."
         }
-        return "Policy control is a separate opt-in and only works for fans. Every run is bounded by a durable lease."
+        if kind == .fan {
+            return "Policy control is a separate opt-in. Every fan run is bounded by a durable lease."
+        }
+        if kind == .water {
+            return "This records the device as watering hardware without bypassing Planty's watering safeguards."
+        }
+        return "Other devices are registered for visibility but have no automatic control behavior."
     }
 
     private func plantBinding(_ id: UUID) -> Binding<Bool> {
@@ -401,11 +455,14 @@ private struct ActuatorEventRow: View {
 }
 
 private extension ActuatorKind {
+    static var configurable: [ActuatorKind] { [.fan, .light, .water, .switch] }
+
     var label: String {
         switch self {
         case .fan: "Fan"
-        case .switch: "Switch"
+        case .switch: "Other"
         case .light: "Light"
+        case .water: "Water"
         case .unknown: "Unknown"
         }
     }
@@ -414,6 +471,7 @@ private extension ActuatorKind {
         case .fan: "fan.fill"
         case .switch: "powerplug.fill"
         case .light: "lightbulb.led.fill"
+        case .water: "drop.fill"
         case .unknown: "questionmark.circle"
         }
     }

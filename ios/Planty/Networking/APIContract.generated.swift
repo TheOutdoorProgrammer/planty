@@ -164,6 +164,7 @@ enum ActuatorKind: String, FallbackDecodable, CaseIterable {
     case fan
     case `switch` = "switch"
     case light
+    case water
     case unknown
 
     static let fallback = ActuatorKind.unknown

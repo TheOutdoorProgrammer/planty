@@ -53,7 +53,7 @@ func TestActuatorControlUsesRegisteredEntityAndReconcilesDeadline(t *testing.T) 
 		t.Fatal(err)
 	}
 	actuator, err := db.RegisterActuator(ctx, plant.Actuator{
-		EntityID: "fan.job_test", Name: "Job test", Kind: plant.ActuatorFan,
+		EntityID: "switch.job_test", Name: "Job test", Kind: plant.ActuatorFan,
 		PlantIDs: []uuid.UUID{grown.ID, neighbor.ID},
 	})
 	if err != nil {
@@ -82,7 +82,7 @@ func TestActuatorControlUsesRegisteredEntityAndReconcilesDeadline(t *testing.T) 
 	if err != nil || stopped != 1 {
 		t.Fatalf("reconcile stopped=%d err=%v", stopped, err)
 	}
-	want := []string{"fan/turn_on:fan.job_test", "fan/turn_off:fan.job_test"}
+	want := []string{"switch/turn_on:switch.job_test", "switch/turn_off:switch.job_test"}
 	if len(ha.calls) != len(want) || ha.calls[0] != want[0] || ha.calls[1] != want[1] {
 		t.Fatalf("HA calls = %#v", ha.calls)
 	}
@@ -129,7 +129,7 @@ func TestActuatorControlEnforcesLightScheduleWithoutCreatingALease(t *testing.T)
 	}
 	subject := createActuatorTestPlant(t, ctx, db, "Light schedule plant")
 	actuator, err := db.RegisterActuator(ctx, plant.Actuator{
-		EntityID: "light.schedule_test", Name: "Schedule test", Kind: plant.ActuatorLight,
+		EntityID: "switch.schedule_test", Name: "Schedule test", Kind: plant.ActuatorLight,
 		PlantIDs: []uuid.UUID{subject.ID},
 	})
 	if err != nil {
@@ -147,7 +147,7 @@ func TestActuatorControlEnforcesLightScheduleWithoutCreatingALease(t *testing.T)
 	if err != nil || changed != 1 {
 		t.Fatalf("reconcile changed=%d err=%v", changed, err)
 	}
-	if len(ha.calls) != 1 || ha.calls[0] != "light/turn_on:light.schedule_test" {
+	if len(ha.calls) != 1 || ha.calls[0] != "switch/turn_on:switch.schedule_test" {
 		t.Fatalf("Home Assistant calls = %#v", ha.calls)
 	}
 	if _, _, err := control.Start(ctx, actuator.ID, 60, "tester", plant.SourceApp, uuid.New()); err == nil {

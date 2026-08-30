@@ -18,6 +18,7 @@ extension PlantyClient {
     func renameActuator(
         id: UUID,
         name: String,
+        kind: ActuatorKind,
         plantIDs: [UUID],
         policyControlEnabled: Bool
     ) async throws -> Actuator {
@@ -26,6 +27,7 @@ extension PlantyClient {
             APIPath.updateActuator(id: id.uuidString),
             body: ActuatorRename(
                 name: name,
+                kind: kind,
                 plantIDs: plantIDs,
                 policyControlEnabled: policyControlEnabled
             )

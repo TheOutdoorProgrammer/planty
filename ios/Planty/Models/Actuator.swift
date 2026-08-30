@@ -238,22 +238,26 @@ struct DiscoveredActuatorListResponse: Codable, Sendable {
 struct ActuatorRegistration: Codable, Sendable, Equatable {
     let entityID: String
     let name: String
+    let kind: ActuatorKind
     let plantIDs: [UUID]
 
     enum CodingKeys: String, CodingKey {
         case entityID = "entity_id"
         case name
+        case kind
         case plantIDs = "plant_ids"
     }
 }
 
 struct ActuatorRename: Codable, Sendable {
     let name: String
+    let kind: ActuatorKind
     let plantIDs: [UUID]
     let policyControlEnabled: Bool
 
     enum CodingKeys: String, CodingKey {
         case name
+        case kind
         case plantIDs = "plant_ids"
         case policyControlEnabled = "policy_control_enabled"
     }

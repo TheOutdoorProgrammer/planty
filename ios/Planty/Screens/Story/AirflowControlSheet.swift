@@ -11,7 +11,7 @@ struct AirflowControlSheet: View {
     @State private var failure: PlantyError?
 
     private var actuators: [Actuator] {
-        session.actuators.registered.assigned(to: plant.id)
+        session.actuators.registered.assigned(to: plant.id).filter { $0.kind == .fan }
     }
 
     private var selectedActuator: Actuator? {

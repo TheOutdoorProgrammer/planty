@@ -56,10 +56,14 @@ func (c ActuatorControl) start(ctx context.Context, actuatorID, plantID uuid.UUI
 	if err != nil || !created {
 		return lease, created, err
 	}
-	if err := c.HA.CallService(ctx, string(actuator.Kind), "turn_on", map[string]any{"entity_id": actuator.EntityID}); err != nil {
+	domain, err := actuator.EntityDomain()
+	if err != nil {
+		return lease, true, err
+	}
+	if err := c.HA.CallService(ctx, domain, "turn_on", map[string]any{"entity_id": actuator.EntityID}); err != nil {
 		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		stopErr := c.HA.CallService(stopCtx, string(actuator.Kind), "turn_off", map[string]any{"entity_id": actuator.EntityID})
+		stopErr := c.HA.CallService(stopCtx, domain, "turn_off", map[string]any{"entity_id": actuator.EntityID})
 		cause := errors.Join(err, stopErr)
 		return lease, true, errors.Join(fmt.Errorf("start actuator: %w", err), c.Store.RecordActuatorStartFailure(stopCtx, lease, cause, stopErr == nil))
 	}
@@ -86,6 +90,10 @@ func (c ActuatorControl) Stop(ctx context.Context, actuatorID uuid.UUID, actor s
 	if err != nil {
 		return false, err
 	}
+	domain, err := actuator.EntityDomain()
+	if err != nil {
+		return false, err
+	}
 	lease, err := c.Store.ActiveActuatorLease(ctx, actuatorID)
 	if errors.Is(err, store.ErrNotFound) {
 		if _, recordErr := c.Store.RecordActuatorNoopStop(ctx, actuatorID, actor, source, key); recordErr != nil {
@@ -93,7 +101,7 @@ func (c ActuatorControl) Stop(ctx context.Context, actuatorID uuid.UUID, actor s
 		}
 		stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 		defer cancel()
-		return false, c.HA.CallService(stopCtx, string(actuator.Kind), "turn_off", map[string]any{"entity_id": actuator.EntityID})
+		return false, c.HA.CallService(stopCtx, domain, "turn_off", map[string]any{"entity_id": actuator.EntityID})
 	}
 	if err != nil {
 		return false, err
@@ -156,7 +164,11 @@ func (c ActuatorControl) SetLight(ctx context.Context, actuatorID uuid.UUID, on 
 	if on {
 		service = "turn_on"
 	}
-	controlErr := c.HA.CallService(ctx, "light", service, map[string]any{"entity_id": actuator.EntityID})
+	domain, err := actuator.EntityDomain()
+	if err != nil {
+		return err
+	}
+	controlErr := c.HA.CallService(ctx, domain, service, map[string]any{"entity_id": actuator.EntityID})
 	recordCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
 	recordErr := c.Store.RecordLightState(recordCtx, actuatorID, on, actor, source, controlErr)
@@ -198,7 +210,11 @@ func (c ActuatorControl) reconcileLights(ctx context.Context, now time.Time) (in
 func (c ActuatorControl) stop(ctx context.Context, actuator plant.Actuator, lease plant.ActuatorLease, reason, actor string, source plant.Source, key *uuid.UUID) error {
 	stopCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 	defer cancel()
-	err := c.HA.CallService(stopCtx, string(actuator.Kind), "turn_off", map[string]any{"entity_id": actuator.EntityID})
+	domain, domainErr := actuator.EntityDomain()
+	err := domainErr
+	if err == nil {
+		err = c.HA.CallService(stopCtx, domain, "turn_off", map[string]any{"entity_id": actuator.EntityID})
+	}
 	_, recordErr := c.Store.FinishActuatorLease(stopCtx, lease, actor, source, reason, err, key)
 	return errors.Join(err, recordErr)
 }

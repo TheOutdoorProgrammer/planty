@@ -180,7 +180,7 @@
       "ObservationSource": {"type": "string", "enum": ["app", "agent", "automation"]},
       "ReminderDisposition": {"type": "string", "enum": ["completed", "missed"]},
       "HealthChangeKind": {"type": "string", "enum": ["baseline", "delta"]},
-      "ActuatorKind": {"type": "string", "enum": ["fan", "switch", "light"]},
+      "ActuatorKind": {"type": "string", "enum": ["fan", "switch", "light", "water"]},
       "ActuatorEventAction": {"type": "string", "enum": ["start_requested", "started", "start_failed", "stop_requested", "stopped", "stop_failed", "stop_noop", "state_changed", "schedule_updated", "schedule_disabled", "schedule_failed"]},
       "EvidenceWindowKind": {"type": "string", "enum": ["recheck", "experiment"]},
       "EvidenceWindowStatus": {"type": "string", "enum": ["proposed", "active", "ready", "completed", "cancelled"]},

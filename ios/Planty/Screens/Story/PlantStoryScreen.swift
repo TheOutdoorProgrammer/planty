@@ -414,7 +414,7 @@ struct PlantStoryScreen: View {
     }
 
     private var plantActuators: [Actuator] {
-        session.actuators.registered.assigned(to: store.plant.id).filter { $0.kind != .light }
+        session.actuators.registered.assigned(to: store.plant.id).filter { $0.kind == .fan }
     }
 
     private var plantLights: [Actuator] {

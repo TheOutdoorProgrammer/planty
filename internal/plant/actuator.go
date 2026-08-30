@@ -16,6 +16,7 @@ const (
 	ActuatorFan    ActuatorKind = "fan"
 	ActuatorSwitch ActuatorKind = "switch"
 	ActuatorLight  ActuatorKind = "light"
+	ActuatorWater  ActuatorKind = "water"
 )
 
 type Actuator struct {
@@ -36,12 +37,13 @@ func (a Actuator) Valid() error {
 	if strings.TrimSpace(a.Name) == "" {
 		return invalid("actuator name is required")
 	}
-	domain, _, ok := strings.Cut(strings.TrimSpace(a.EntityID), ".")
-	if !ok || (domain != string(ActuatorFan) && domain != string(ActuatorSwitch) && domain != string(ActuatorLight)) {
+	if _, err := a.EntityDomain(); err != nil {
 		return invalid("actuator entity_id must be a fan, switch, or light entity")
 	}
-	if a.Kind != ActuatorKind(domain) {
-		return invalid("actuator kind must match its entity_id domain")
+	switch a.Kind {
+	case ActuatorFan, ActuatorSwitch, ActuatorLight, ActuatorWater:
+	default:
+		return invalid("actuator kind must be fan, switch, light, or water")
 	}
 	if a.PolicyControlEnabled && a.Kind != ActuatorFan {
 		return invalid("policy control is only available for fans")
@@ -60,6 +62,14 @@ func (a Actuator) Valid() error {
 		seen[id] = struct{}{}
 	}
 	return nil
+}
+
+func (a Actuator) EntityDomain() (string, error) {
+	domain, _, ok := strings.Cut(strings.TrimSpace(a.EntityID), ".")
+	if !ok || (domain != "fan" && domain != "switch" && domain != "light") {
+		return "", invalid("actuator entity_id must be a fan, switch, or light entity")
+	}
+	return domain, nil
 }
 
 type LightSchedule struct {

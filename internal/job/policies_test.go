@@ -40,7 +40,7 @@ func TestEnforcingPolicyRunsOnlyAnOptedInFanAndDailyRetryIsIdempotent(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	actuator, err = db.UpdateActuator(ctx, actuator.ID, actuator.Name, actuator.PlantIDs, true)
+	actuator, err = db.UpdateActuator(ctx, actuator.ID, actuator.Name, actuator.Kind, actuator.PlantIDs, true)
 	if err != nil {
 		t.Fatal(err)
 	}

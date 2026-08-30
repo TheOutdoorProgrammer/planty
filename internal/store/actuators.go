@@ -85,7 +85,7 @@ func (s *Store) RegisterActuator(ctx context.Context, actuator plant.Actuator) (
 	return s.Actuator(ctx, created.ID)
 }
 
-func (s *Store) UpdateActuator(ctx context.Context, id uuid.UUID, name string, plantIDs []uuid.UUID, policyControlEnabled bool) (plant.Actuator, error) {
+func (s *Store) UpdateActuator(ctx context.Context, id uuid.UUID, name string, kind plant.ActuatorKind, plantIDs []uuid.UUID, policyControlEnabled bool) (plant.Actuator, error) {
 	name = strings.TrimSpace(name)
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -100,16 +100,25 @@ func (s *Store) UpdateActuator(ctx context.Context, id uuid.UUID, name string, p
 	if err != nil {
 		return plant.Actuator{}, err
 	}
+	if kind == "" {
+		kind = actuator.Kind
+	}
 	actuator.Name = name
+	actuator.Kind = kind
 	actuator.PlantIDs = plantIDs
 	actuator.PolicyControlEnabled = policyControlEnabled
 	if err := actuator.Valid(); err != nil {
 		return plant.Actuator{}, err
 	}
 	if _, err := tx.Exec(ctx, `UPDATE plant_actuators
-		SET name = $2, policy_control_enabled = $3, updated_at = now()
-		WHERE id = $1`, id, name, policyControlEnabled); err != nil {
+		SET name = $2, kind = $3, policy_control_enabled = $4, updated_at = now()
+		WHERE id = $1`, id, name, kind, policyControlEnabled); err != nil {
 		return plant.Actuator{}, err
+	}
+	if actuator.Kind != plant.ActuatorLight {
+		if _, err := tx.Exec(ctx, `DELETE FROM plant_light_schedules WHERE actuator_id = $1`, id); err != nil {
+			return plant.Actuator{}, err
+		}
 	}
 	if err := replaceActuatorPlants(ctx, tx, id, plantIDs); err != nil {
 		return plant.Actuator{}, err
@@ -227,8 +236,8 @@ func (s *Store) beginActuatorLease(ctx context.Context, lease plant.ActuatorLeas
 	if err != nil {
 		return plant.Actuator{}, plant.ActuatorLease{}, false, err
 	}
-	if actuator.Kind == plant.ActuatorLight {
-		return plant.Actuator{}, plant.ActuatorLease{}, false, fmt.Errorf("%w: light actuators use direct state control and schedules", plant.ErrInvalid)
+	if actuator.Kind != plant.ActuatorFan {
+		return plant.Actuator{}, plant.ActuatorLease{}, false, fmt.Errorf("%w: bounded runs are only available for fans", plant.ErrInvalid)
 	}
 	existing, err := scanActuatorLease(tx.QueryRow(ctx, `SELECT `+actuatorLeaseColumns+`
 		FROM plant_actuator_leases WHERE idempotency_key = $1`, lease.IdempotencyKey))

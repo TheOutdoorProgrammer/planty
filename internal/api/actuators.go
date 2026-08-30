@@ -61,9 +61,10 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		EntityID string      `json:"entity_id"`
-		Name     string      `json:"name"`
-		PlantIDs []uuid.UUID `json:"plant_ids"`
+		EntityID string             `json:"entity_id"`
+		Name     string             `json:"name"`
+		Kind     plant.ActuatorKind `json:"kind"`
+		PlantIDs []uuid.UUID        `json:"plant_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		s.fail(w, http.StatusBadRequest, err)
@@ -90,9 +91,12 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusBadRequest, errors.New("entity_id is not a discovered Home Assistant fan, switch, or light"))
 		return
 	}
+	if request.Kind == "" {
+		request.Kind = plant.ActuatorKind(candidateDomain)
+	}
 	created, err := s.store.RegisterActuator(r.Context(), plant.Actuator{
 		EntityID: strings.TrimSpace(request.EntityID), Name: request.Name,
-		Kind: plant.ActuatorKind(candidateDomain), PlantIDs: request.PlantIDs,
+		Kind: request.Kind, PlantIDs: request.PlantIDs,
 	})
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
@@ -173,15 +177,16 @@ func (s *Server) updateActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var request struct {
-		Name                 string      `json:"name"`
-		PlantIDs             []uuid.UUID `json:"plant_ids"`
-		PolicyControlEnabled bool        `json:"policy_control_enabled"`
+		Name                 string             `json:"name"`
+		Kind                 plant.ActuatorKind `json:"kind"`
+		PlantIDs             []uuid.UUID        `json:"plant_ids"`
+		PolicyControlEnabled bool               `json:"policy_control_enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
-	updated, err := s.store.UpdateActuator(r.Context(), id, request.Name, request.PlantIDs,
+	updated, err := s.store.UpdateActuator(r.Context(), id, request.Name, request.Kind, request.PlantIDs,
 		request.PolicyControlEnabled)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)

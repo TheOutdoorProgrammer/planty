@@ -52,6 +52,7 @@ protocol PlantyAPI: Sendable {
     func renameActuator(
         id: UUID,
         name: String,
+        kind: ActuatorKind,
         plantIDs: [UUID],
         policyControlEnabled: Bool
     ) async throws -> Actuator
@@ -284,6 +285,7 @@ extension PlantyAPI {
     func renameActuator(
         id: UUID,
         name: String,
+        kind: ActuatorKind,
         plantIDs: [UUID],
         policyControlEnabled: Bool
     ) async throws -> Actuator {

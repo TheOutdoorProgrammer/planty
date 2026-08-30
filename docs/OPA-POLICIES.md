@@ -96,8 +96,8 @@ Weather is optional because Home Assistant can be unavailable without blocking p
 | --- | --- | --- |
 | `id` | UUID | Planty actuator ID, which policy output must use. |
 | `name` | string | Display name. |
-| `kind` | `fan` or `switch` | Home Assistant domain. Only fans may be policy-controlled. |
-| `entity_id` | string | Exact Home Assistant entity. |
+| `kind` | `fan`, `light`, `water`, or `switch` | Owner-selected behavior. Only fans may be policy-controlled. |
+| `entity_id` | string | Exact Home Assistant entity. Its domain may differ from `kind`. |
 | `policy_control_enabled` | boolean | Separate owner opt-in for enforcing policies. |
 | `active_until` | timestamp, optional | Deadline of the active durable lease. |
 

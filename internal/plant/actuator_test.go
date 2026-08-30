@@ -8,14 +8,21 @@ import (
 	"github.com/google/uuid"
 )
 
-func TestActuatorRequiresMatchingAllowlistedDomainAndBoundedLease(t *testing.T) {
+func TestActuatorSeparatesSemanticKindFromHomeAssistantDomain(t *testing.T) {
 	plantID := uuid.New()
-	if err := (Actuator{Name: "Cabinet fan", EntityID: "fan.cabinet", Kind: ActuatorFan, PlantIDs: []uuid.UUID{plantID}}).Valid(); err != nil {
-		t.Fatal(err)
+	for _, actuator := range []Actuator{
+		{Name: "Cabinet fan", EntityID: "fan.cabinet", Kind: ActuatorFan, PlantIDs: []uuid.UUID{plantID}},
+		{Name: "Plug fan", EntityID: "switch.circulator", Kind: ActuatorFan, PlantIDs: []uuid.UUID{plantID}},
+		{Name: "Plug light", EntityID: "switch.grow", Kind: ActuatorLight, PlantIDs: []uuid.UUID{plantID}},
+		{Name: "Pump", EntityID: "switch.pump", Kind: ActuatorWater, PlantIDs: []uuid.UUID{plantID}},
+	} {
+		if err := actuator.Valid(); err != nil {
+			t.Fatalf("rejected valid actuator %#v: %v", actuator, err)
+		}
 	}
 	for _, actuator := range []Actuator{
-		{Name: "Light", EntityID: "light.grow", Kind: ActuatorSwitch, PlantIDs: []uuid.UUID{plantID}},
-		{Name: "Wrong domain", EntityID: "fan.cabinet", Kind: ActuatorSwitch, PlantIDs: []uuid.UUID{plantID}},
+		{Name: "Wrong domain", EntityID: "sensor.moisture", Kind: ActuatorWater, PlantIDs: []uuid.UUID{plantID}},
+		{Name: "Wrong kind", EntityID: "switch.circulator", Kind: "heater", PlantIDs: []uuid.UUID{plantID}},
 		{Name: "Policy switch", EntityID: "switch.circulator", Kind: ActuatorSwitch,
 			PlantIDs: []uuid.UUID{plantID}, PolicyControlEnabled: true},
 		{Name: "Unassigned", EntityID: "fan.unassigned", Kind: ActuatorFan},
@@ -30,6 +37,14 @@ func TestActuatorRequiresMatchingAllowlistedDomainAndBoundedLease(t *testing.T) 
 	}
 	if !errors.Is(lease.Valid(), ErrInvalid) {
 		t.Fatal("accepted a lease beyond the hard maximum")
+	}
+}
+
+func TestActuatorEntityDomainUsesTheHomeAssistantEntity(t *testing.T) {
+	actuator := Actuator{EntityID: "switch.grow_light", Kind: ActuatorLight}
+	domain, err := actuator.EntityDomain()
+	if err != nil || domain != "switch" {
+		t.Fatalf("EntityDomain() = %q, %v; want switch", domain, err)
 	}
 }
 

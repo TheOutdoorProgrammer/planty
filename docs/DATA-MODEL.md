@@ -103,6 +103,8 @@ An uncalibrated soil link produces readings but must never produce an automated 
 
 `plant_actuators` is the explicit allowlist of Home Assistant `fan`, `switch`, and `light` entities Planty may control.
 Discovery only offers those three domains for selection and never registers or actuates an entity by guessing from its name.
+Each registration also has an owner-selected semantic kind: `fan`, `light`, `water`, or generic `switch`.
+The semantic kind controls Planty behavior while the domain in `entity_id` selects the Home Assistant service, so a `switch.*` entity can correctly behave as a light or fan.
 Every start and stop route takes the Planty actuator UUID, never a caller-supplied Home Assistant entity ID.
 `plant_actuator_plants` assigns each registration to one or more living plants, and registration is refused without that explicit relationship.
 A shared room fan remains one actuator assigned to several plants rather than several registrations for one Home Assistant entity.
@@ -293,6 +295,8 @@ The agent exposes the same operations through `health` and `healthchange`; neith
 
 **Actuator discovery and actuation are separate capabilities.** `/v1/home-assistant/actuators` returns only fan, switch, and light candidates, while `/v1/actuators` manages the persistent allowlist.
 Start, stop, and event-history routes are nested beneath `/v1/actuators/{id}` so no actuation request accepts an arbitrary Home Assistant entity ID.
+Only semantic fans receive bounded leases and policy control, while semantic lights receive direct state control and daily schedules.
+Water and generic registrations remain visible but gain no physical control path until that role has explicit safety behavior.
 
 **Identification belongs to no plant, deliberately.** Nobody knows which plant it is yet, and it may not be one on record. The synchronous `POST /v1/identify` route remains for compatibility. The iOS app posts raw bytes or a multipart `photo` to `/v1/identifications/{id}`, receives an accepted status, and polls that same stable id until the durable job completes. Both return at most three candidates, most likely first. An empty list is a valid answer and a better one than a guessed name.
 

@@ -88,16 +88,27 @@ final class ActuatorStore {
         }
     }
 
-    func register(entity: HomeAssistantEntity, name: String, plantIDs: [UUID]) async -> PlantyError? {
+    func register(
+        entity: HomeAssistantEntity,
+        name: String,
+        kind: ActuatorKind,
+        plantIDs: [UUID]
+    ) async -> PlantyError? {
         guard discovered.contains(where: { $0.entityID == entity.entityID }),
               entity.domain == "fan" || entity.domain == "switch" || entity.domain == "light"
         else { return .transport("Choose a discovered Home Assistant fan, switch, or light.") }
         let cleanedName = name.cleaned
         guard !cleanedName.isEmpty else { return .transport("Give the actuator a name.") }
+        guard kind != .unknown else { return .transport("Choose what this device does.") }
         guard !plantIDs.isEmpty else { return .transport("Choose at least one plant this actuator serves.") }
         do {
             let saved = try await api.registerActuator(
-                ActuatorRegistration(entityID: entity.entityID, name: cleanedName, plantIDs: plantIDs)
+                ActuatorRegistration(
+                    entityID: entity.entityID,
+                    name: cleanedName,
+                    kind: kind,
+                    plantIDs: plantIDs
+                )
             )
             registered.removeAll { $0.id == saved.id }
             registered.append(saved)
@@ -125,18 +136,21 @@ final class ActuatorStore {
     func update(
         _ actuator: Actuator,
         name: String,
+        kind: ActuatorKind,
         plantIDs: [UUID],
         policyControlEnabled: Bool
     ) async -> PlantyError? {
         let cleanedName = name.cleaned
         guard !cleanedName.isEmpty else { return .transport("Give the actuator a name.") }
+        guard kind != .unknown else { return .transport("Choose what this device does.") }
         guard !plantIDs.isEmpty else { return .transport("Choose at least one plant this actuator serves.") }
         do {
             let saved = try await api.renameActuator(
                 id: actuator.id,
                 name: cleanedName,
+                kind: kind,
                 plantIDs: plantIDs,
-                policyControlEnabled: policyControlEnabled
+                policyControlEnabled: kind == .fan && policyControlEnabled
             )
             if let index = registered.firstIndex(where: { $0.id == saved.id }) {
                 var refreshed = saved
@@ -151,6 +165,7 @@ final class ActuatorStore {
     }
 
     func start(_ actuator: Actuator, durationSeconds: Int) async -> PlantyError? {
+        guard actuator.kind == .fan else { return .transport("Bounded runs are only available for fans.") }
         guard (1...3_600).contains(durationSeconds) else {
             return .transport("Run time must be between one second and one hour.")
         }

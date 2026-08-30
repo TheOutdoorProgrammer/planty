@@ -96,7 +96,7 @@ func Reference() ReferenceDocument {
 				{Path: "input.actuators", Type: "array", Description: "Only devices assigned to the current plant."},
 				{Path: "input.actuators[_].id", Type: "UUID", Description: "Planty actuator ID used in fan_runs output."},
 				{Path: "input.actuators[_].name", Type: "string", Description: "Display name."},
-				{Path: "input.actuators[_].kind", Type: "fan | switch", Description: "Home Assistant domain. Only fans may be policy-controlled."},
+				{Path: "input.actuators[_].kind", Type: "fan | light | water | switch", Description: "Owner-selected device behavior. Only fans may be policy-controlled."},
 				{Path: "input.actuators[_].entity_id", Type: "string", Description: "Exact Home Assistant entity."},
 				{Path: "input.actuators[_].policy_control_enabled", Type: "boolean", Description: "Owner opt-in required before an enforcing policy may run this fan."},
 				{Path: "input.actuators[_].active_until", Type: "timestamp or undefined", Description: "Deadline of the active durable lease."},

@@ -114,6 +114,7 @@ struct SettingsAutomationTests {
             ActuatorRegistration(
                 entityID: "switch.grow_tent",
                 name: "Grow tent exhaust",
+                kind: .fan,
                 plantIDs: [actuatorID]
             )
         )
@@ -125,6 +126,7 @@ struct SettingsAutomationTests {
         #expect(request.url?.path == "/v1/actuators")
         #expect(json["entity_id"] as? String == "switch.grow_tent")
         #expect(json["name"] as? String == "Grow tent exhaust")
+        #expect(json["kind"] as? String == "fan")
         #expect((json["plant_ids"] as? [String]) == [actuatorID.uuidString])
     }
 
@@ -142,7 +144,12 @@ struct SettingsAutomationTests {
             area: nil
         )
 
-        let failure = await store.register(entity: guessed, name: "Tent fan", plantIDs: [actuatorID])
+        let failure = await store.register(
+            entity: guessed,
+            name: "Tent fan",
+            kind: .fan,
+            plantIDs: [actuatorID]
+        )
 
         #expect(failure != nil)
         #expect(stub.requests.isEmpty)
@@ -232,7 +239,7 @@ struct SettingsAutomationTests {
     @Test("Light status stays unknown unless Home Assistant reported it")
     func lightStatusIsHonest() throws {
         let lightOn = try PlantyCoders.decoder().decode(Actuator.self, from: Data("""
-            {"id":"\(actuatorID.uuidString)","entity_id":"light.grow","name":"Grow light",
+            {"id":"\(actuatorID.uuidString)","entity_id":"switch.grow","name":"Grow light",
              "kind":"light","plant_ids":["\(actuatorID.uuidString)"],"current_state":"on",
              "created_at":"2026-08-25T11:00:00Z","updated_at":"2026-08-25T11:00:00Z"}
             """.utf8))
@@ -276,7 +283,7 @@ struct SettingsAutomationTests {
     func lightControlUpdatesState() async throws {
         let stub = IsolatedStubTransport()
         stub.respond(json: """
-            {"actuators":[{"id":"\(actuatorID.uuidString)","entity_id":"light.grow",
+            {"actuators":[{"id":"\(actuatorID.uuidString)","entity_id":"switch.grow",
              "name":"Grow light","kind":"light","plant_ids":["\(actuatorID.uuidString)"],
              "current_state":"off","created_at":"2026-08-25T11:00:00Z",
              "updated_at":"2026-08-25T11:00:00Z"}],"count":1}
@@ -296,7 +303,7 @@ struct SettingsAutomationTests {
     private var actuatorJSON: String {
         """
         {"id":"\(actuatorID.uuidString)","entity_id":"switch.grow_tent","name":"Grow tent exhaust",
-         "kind":"switch","plant_ids":["\(actuatorID.uuidString)"],
+         "kind":"fan","plant_ids":["\(actuatorID.uuidString)"],
          "created_at":"2026-08-25T11:00:00Z","updated_at":"2026-08-25T11:00:00Z"}
         """
     }
