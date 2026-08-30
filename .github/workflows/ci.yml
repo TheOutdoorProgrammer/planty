@@ -74,7 +74,7 @@ jobs:
           cache-to: type=gha,mode=max
 
   ios:
-    runs-on: macos-26
+    runs-on: [self-hosted, macOS, ARM64, mini-2, release, planty]
     steps:
       - uses: actions/checkout@v5
 
