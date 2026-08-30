@@ -1,14 +1,19 @@
 package store
 
 import (
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/google/uuid"
 )
 
 func TestCalibrationProposalRequiresReviewAndEnforcesCooldown(t *testing.T) {
 	s, ctx := testStore(t)
+	if _, err := s.ResolveCalibrationProposal(ctx, uuid.New(), true, "owner"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("resolve missing proposal = %v, want ErrNotFound", err)
+	}
 	p := newPlant(t, s, ctx, "Calibration review")
 	link, err := s.LinkSensor(ctx, plant.SensorLink{
 		PlantID: &p.ID, HAEntityID: "sensor.calibration_" + p.ID.String(), Role: plant.RoleSoilMoisture,

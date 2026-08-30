@@ -859,6 +859,16 @@ func TestPlantDetailReturnsSensorLinksWithContractReadings(t *testing.T) {
 	}
 }
 
+func TestResolveMissingCalibrationProposalReturnsNotFound(t *testing.T) {
+	h, _, _ := newServer(t)
+	rec, _ := do(t, h, http.MethodPost, "/v1/calibration-proposals/"+uuid.NewString()+"/approve", map[string]any{
+		"actor": "owner",
+	})
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("resolve missing calibration proposal = %d, want 404", rec.Code)
+	}
+}
+
 func TestPlantListShowsOnlyWateringThatIsHappeningNow(t *testing.T) {
 	h, db, ctx := newServer(t)
 	slug := createPlant(t, h, map[string]any{

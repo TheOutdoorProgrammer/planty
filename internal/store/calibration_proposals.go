@@ -29,6 +29,9 @@ func scanCalibrationProposal(row pgx.Row) (plant.CalibrationProposal, error) {
 		&proposal.ProposedRelative, &proposal.Reason, &proposal.ModelVersion,
 		&proposal.Status, &proposal.CreatedAt, &proposal.ResolvedAt, &proposal.ResolvedBy,
 	)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return plant.CalibrationProposal{}, ErrNotFound
+	}
 	return proposal, classify(err)
 }
 
