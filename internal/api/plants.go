@@ -41,8 +41,9 @@ func (s *Server) listPlants(w http.ResponseWriter, r *http.Request) {
 // shows the plants rather than a column of identical leaf glyphs.
 type listedPlant struct {
 	plant.Plant
-	PhotoURL   string     `json:"photo_url,omitempty"`
-	PhotoTaken *time.Time `json:"photo_taken_at,omitempty"`
+	PhotoURL       string     `json:"photo_url,omitempty"`
+	PhotoTaken     *time.Time `json:"photo_taken_at,omitempty"`
+	ActiveWatering bool       `json:"active_watering,omitempty"`
 }
 
 // withThumbnails attaches a link to each plant's most recent photograph.
@@ -52,7 +53,18 @@ func (s *Server) withThumbnails(r *http.Request, plants []plant.Plant) []listedP
 	for _, p := range plants {
 		listed = append(listed, listedPlant{Plant: p})
 	}
-	if s.photos == nil || len(plants) == 0 {
+	if len(plants) == 0 {
+		return listed
+	}
+	activeWatering, err := s.store.ActiveWateringPlantIDs(r.Context())
+	if err != nil {
+		s.log.Warn("listing without active watering state", "error", err)
+	} else {
+		for i := range listed {
+			_, listed[i].ActiveWatering = activeWatering[listed[i].ID]
+		}
+	}
+	if s.photos == nil {
 		return listed
 	}
 
@@ -134,7 +146,7 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 
 	// Sensor links and readings have to travel together. A reading without its
 	// link loses its role, calibration, and stable identity on the client.
-	links, readings, err := s.sensorSnapshot(r.Context(), p)
+	links, readings, err := s.sensorSnapshot(r.Context(), &p.ID)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
@@ -154,12 +166,12 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) sensorSnapshot(
 	ctx context.Context,
-	p plant.Plant,
+	plantID *uuid.UUID,
 ) ([]plant.SensorLink, []plant.Reading, error) {
 	ctx, span := otel.Tracer("planty/api").Start(ctx, "plant.sensor.snapshot")
 	defer span.End()
 
-	links, err := s.store.SensorLinks(ctx, &p.ID)
+	links, err := s.store.SensorLinks(ctx, plantID)
 	if err != nil {
 		span.RecordError(err)
 		return nil, nil, err

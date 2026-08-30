@@ -177,11 +177,6 @@ struct LightControlSheet: View {
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
     @State private var selectedActuatorID: UUID?
-    @State private var start = Date()
-    @State private var end = Date()
-    @State private var enabled = true
-    @State private var failure: PlantyError?
-    @State private var confirmsScheduleRemoval = false
 
     private var lights: [Actuator] {
         session.actuators.registered
@@ -207,62 +202,14 @@ struct LightControlSheet: View {
                 }
 
                 if let light = selectedLight {
-                    Section("Right now") {
-                        HStack {
-                            Button("Turn on") { Task { await setState(light, isOn: true) } }
-                                .buttonStyle(.borderedProminent)
-                                .tint(PlantyColor.green)
-                            Button("Turn off") { Task { await setState(light, isOn: false) } }
-                                .buttonStyle(.bordered)
-                        }
-                    }
-
-                    Section {
-                        Toggle("Schedule enabled", isOn: $enabled)
-                        DatePicker("Turn on", selection: $start, displayedComponents: .hourAndMinute)
-                        DatePicker("Turn off", selection: $end, displayedComponents: .hourAndMinute)
-                        LabeledContent("Timezone", value: TimeZone.current.identifier)
-
-                        Button("Save schedule") { Task { await save(light) } }
-                            .buttonStyle(PrimaryButtonStyle(color: PlantyColor.green))
-                    } header: {
-                        Text("Daily schedule")
-                    } footer: {
-                        Text(
-                            "Planty checks the schedule every minute and controls only "
-                                + "this registered Home Assistant light."
-                        )
-                    }
-
-                    if let schedule = light.lightSchedule {
-                        Section("Last applied") {
-                            if let state = schedule.lastAppliedState {
-                                LabeledContent("State", value: state ? "On" : "Off")
-                            }
-                            if let appliedAt = schedule.lastAppliedAt {
-                                LabeledContent(
-                                    "When",
-                                    value: appliedAt.formatted(date: .abbreviated, time: .shortened)
-                                )
-                            }
-                            if let error = schedule.lastError, !error.isEmpty {
-                                Text(error).foregroundStyle(PlantyColor.orange)
-                            }
-                            Button("Remove schedule", role: .destructive) {
-                                confirmsScheduleRemoval = true
-                            }
-                        }
-                    }
+                    LightControlSections(actuator: light)
+                        .id(light.id)
                 } else {
                     ContentUnavailableView(
                         "No light assigned",
                         systemImage: "lightbulb.slash",
                         description: Text("Register a Home Assistant light in Settings first.")
                     )
-                }
-
-                if let failure {
-                    Section { SheetErrorRow(headline: "The light was not changed.", error: failure) }
                 }
             }
             .scrollContentBackground(.hidden)
@@ -276,59 +223,7 @@ struct LightControlSheet: View {
             }
             .task {
                 selectedActuatorID = selectedActuatorID ?? lights.first?.id
-                loadSchedule()
-            }
-            .onChange(of: selectedActuatorID) { _, _ in loadSchedule() }
-            .confirmationDialog(
-                "Remove this light schedule?",
-                isPresented: $confirmsScheduleRemoval,
-                titleVisibility: .visible
-            ) {
-                Button("Remove schedule", role: .destructive) {
-                    guard let light = selectedLight else { return }
-                    Task { failure = await session.actuators.deleteSchedule(light) }
-                }
-                Button("Keep schedule", role: .cancel) {}
-            } message: {
-                Text("The light stays registered and can still be controlled manually.")
             }
         }
-    }
-
-    private func loadSchedule() {
-        let calendar = Calendar.current
-        let schedule = selectedLight?.lightSchedule
-        enabled = schedule?.enabled ?? true
-        let startMinute = schedule?.startMinute ?? 7 * 60
-        let endMinute = schedule?.endMinute ?? 21 * 60
-        start = calendar.date(
-            bySettingHour: startMinute / 60,
-            minute: startMinute % 60,
-            second: 0,
-            of: Date()
-        ) ?? Date()
-        end = calendar.date(
-            bySettingHour: endMinute / 60,
-            minute: endMinute % 60,
-            second: 0,
-            of: Date()
-        ) ?? Date()
-    }
-
-    private func setState(_ light: Actuator, isOn: Bool) async {
-        failure = await session.actuators.setLight(light, isOn: isOn)
-    }
-
-    private func save(_ light: Actuator) async {
-        let calendar = Calendar.current
-        let startParts = calendar.dateComponents([.hour, .minute], from: start)
-        let endParts = calendar.dateComponents([.hour, .minute], from: end)
-        failure = await session.actuators.setSchedule(
-            light,
-            startMinute: (startParts.hour ?? 0) * 60 + (startParts.minute ?? 0),
-            endMinute: (endParts.hour ?? 0) * 60 + (endParts.minute ?? 0),
-            timezone: TimeZone.current.identifier,
-            enabled: enabled
-        )
     }
 }

@@ -40,7 +40,7 @@ final class ActuatorStore {
         stopKeys = [:]
     }
 
-    func load() async {
+    func load(includeEvents: Bool = true) async {
         guard isConfigured else {
             registered = []
             error = nil
@@ -55,7 +55,7 @@ final class ActuatorStore {
             leases = [:]
             for actuator in loaded {
                 if let lease = actuator.activeLease, lease.isActive { leases[actuator.id] = lease }
-                await loadEvents(for: actuator)
+                if includeEvents { await loadEvents(for: actuator) }
             }
             error = nil
             hasLoaded = true
@@ -139,7 +139,9 @@ final class ActuatorStore {
                 policyControlEnabled: policyControlEnabled
             )
             if let index = registered.firstIndex(where: { $0.id == saved.id }) {
-                registered[index] = saved
+                var refreshed = saved
+                refreshed.currentState = registered[index].currentState
+                registered[index] = refreshed
             }
             error = nil
             return nil
@@ -204,6 +206,9 @@ final class ActuatorStore {
                 id: actuator.id,
                 request: LightStateRequest(isOn: isOn, actor: "owner")
             )
+            if let index = registered.firstIndex(where: { $0.id == actuator.id }) {
+                registered[index].currentState = isOn ? "on" : "off"
+            }
             error = nil
             return nil
         } catch {
@@ -233,6 +238,7 @@ final class ActuatorStore {
                 registered[index].lightSchedule = schedule
             }
             error = nil
+            await loadEvents(for: actuator)
             return nil
         } catch {
             return record(error)
@@ -246,6 +252,7 @@ final class ActuatorStore {
                 registered[index].lightSchedule = nil
             }
             error = nil
+            await loadEvents(for: actuator)
             return nil
         } catch {
             return record(error)

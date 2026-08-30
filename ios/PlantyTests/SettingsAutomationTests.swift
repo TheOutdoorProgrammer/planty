@@ -229,6 +229,70 @@ struct SettingsAutomationTests {
         #expect(ObservationKind.airflow.label == "Airflow")
     }
 
+    @Test("Light status stays unknown unless Home Assistant reported it")
+    func lightStatusIsHonest() throws {
+        let lightOn = try PlantyCoders.decoder().decode(Actuator.self, from: Data("""
+            {"id":"\(actuatorID.uuidString)","entity_id":"light.grow","name":"Grow light",
+             "kind":"light","plant_ids":["\(actuatorID.uuidString)"],"current_state":"on",
+             "created_at":"2026-08-25T11:00:00Z","updated_at":"2026-08-25T11:00:00Z"}
+            """.utf8))
+        let unknown = try PlantyCoders.decoder().decode(Actuator.self, from: Data(actuatorJSON.utf8))
+
+        #expect(lightOn.isOn == true)
+        #expect(lightOn.stateLabel == "On")
+        #expect(unknown.isOn == nil)
+        #expect(unknown.stateLabel == "Status unknown")
+    }
+
+    @Test("Light schedules preserve their timezone and reject a zero-length window")
+    func lightScheduleDraftIsValid() {
+        var draft = LightScheduleDraft(schedule: nil, defaultTimezone: "America/New_York")
+        #expect(draft.canSave)
+        #expect(draft.timezone == "America/New_York")
+        draft.endMinute = draft.startMinute
+        #expect(!draft.canSave)
+
+        let saved = LightSchedule(
+            actuatorID: actuatorID,
+            startMinute: 480,
+            endMinute: 1_200,
+            timezone: "America/Chicago",
+            enabled: false,
+            lastAppliedState: nil,
+            lastAppliedAt: nil,
+            lastError: nil,
+            createdAt: .now,
+            updatedAt: .now
+        )
+        let loaded = LightScheduleDraft(schedule: saved, defaultTimezone: "America/New_York")
+        #expect(loaded.startMinute == 480)
+        #expect(loaded.endMinute == 1_200)
+        #expect(loaded.timezone == "America/Chicago")
+        #expect(!loaded.enabled)
+    }
+
+    @Test("A successful light command updates the dashboard immediately")
+    @MainActor
+    func lightControlUpdatesState() async throws {
+        let stub = IsolatedStubTransport()
+        stub.respond(json: """
+            {"actuators":[{"id":"\(actuatorID.uuidString)","entity_id":"light.grow",
+             "name":"Grow light","kind":"light","plant_ids":["\(actuatorID.uuidString)"],
+             "current_state":"off","created_at":"2026-08-25T11:00:00Z",
+             "updated_at":"2026-08-25T11:00:00Z"}],"count":1}
+            """)
+        let store = ActuatorStore(api: stub.client(), isConfigured: true)
+        await store.load(includeEvents: false)
+        let light = try #require(store.registered.first)
+        stub.respond(json: #"{"on":true}"#)
+
+        let failure = await store.setLight(light, isOn: true)
+
+        #expect(failure == nil)
+        #expect(store.registered.first?.isOn == true)
+        #expect(stub.requests.last?.url?.path == "/v1/actuators/\(actuatorID.uuidString)/state")
+    }
+
     private var actuatorJSON: String {
         """
         {"id":"\(actuatorID.uuidString)","entity_id":"switch.grow_tent","name":"Grow tent exhaust",

@@ -9,7 +9,7 @@ Planty launches into Today with four native tabs: Today, Capture, Plants, and Mo
 The selected tab uses the green product tint and a filled SF Symbol.
 Tab labels remain visible at accessibility text sizes.
 
-Settings opens as a sheet and contains API configuration, connection testing, data freshness, household notes, sensor links, build information, per-job model assignments, and controls for launching scheduled work.
+Settings opens as a sheet and contains API configuration, connection testing, data freshness, household notes, sensor links, registered actuators, build information, per-job model assignments, and controls for launching scheduled work.
 The current connection test proves API reachability only; APNs diagnostics remain roadmap work.
 
 ## Shared states
@@ -61,6 +61,7 @@ On simulators or devices without an available camera, the Photos path remains fu
 
 The library is searchable and visual.
 Rows show the current photograph when available, name, location, ownership, and plain-language care state rather than sensor gauges.
+Small activity glyphs appear only while Planty can prove that watering or a fan is running, or that an assigned grow light is on.
 
 A plant story combines:
 
@@ -79,6 +80,9 @@ Photograph comparison becomes available when at least two photos exist.
 Unknown toxicity is labeled “Not checked” and is never styled as safe.
 An assigned fan appears as an Airflow action on the plant story.
 The sheet offers bounded duration choices, names every other plant sharing the fan before start, shows the active countdown, and provides an explicit stop.
+An assigned grow light shows its current Home Assistant state on the plant story and opens direct on/off controls.
+Its daily on/off window, enabled state, and timezone are editable both there and on the registered light in Settings.
+Soil calibration shows the latest raw probe reading and timestamp, and loads any saved dry and wet baselines into the editable fields.
 
 ## Consultation
 

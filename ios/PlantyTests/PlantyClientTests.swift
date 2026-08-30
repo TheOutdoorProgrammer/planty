@@ -328,6 +328,37 @@ struct PlantyClientTests {
         #expect(saved.isCalibrated)
     }
 
+    @Test("Sensor settings receive the latest reading with each link")
+    func listsSensorReadings() async throws {
+        let linkID = UUID()
+        StubTransport.respond(json: """
+            {
+              "sensors": [{
+                "id": "\(linkID.uuidString)",
+                "ha_entity_id": "sensor.pumpkins_soil_moisture",
+                "role": "soil_moisture",
+                "dry_baseline": 70.88,
+                "wet_baseline": 73.97,
+                "created_at": "2026-08-01T09:00:00Z"
+              }],
+              "readings": [{
+                "id": "\(UUID().uuidString)",
+                "sensor_link_id": "\(linkID.uuidString)",
+                "value": 72.31,
+                "unit": "%",
+                "taken_at": "2026-08-30T13:00:00Z"
+              }],
+              "count": 1
+            }
+            """)
+
+        let sensors = try await StubTransport.client().sensors()
+
+        #expect(sensors.first?.latest?.value == 72.31)
+        #expect(sensors.first?.latest?.displayValue == "72.31%")
+        #expect(StubResponder.shared.requests.first?.url?.path == "/v1/sensors")
+    }
+
     @Test("Acknowledging a verdict hits the ack path")
     func acknowledges() async throws {
         StubTransport.respond(json: #"{"ok":true}"#)

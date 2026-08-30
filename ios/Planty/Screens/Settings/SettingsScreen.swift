@@ -269,12 +269,12 @@ struct SettingsScreen: View {
             NavigationLink {
                 ActuatorSettingsScreen()
             } label: {
-                Label("Fans and switches", systemImage: "fan.fill")
+                Label("Fans, switches & lights", systemImage: "fan.fill")
             }
         } footer: {
             Text(
                 "Register an exact Home Assistant entity before Planty can control it. " +
-                "Recurring schedules stay in Home Assistant."
+                "Grow lights can use Planty-owned daily schedules."
             )
         }
     }
@@ -347,10 +347,10 @@ enum ProbeResult: Equatable {
 struct SensorListScreen: View {
     let api: any PlantyAPI
 
-    @State private var links: [SensorLink] = []
+    @State private var sensors: [SensorSeries] = []
     @State private var hasLoaded = false
     @State private var error: PlantyError?
-    @State private var calibrating: SensorLink?
+    @State private var calibrating: SensorSeries?
     @State private var isLinking = false
 
     var body: some View {
@@ -369,13 +369,14 @@ struct SensorListScreen: View {
                         .foregroundStyle(PlantyColor.secondaryText)
                 }
                 .listRowBackground(PlantyColor.surface)
-            } else if links.isEmpty && error == nil {
+            } else if sensors.isEmpty && error == nil {
                 emptyState
             }
-            ForEach(links) { link in
+            ForEach(sensors) { sensor in
+                let link = sensor.link
                 if link.role.requiresCalibration {
                     Button {
-                        calibrating = link
+                        calibrating = sensor
                     } label: {
                         row(for: link)
                     }
@@ -401,14 +402,14 @@ struct SensorListScreen: View {
                 }
             }
         }
-        .sheet(item: $calibrating) { link in
-            CalibrateSensorSheet(link: link) { calibration in
-                await apply(calibration, to: link)
+        .sheet(item: $calibrating) { sensor in
+            CalibrateSensorSheet(link: sensor.link, latest: sensor.latest) { calibration in
+                await apply(calibration, to: sensor)
             }
         }
         .sheet(isPresented: $isLinking) {
             LinkSensorSheet(api: api) { saved in
-                links.append(saved)
+                sensors.append(SensorSeries(link: saved, readings: []))
             }
         }
         .task { await load() }
@@ -456,7 +457,7 @@ struct SensorListScreen: View {
 
     private func load() async {
         do {
-            links = try await api.sensors()
+            sensors = try await api.sensors()
             error = nil
         } catch {
             guard !PlantyError.isCancellation(error) else { return }
@@ -467,11 +468,11 @@ struct SensorListScreen: View {
 
     /// Returns the failure so the calibration sheet can stay open with the
     /// typed baselines instead of dismissing into a list-level error.
-    private func apply(_ calibration: SensorCalibration, to link: SensorLink) async -> PlantyError? {
+    private func apply(_ calibration: SensorCalibration, to sensor: SensorSeries) async -> PlantyError? {
         do {
-            let saved = try await api.calibrate(sensorID: link.id, to: calibration)
-            if let index = links.firstIndex(where: { $0.id == saved.id }) {
-                links[index] = saved
+            let saved = try await api.calibrate(sensorID: sensor.id, to: calibration)
+            if let index = sensors.firstIndex(where: { $0.id == saved.id }) {
+                sensors[index] = SensorSeries(link: saved, readings: sensor.readings)
             }
             return nil
         } catch {

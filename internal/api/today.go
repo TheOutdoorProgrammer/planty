@@ -111,12 +111,16 @@ func (s *Server) autopsy(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listSensors(w http.ResponseWriter, r *http.Request) {
-	links, err := s.store.SensorLinks(r.Context(), nil)
+	links, readings, err := s.sensorSnapshot(r.Context(), nil)
 	if err != nil {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
-	s.ok(w, http.StatusOK, map[string]any{"sensors": links, "count": len(links)})
+	s.ok(w, http.StatusOK, map[string]any{
+		"sensors":  links,
+		"readings": readings,
+		"count":    len(links),
+	})
 }
 
 func (s *Server) linkSensor(w http.ResponseWriter, r *http.Request) {

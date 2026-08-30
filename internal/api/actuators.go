@@ -37,6 +37,21 @@ func (s *Server) listActuators(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
+	if s.homeAssistant != nil {
+		entities, stateErr := s.homeAssistant.Entities(r.Context())
+		if stateErr != nil {
+			s.log.Warn("listing actuators without Home Assistant state", "error", stateErr)
+		} else {
+			states := make(map[string]string, len(entities))
+			for _, entity := range entities {
+				states[entity.EntityID] = entity.State
+			}
+			for i := range actuators {
+				actuators[i].CurrentState = states[actuators[i].EntityID]
+			}
+		}
+	}
+	w.Header().Set("Cache-Control", "no-store")
 	s.ok(w, http.StatusOK, map[string]any{"actuators": actuators, "count": len(actuators)})
 }
 
@@ -60,9 +75,11 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var candidateDomain string
+	var candidateState string
 	for _, entity := range filterDiscoveredActuators(entities, "") {
 		if entity.EntityID == strings.TrimSpace(request.EntityID) {
 			candidateDomain = entity.Domain
+			candidateState = entity.State
 			if request.Name == "" {
 				request.Name = entity.FriendlyName
 			}
@@ -81,6 +98,7 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		s.fail(w, http.StatusInternalServerError, err)
 		return
 	}
+	created.CurrentState = candidateState
 	s.ok(w, http.StatusCreated, created)
 }
 

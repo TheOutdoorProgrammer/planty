@@ -161,6 +161,25 @@ struct SensorCalibration: Codable, Sendable, Hashable {
     }
 }
 
+struct SensorCalibrationDraft: Equatable {
+    var dry: String
+    var wet: String
+
+    init(link: SensorLink) {
+        dry = Self.inputValue(link.dryBaseline)
+        wet = Self.inputValue(link.wetBaseline)
+    }
+
+    var proposed: SensorCalibration? {
+        SensorCalibration(dry: dry, wet: wet)
+    }
+
+    private static func inputValue(_ value: Double?) -> String {
+        guard let value else { return "" }
+        return value == value.rounded() ? String(Int(value)) : String(value)
+    }
+}
+
 struct Reading: Codable, Sendable, Hashable, Identifiable {
     let id: UUID
     let sensorLinkID: UUID
@@ -174,6 +193,14 @@ struct Reading: Codable, Sendable, Hashable, Identifiable {
         case value
         case unit
         case takenAt = "taken_at"
+    }
+
+    var displayValue: String {
+        let number = value.formatted(.number.precision(.fractionLength(0...2)))
+        guard let unit = unit?.trimmingCharacters(in: .whitespacesAndNewlines), !unit.isEmpty else {
+            return number
+        }
+        return ["%", "°F", "°C"].contains(unit) ? number + unit : number + " " + unit
     }
 }
 

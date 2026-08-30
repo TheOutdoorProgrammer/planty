@@ -26,7 +26,7 @@ protocol PlantyAPI: Sendable {
     func uploadPhoto(slug: String, jpeg: Data, caption: String?, takenAt: Date) async throws -> Photo
     func deletePhoto(id: UUID) async throws
     func acknowledge(verdictID: UUID) async throws
-    func sensors() async throws -> [SensorLink]
+    func sensors() async throws -> [SensorSeries]
     func homeAssistantEntities() async throws -> [HomeAssistantEntity]
     func managedChoices() async throws -> ManagedChoices
     func aiModels() async throws -> [AIModel]

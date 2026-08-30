@@ -13,6 +13,7 @@ type Entity struct {
 	FriendlyName string `json:"friendly_name"`
 	Domain       string `json:"domain"`
 	DeviceClass  string `json:"device_class,omitempty"`
+	State        string `json:"state,omitempty"`
 	Available    bool   `json:"available"`
 	Area         string `json:"area,omitempty"`
 }
@@ -55,7 +56,7 @@ func (c *Client) Entities(ctx context.Context) ([]Entity, error) {
 		entities = append(entities, Entity{
 			EntityID: state.EntityID, FriendlyName: friendlyName, Domain: domain,
 			DeviceClass: stateAttributeString(state.Attributes, "device_class"),
-			Available:   stateIsAvailable(state.State), Area: area,
+			State:       state.State, Available: stateIsAvailable(state.State), Area: area,
 		})
 	}
 	sort.Slice(entities, func(i, j int) bool {

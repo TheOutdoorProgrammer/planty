@@ -130,7 +130,9 @@ struct PlantsLibraryScreen: View {
     }
 
     private func loadWithStatuses() async {
+        async let actuators: Void = session.actuators.load(includeEvents: false)
         await store.load()
+        _ = await actuators
         await session.health.load(store.plants)
         if session.today.digest == nil {
             await session.today.load()
@@ -214,7 +216,17 @@ struct PlantLibraryRow: View {
                         Text(plant.commonName)
                             .font(.headline)
                             .foregroundStyle(PlantyColor.foreground)
-                        StatusPill(state: state)
+                        HStack(spacing: 6) {
+                            StatusPill(state: state)
+                            ForEach(activities) { activity in
+                                Image(systemName: activity.symbol)
+                                    .font(.caption.weight(.bold))
+                                    .foregroundStyle(activity.color)
+                                    .frame(width: 22, height: 22)
+                                    .background(activity.color.opacity(0.14), in: Circle())
+                                    .accessibilityLabel(activity.accessibilityLabel)
+                            }
+                        }
                         PlantHealthBar(event: session.health.current(for: plant), compact: true)
                         Text(metadata)
                             .font(.caption)
@@ -248,5 +260,52 @@ struct PlantLibraryRow: View {
             .compactMap { $0 }
             .filter { !$0.isEmpty }
             .joined(separator: " · ")
+    }
+
+    private var activities: [PlantActivity] {
+        var active: [PlantActivity] = []
+        if plant.activeWatering == true { active.append(.watering) }
+        let assigned = session.actuators.registered.assigned(to: plant.id)
+        if assigned.contains(where: {
+            $0.kind != .light && session.actuators.leases[$0.id]?.isActive == true
+        }) {
+            active.append(.airflow)
+        }
+        if assigned.contains(where: { $0.kind == .light && $0.isOn == true }) {
+            active.append(.light)
+        }
+        return active
+    }
+}
+
+private enum PlantActivity: String, Identifiable {
+    case watering
+    case airflow
+    case light
+
+    var id: String { rawValue }
+
+    var symbol: String {
+        switch self {
+        case .watering: "drop.fill"
+        case .airflow: "fan.fill"
+        case .light: "lightbulb.led.fill"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .watering: PlantyColor.cyan
+        case .airflow: PlantyColor.green
+        case .light: PlantyColor.yellow
+        }
+    }
+
+    var accessibilityLabel: String {
+        switch self {
+        case .watering: "Watering now"
+        case .airflow: "Fan running"
+        case .light: "Grow light on"
+        }
     }
 }

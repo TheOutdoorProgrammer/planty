@@ -25,6 +25,7 @@ type Actuator struct {
 	Kind                 ActuatorKind   `json:"kind"`
 	PlantIDs             []uuid.UUID    `json:"plant_ids"`
 	PolicyControlEnabled bool           `json:"policy_control_enabled"`
+	CurrentState         string         `json:"current_state,omitempty"`
 	ActiveLease          *ActuatorLease `json:"active_lease,omitempty"`
 	LightSchedule        *LightSchedule `json:"light_schedule,omitempty"`
 	CreatedAt            time.Time      `json:"created_at"`

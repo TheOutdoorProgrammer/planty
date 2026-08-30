@@ -65,6 +65,30 @@ type WateringPlantEvidence struct {
 	Details   map[string]any
 }
 
+func (s *Store) ActiveWateringPlantIDs(ctx context.Context) (map[uuid.UUID]struct{}, error) {
+	rows, err := s.pool.Query(ctx, `
+		SELECT watering_attempt_plants.plant_id
+		FROM watering_attempt_plants
+		JOIN watering_attempts ON watering_attempts.id = watering_attempt_plants.attempt_id
+		WHERE watering_attempts.outcome = 'pending'
+		  AND watering_attempts.pump_started_at IS NOT NULL
+		  AND watering_attempts.pump_stopped_at IS NULL`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	ids := make(map[uuid.UUID]struct{})
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids[id] = struct{}{}
+	}
+	return ids, rows.Err()
+}
+
 func (s *Store) CreateWateringAttempt(ctx context.Context, pumpSwitch, pumpSensor string, runFor time.Duration, plants []plant.Plant) (WateringAttempt, error) {
 	seconds := int(runFor / time.Second)
 	if runFor > 0 && seconds == 0 {

@@ -7,6 +7,7 @@ struct Actuator: Codable, Sendable, Hashable, Identifiable {
     let kind: ActuatorKind
     var plantIDs: [UUID]
     var policyControlEnabled: Bool = false
+    var currentState: String?
     let createdAt: Date
     let updatedAt: Date
     var activeLease: ActuatorLease?
@@ -19,6 +20,7 @@ struct Actuator: Codable, Sendable, Hashable, Identifiable {
         case kind
         case plantIDs = "plant_ids"
         case policyControlEnabled = "policy_control_enabled"
+        case currentState = "current_state"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case activeLease = "active_lease"
@@ -35,10 +37,30 @@ extension Actuator {
         kind = try container.decode(ActuatorKind.self, forKey: .kind)
         plantIDs = try container.decode([UUID].self, forKey: .plantIDs)
         policyControlEnabled = try container.decodeIfPresent(Bool.self, forKey: .policyControlEnabled) ?? false
+        currentState = try container.decodeIfPresent(String.self, forKey: .currentState)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         activeLease = try container.decodeIfPresent(ActuatorLease.self, forKey: .activeLease)
         lightSchedule = try container.decodeIfPresent(LightSchedule.self, forKey: .lightSchedule)
+    }
+}
+
+extension Actuator {
+    var isOn: Bool? {
+        switch currentState?.lowercased() {
+        case "on": true
+        case "off": false
+        default: nil
+        }
+    }
+
+    var stateLabel: String {
+        switch isOn {
+        case true: "On"
+        case false: "Off"
+        case nil where currentState == "unavailable": "Unavailable"
+        default: "Status unknown"
+        }
     }
 }
 
@@ -79,6 +101,27 @@ struct LightScheduleRequest: Codable, Sendable, Equatable {
         case startMinute = "start_minute"
         case endMinute = "end_minute"
         case timezone, enabled, actor
+    }
+}
+
+struct LightScheduleDraft: Equatable {
+    var startMinute: Int
+    var endMinute: Int
+    var timezone: String
+    var enabled: Bool
+
+    init(schedule: LightSchedule?, defaultTimezone: String = TimeZone.current.identifier) {
+        startMinute = schedule?.startMinute ?? 7 * 60
+        endMinute = schedule?.endMinute ?? 21 * 60
+        timezone = schedule?.timezone ?? defaultTimezone
+        enabled = schedule?.enabled ?? true
+    }
+
+    var canSave: Bool {
+        (0..<24 * 60).contains(startMinute)
+            && (0..<24 * 60).contains(endMinute)
+            && startMinute != endMinute
+            && !timezone.isEmpty
     }
 }
 

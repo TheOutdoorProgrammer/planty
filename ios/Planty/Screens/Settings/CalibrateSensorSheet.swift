@@ -5,12 +5,23 @@ import SwiftUI
 /// take each reading rather than asking for two numbers.
 struct CalibrateSensorSheet: View {
     let link: SensorLink
+    let latest: Reading?
     let save: (SensorCalibration) async -> PlantyError?
 
     @Environment(\.dismiss) private var dismiss
-    @State private var dry = ""
-    @State private var wet = ""
+    @State private var draft: SensorCalibrationDraft
     @State private var action = AsyncSheetAction()
+
+    init(
+        link: SensorLink,
+        latest: Reading?,
+        save: @escaping (SensorCalibration) async -> PlantyError?
+    ) {
+        self.link = link
+        self.latest = latest
+        self.save = save
+        _draft = State(initialValue: SensorCalibrationDraft(link: link))
+    }
 
     var body: some View {
         NavigationStack {
@@ -29,19 +40,48 @@ struct CalibrateSensorSheet: View {
                 }
 
                 Section {
-                    TextField("What it reads dry", text: $dry)
+                    if let latest {
+                        HStack(spacing: 14) {
+                            Image(systemName: "drop.fill")
+                                .font(.title2.weight(.semibold))
+                                .foregroundStyle(PlantyColor.cyan)
+                                .frame(width: 44, height: 44)
+                                .background(PlantyColor.cyan.opacity(0.14), in: Circle())
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(latest.displayValue)
+                                    .font(.title2.weight(.bold).monospacedDigit())
+                                Text("Reported \(RelativeAge.dayAndTime(latest.takenAt, now: Date()))")
+                                    .font(.caption)
+                                    .foregroundStyle(PlantyColor.secondaryText)
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                    } else {
+                        Label("Waiting for the first reading", systemImage: "clock.badge.questionmark")
+                            .foregroundStyle(PlantyColor.secondaryText)
+                    }
+                } header: {
+                    Text("Current reading")
+                } footer: {
+                    if latest == nil {
+                        Text("Planty will show the probe value here after the next sensor ingest.")
+                    }
+                }
+
+                Section {
+                    TextField("What it reads dry", text: $draft.dry)
                         .keyboardType(.decimalPad)
                 } header: {
-                    Text("Dry")
+                    calibrationHeader("Dry", isSaved: link.dryBaseline != nil)
                 } footer: {
                     Text("Take this just before you water, when the soil is as dry as you would ever let it get.")
                 }
 
                 Section {
-                    TextField("What it reads wet", text: $wet)
+                    TextField("What it reads wet", text: $draft.wet)
                         .keyboardType(.decimalPad)
                 } header: {
-                    Text("Wet")
+                    calibrationHeader("Wet", isSaved: link.wetBaseline != nil)
                 } footer: {
                     Text("Take this straight after a thorough watering, once it has soaked all the way through.")
                 }
@@ -61,7 +101,7 @@ struct CalibrateSensorSheet: View {
 
                 if link.isCalibrated {
                     Section {
-                        Text("Already calibrated. Saving replaces both baselines.")
+                        Text("Saved values are loaded above. Saving replaces both baselines.")
                             .font(.caption)
                             .foregroundStyle(PlantyColor.secondaryText)
                     }
@@ -110,6 +150,19 @@ struct CalibrateSensorSheet: View {
     }
 
     private var proposed: SensorCalibration? {
-        SensorCalibration(dry: dry, wet: wet)
+        draft.proposed
+    }
+
+    private func calibrationHeader(_ title: String, isSaved: Bool) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            if isSaved {
+                Label("Saved", systemImage: "checkmark.circle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(PlantyColor.green)
+                    .textCase(nil)
+            }
+        }
     }
 }

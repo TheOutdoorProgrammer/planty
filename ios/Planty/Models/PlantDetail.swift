@@ -160,6 +160,18 @@ struct PlantListResponse: Decodable, Sendable {
 
 struct SensorListResponse: Decodable, Sendable {
     let sensors: [SensorLink]
+    let readings: [Reading]?
+
+    var series: [SensorSeries] {
+        sensors.map { link in
+            SensorSeries(
+                link: link,
+                readings: (readings ?? [])
+                    .filter { $0.sensorLinkID == link.id }
+                    .sorted { $0.takenAt < $1.takenAt }
+            )
+        }
+    }
 }
 
 /// Naming plants rather than sending `all`: the app knows exactly which ones

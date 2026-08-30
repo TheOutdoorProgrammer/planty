@@ -33,7 +33,7 @@ private final class HangingAPI: PlantyAPI, @unchecked Sendable {
         throw PlantyError.notFound
     }
     func acknowledge(verdictID: UUID) async throws {}
-    func sensors() async throws -> [SensorLink] { [] }
+    func sensors() async throws -> [SensorSeries] { [] }
     func shelter(slugs: [String], indoors: Bool) async throws -> Int { 0 }
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink {
         throw PlantyError.notFound

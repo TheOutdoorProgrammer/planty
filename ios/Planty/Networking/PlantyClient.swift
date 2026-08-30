@@ -252,9 +252,9 @@ struct PlantyClient: PlantyAPI {
         _ = try await perform(request)
     }
 
-    func sensors() async throws -> [SensorLink] {
+    func sensors() async throws -> [SensorSeries] {
         let response: SensorListResponse = try await get(APIPath.listSensors)
-        return response.sensors
+        return response.series
     }
 
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink {

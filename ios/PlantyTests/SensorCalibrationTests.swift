@@ -79,4 +79,39 @@ struct SensorCalibrationTests {
         #expect(!SensorRole.ambientHumidity.requiresCalibration)
         #expect(!SensorRole.illuminance.requiresCalibration)
     }
+
+    @Test("Saved baselines are loaded into the calibration fields")
+    func loadsSavedBaselines() {
+        let link = SensorLink(
+            id: UUID(),
+            haEntityID: "sensor.pumpkins_soil_moisture",
+            role: .soilMoisture,
+            dryBaseline: 70.88,
+            wetBaseline: 73.97,
+            createdAt: Date()
+        )
+
+        let draft = SensorCalibrationDraft(link: link)
+
+        #expect(draft.dry == "70.88")
+        #expect(draft.wet == "73.97")
+        #expect(draft.proposed == SensorCalibration(dryBaseline: 70.88, wetBaseline: 73.97))
+    }
+
+    @Test("Missing baselines stay visibly unset")
+    func leavesMissingBaselinesEmpty() {
+        let link = SensorLink(
+            id: UUID(),
+            haEntityID: "sensor.new_soil_probe",
+            role: .soilMoisture,
+            dryBaseline: 42,
+            createdAt: Date()
+        )
+
+        let draft = SensorCalibrationDraft(link: link)
+
+        #expect(draft.dry == "42")
+        #expect(draft.wet.isEmpty)
+        #expect(draft.proposed == nil)
+    }
 }

@@ -777,6 +777,11 @@ func TestPlantDetailReturnsSensorLinksWithContractReadings(t *testing.T) {
 	}
 	takenAt := time.Now().UTC().Truncate(time.Microsecond)
 	if err := db.RecordReading(ctx, plant.Reading{
+		SensorLinkID: moisture.ID, Value: 12.5, Unit: "%", TakenAt: takenAt.Add(-time.Hour),
+	}); err != nil {
+		t.Fatalf("record older reading: %v", err)
+	}
+	if err := db.RecordReading(ctx, plant.Reading{
 		SensorLinkID: moisture.ID, Value: 42.5, Unit: "%", TakenAt: takenAt,
 	}); err != nil {
 		t.Fatalf("record reading: %v", err)
@@ -804,6 +809,52 @@ func TestPlantDetailReturnsSensorLinksWithContractReadings(t *testing.T) {
 	if reading["value"] != 42.5 || reading["unit"] != "%" || reading["id"] == nil {
 		t.Errorf("reading lost its durable contract fields: %#v", reading)
 	}
+
+	rec, out = do(t, h, http.MethodGet, "/v1/sensors", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list sensors: got %d, body %s", rec.Code, rec.Body.String())
+	}
+	listedReadings, ok := out["readings"].([]any)
+	if !ok || len(listedReadings) != 1 {
+		t.Fatalf("listed readings = %#v, want one latest reading", out["readings"])
+	}
+	listedReading := listedReadings[0].(map[string]any)
+	if listedReading["sensor_link_id"] != moisture.ID.String() || listedReading["value"] != 42.5 {
+		t.Errorf("sensor list reading = %#v, want moisture's latest reading", listedReading)
+	}
+}
+
+func TestPlantListShowsOnlyWateringThatIsHappeningNow(t *testing.T) {
+	h, db, ctx := newServer(t)
+	slug := createPlant(t, h, map[string]any{
+		"common_name": "Watering now", "slug": unique("watering-now"),
+	})
+	p, err := db.GetPlant(ctx, slug)
+	if err != nil {
+		t.Fatal(err)
+	}
+	attempt, err := db.CreateWateringAttempt(ctx, "switch.letpot", "", time.Minute, []plant.Plant{p})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.MarkWateringStarted(ctx, attempt.ID, time.Now(), store.PumpActivityConfirmed); err != nil {
+		t.Fatal(err)
+	}
+
+	rec, out := do(t, h, http.MethodGet, "/v1/plants", nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("list plants: got %d, body %s", rec.Code, rec.Body.String())
+	}
+	for _, raw := range out["plants"].([]any) {
+		listed := raw.(map[string]any)
+		if listed["slug"] == slug {
+			if listed["active_watering"] != true {
+				t.Fatalf("listed plant = %#v, want active_watering", listed)
+			}
+			return
+		}
+	}
+	t.Fatalf("plant %s was not listed", slug)
 }
 
 // A soil probe measures one pot, so it cannot belong to a zone.

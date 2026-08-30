@@ -203,7 +203,7 @@ final class FakeAPI: PlantyAPI, ReminderResolving, @unchecked Sendable {
         lock.withLock { _acknowledged.append(verdictID) }
     }
 
-    func sensors() async throws -> [SensorLink] {
+    func sensors() async throws -> [SensorSeries] {
         try check()
         return []
     }

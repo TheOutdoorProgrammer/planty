@@ -7,12 +7,12 @@ struct ActuatorSettingsScreen: View {
     var body: some View {
         List {
             Section {
-                Label("Recurring schedules stay in Home Assistant", systemImage: "house.and.flag.fill")
+                Label("Planty owns grow-light schedules", systemImage: "lightbulb.led.fill")
                     .font(.headline)
                     .foregroundStyle(PlantyColor.cyan)
                 Text(
-                    "Planty can start a registered fan or switch for a bounded lease and stop it " +
-                    "by Planty actuator ID. It does not create or own recurring schedules."
+                    "Fans and switches use bounded runs. Registered grow lights can be " +
+                    "controlled now or put on a timezone-aware daily schedule."
                 )
                     .font(.subheadline)
                     .foregroundStyle(PlantyColor.secondaryText)
@@ -26,7 +26,7 @@ struct ActuatorSettingsScreen: View {
                 if !session.actuators.hasLoaded {
                     HStack { ProgressView(); Text("Loading registered actuators…") }
                 } else if session.actuators.registered.isEmpty {
-                    Text("No fan or switch has been explicitly registered.")
+                    Text("No fan, switch, or light has been explicitly registered.")
                         .foregroundStyle(PlantyColor.secondaryText)
                 }
                 ForEach(session.actuators.registered) { actuator in
@@ -44,7 +44,7 @@ struct ActuatorSettingsScreen: View {
         }
         .scrollContentBackground(.hidden)
         .plantyPage()
-        .navigationTitle("Fans and switches")
+        .navigationTitle("Actuators")
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await session.actuators.load() }
         .task { await session.actuators.load() }
@@ -67,6 +67,10 @@ private struct ActuatorSummaryRow: View {
                 Text("Lease ends \(lease.deadline.formatted(date: .omitted, time: .shortened))")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(PlantyColor.green)
+            } else if actuator.kind == .light {
+                Label(actuator.stateLabel, systemImage: actuator.isOn == true ? "lightbulb.fill" : "lightbulb")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(actuator.isOn == true ? PlantyColor.yellow : PlantyColor.secondaryText)
             }
         }
         .accessibilityElement(children: .combine)
@@ -91,8 +95,8 @@ private struct ActuatorRegistrationSheet: View {
             List {
                 Section {
                     Text(
-                        "Choose the exact Home Assistant fan or switch. Planty will never guess " +
-                        "which plug controls a plant device."
+                        "Choose the exact Home Assistant fan, switch, or light. Planty will never guess " +
+                        "which entity controls a plant device."
                     )
                         .font(.subheadline)
                         .foregroundStyle(PlantyColor.secondaryText)
@@ -140,13 +144,13 @@ private struct ActuatorRegistrationSheet: View {
                         .buttonStyle(.plain)
                     }
                 }
-                Section("Discovered fans and switches") {
+                Section("Discovered actuators") {
                     if session.actuators.isDiscovering {
                         HStack { ProgressView(); Text("Asking Home Assistant…") }
                     } else if matches.isEmpty {
                         Text(
                             search.isEmpty
-                                ? "No fan or switch entities were discovered."
+                                ? "No fan, switch, or light entities were discovered."
                                 : "No matching entities."
                         )
                             .foregroundStyle(PlantyColor.secondaryText)
@@ -253,13 +257,12 @@ private struct ActuatorDetailScreen: View {
                 } header: {
                     Text("Registration")
                 } footer: {
-                    Text(
-                        "Policy control is a separate opt-in and only works for fans. " +
-                        "Every run is still bounded by a durable lease."
-                    )
+                    Text(registrationFooter(for: actuator))
                 }
 
-                if actuator.kind != .light {
+                if actuator.kind == .light {
+                    LightControlSections(actuator: actuator)
+                } else {
                     Section {
                     if let lease, lease.isActive {
                         LabeledContent("Current lease", value: "Running")
@@ -351,6 +354,14 @@ private struct ActuatorDetailScreen: View {
             plantIDs: Array(selectedPlantIDs),
             policyControlEnabled: policyControlEnabled
         )
+    }
+
+    private func registrationFooter(for actuator: Actuator) -> String {
+        if actuator.kind == .light {
+            return "Plant assignments decide where this light appears. " +
+                "Its manual controls and daily schedule live below."
+        }
+        return "Policy control is a separate opt-in and only works for fans. Every run is bounded by a durable lease."
     }
 
     private func plantBinding(_ id: UUID) -> Binding<Bool> {

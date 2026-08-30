@@ -36,7 +36,7 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 	}
 	fake := &actuatorAPIHA{entities: []ha.Entity{
 		{EntityID: "sensor.humidity", Domain: "sensor", FriendlyName: "Humidity", Available: true},
-		{EntityID: "light.grow", Domain: "light", FriendlyName: "Grow light", Available: true},
+		{EntityID: "light.grow", Domain: "light", FriendlyName: "Grow light", State: "on", Available: true},
 		{EntityID: "fan.cabinet", Domain: "fan", FriendlyName: "Cabinet fan", Available: true},
 		{EntityID: "switch.plant_fan", Domain: "switch", FriendlyName: "Plant fan plug", Available: true},
 	}}
@@ -82,10 +82,24 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 	lightCreated, light := do(t, server, http.MethodPost, "/v1/actuators", map[string]any{
 		"entity_id": "light.grow", "plant_ids": []string{grown.ID.String()},
 	})
-	if lightCreated.Code != http.StatusCreated {
+	if lightCreated.Code != http.StatusCreated || light["current_state"] != "on" {
 		t.Fatalf("light registration = %d %#v", lightCreated.Code, light)
 	}
 	lightID := light["id"].(string)
+	listed, listedBody := do(t, server, http.MethodGet, "/v1/actuators", nil)
+	if listed.Code != http.StatusOK {
+		t.Fatalf("list actuators = %d %#v", listed.Code, listedBody)
+	}
+	var listedLight map[string]any
+	for _, raw := range listedBody["actuators"].([]any) {
+		candidate := raw.(map[string]any)
+		if candidate["id"] == lightID {
+			listedLight = candidate
+		}
+	}
+	if listedLight == nil || listedLight["current_state"] != "on" {
+		t.Fatalf("listed light state = %#v, want on", listedLight)
+	}
 	scheduled, schedule := do(t, server, http.MethodPut, "/v1/actuators/"+lightID+"/light-schedule", map[string]any{
 		"start_minute": 480, "end_minute": 1200, "timezone": "America/New_York",
 		"enabled": true, "actor": "Joey",

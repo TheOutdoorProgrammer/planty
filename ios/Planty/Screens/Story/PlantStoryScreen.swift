@@ -379,9 +379,7 @@ struct PlantStoryScreen: View {
                         ActionFace(
                             "Grow lights",
                             icon: "lightbulb.led.fill",
-                            detail: plantLights.contains { $0.lightSchedule?.enabled == true }
-                                ? "Schedule active"
-                                : "Control or schedule"
+                            detail: lightStatus
                         )
                     }
                     .buttonStyle(SecondaryButtonStyle())
@@ -425,6 +423,16 @@ struct PlantStoryScreen: View {
 
     private var activePlantActuator: Actuator? {
         plantActuators.first { session.actuators.leases[$0.id]?.isActive == true }
+    }
+
+    private var lightStatus: String {
+        let lightsOn = plantLights.filter { $0.isOn == true }.count
+        let known = plantLights.filter { $0.isOn != nil }.count
+        if lightsOn > 0 {
+            return plantLights.count == 1 ? "On, tap to control" : "\(lightsOn) of \(plantLights.count) on"
+        }
+        if known == plantLights.count { return "Off, tap to control" }
+        return "Status unavailable"
     }
 
     private var referenceActions: some View {

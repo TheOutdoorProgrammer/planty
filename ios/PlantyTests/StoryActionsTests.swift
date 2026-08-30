@@ -120,7 +120,7 @@ final class RecordingAPI: PlantyAPI, @unchecked Sendable {
     }
 
     func acknowledge(verdictID: UUID) async throws { throw PlantyError.notFound }
-    func sensors() async throws -> [SensorLink] { throw PlantyError.notFound }
+    func sensors() async throws -> [SensorSeries] { throw PlantyError.notFound }
 
     func calibrate(sensorID: UUID, to calibration: SensorCalibration) async throws -> SensorLink {
         throw PlantyError.notFound

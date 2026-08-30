@@ -43,6 +43,7 @@ struct Plant: Codable, Sendable, Hashable, Identifiable {
     /// and because every other endpoint returns a plant without one.
     var photoURL: URL?
     var photoTakenAt: Date?
+    var activeWatering: Bool?
 
     /// Species-level, so it rides with the plant rather than the detail
     /// envelope. Nil means the endpoint sent none, which is not the same as
@@ -77,6 +78,7 @@ struct Plant: Codable, Sendable, Hashable, Identifiable {
         case updatedAt = "updated_at"
         case photoURL = "photo_url"
         case photoTakenAt = "photo_taken_at"
+        case activeWatering = "active_watering"
         case toxicity
     }
 }
@@ -179,10 +181,14 @@ extension Plant {
     /// Only the list endpoint sends a photo URL, so a copy that arrived from
     /// any other call must not blank the picture already on screen.
     func keepingPhoto(from previous: Plant) -> Plant {
-        guard photoURL == nil else { return self }
         var kept = self
-        kept.photoURL = previous.photoURL
-        kept.photoTakenAt = previous.photoTakenAt
+        if kept.photoURL == nil {
+            kept.photoURL = previous.photoURL
+            kept.photoTakenAt = previous.photoTakenAt
+        }
+        if kept.activeWatering == nil {
+            kept.activeWatering = previous.activeWatering
+        }
         return kept
     }
 }
