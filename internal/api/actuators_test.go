@@ -108,11 +108,29 @@ func TestActuatorAPIDiscoversRegistersAndControlsOnlyAllowlistedIDs(t *testing.T
 		t.Fatalf("listed light state = %#v, want on", listedLight)
 	}
 	scheduled, schedule := do(t, server, http.MethodPut, "/v1/actuators/"+lightID+"/light-schedule", map[string]any{
-		"start_minute": 480, "end_minute": 1200, "timezone": "America/New_York",
+		"windows": []map[string]any{
+			{"start_minute": 480, "end_minute": 540},
+			{"start_minute": 720, "end_minute": 780},
+		}, "timezone": "America/New_York",
 		"enabled": true, "actor": "Joey",
 	})
-	if scheduled.Code != http.StatusOK || schedule["timezone"] != "America/New_York" {
+	windows, _ := schedule["windows"].([]any)
+	if scheduled.Code != http.StatusOK || schedule["timezone"] != "America/New_York" ||
+		schedule["start_minute"] != float64(480) || len(windows) != 2 {
 		t.Fatalf("schedule = %d %#v", scheduled.Code, schedule)
+	}
+	storedSchedule, err := db.LightSchedule(ctx, uuid.MustParse(lightID))
+	if err != nil || len(storedSchedule.Windows) != 2 {
+		t.Fatalf("stored schedule = %#v err=%v", storedSchedule, err)
+	}
+	overlapping, _ := do(t, server, http.MethodPut, "/v1/actuators/"+lightID+"/light-schedule", map[string]any{
+		"windows": []map[string]any{
+			{"start_minute": 480, "end_minute": 600},
+			{"start_minute": 540, "end_minute": 660},
+		}, "timezone": "America/New_York", "enabled": true, "actor": "Joey",
+	})
+	if overlapping.Code != http.StatusBadRequest {
+		t.Fatalf("overlapping schedule status = %d", overlapping.Code)
 	}
 	controlled, _ := do(t, server, http.MethodPost, "/v1/actuators/"+lightID+"/state", map[string]any{
 		"on": true, "actor": "Joey",

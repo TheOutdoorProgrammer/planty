@@ -145,20 +145,28 @@ func (s *Server) setActuatorSchedule(w http.ResponseWriter, r *http.Request, kin
 		return
 	}
 	var request struct {
-		StartMinute int          `json:"start_minute"`
-		EndMinute   int          `json:"end_minute"`
-		Timezone    string       `json:"timezone"`
-		Enabled     bool         `json:"enabled"`
-		Actor       string       `json:"actor"`
-		Source      plant.Source `json:"source,omitempty"`
+		StartMinute *int                            `json:"start_minute"`
+		EndMinute   *int                            `json:"end_minute"`
+		Windows     *[]plant.ActuatorScheduleWindow `json:"windows"`
+		Timezone    string                          `json:"timezone"`
+		Enabled     bool                            `json:"enabled"`
+		Actor       string                          `json:"actor"`
+		Source      plant.Source                    `json:"source,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
 		s.fail(w, http.StatusBadRequest, err)
 		return
 	}
-	input := plant.ActuatorSchedule{
-		ActuatorID: id, StartMinute: request.StartMinute, EndMinute: request.EndMinute,
-		Timezone: request.Timezone, Enabled: request.Enabled,
+	input := plant.ActuatorSchedule{ActuatorID: id, Timezone: request.Timezone, Enabled: request.Enabled}
+	if request.Windows != nil {
+		input.Windows = *request.Windows
+		if len(input.Windows) > 0 {
+			input.StartMinute = input.Windows[0].StartMinute
+			input.EndMinute = input.Windows[0].EndMinute
+		}
+	} else if request.StartMinute != nil && request.EndMinute != nil {
+		input.StartMinute = *request.StartMinute
+		input.EndMinute = *request.EndMinute
 	}
 	var schedule plant.ActuatorSchedule
 	var err error

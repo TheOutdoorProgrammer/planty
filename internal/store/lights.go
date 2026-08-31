@@ -25,7 +25,23 @@ func (s *Store) actuatorSchedule(ctx context.Context, actuatorID uuid.UUID) (pla
 	if errors.Is(err, pgx.ErrNoRows) {
 		return plant.ActuatorSchedule{}, ErrNotFound
 	}
-	return schedule, err
+	if err != nil {
+		return plant.ActuatorSchedule{}, err
+	}
+	rows, err := s.pool.Query(ctx, `SELECT start_minute, end_minute
+		FROM plant_actuator_schedule_windows WHERE actuator_id = $1 ORDER BY position`, actuatorID)
+	if err != nil {
+		return plant.ActuatorSchedule{}, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var window plant.ActuatorScheduleWindow
+		if err := rows.Scan(&window.StartMinute, &window.EndMinute); err != nil {
+			return plant.ActuatorSchedule{}, err
+		}
+		schedule.Windows = append(schedule.Windows, window)
+	}
+	return schedule, rows.Err()
 }
 
 func (s *Store) LightSchedule(ctx context.Context, actuatorID uuid.UUID) (plant.ActuatorSchedule, error) {
@@ -56,6 +72,10 @@ func (s *Store) SetFanSchedule(ctx context.Context, schedule plant.ActuatorSched
 }
 
 func (s *Store) setActuatorSchedule(ctx context.Context, schedule plant.ActuatorSchedule, actor string, source plant.Source, kind plant.ActuatorKind) (plant.ActuatorSchedule, error) {
+	windows := schedule.EffectiveWindows()
+	schedule.StartMinute = windows[0].StartMinute
+	schedule.EndMinute = windows[0].EndMinute
+	schedule.Windows = windows
 	if err := schedule.Valid(); err != nil {
 		return plant.ActuatorSchedule{}, err
 	}
@@ -94,13 +114,32 @@ func (s *Store) setActuatorSchedule(ctx context.Context, schedule plant.Actuator
 	if err != nil {
 		return plant.ActuatorSchedule{}, classify(err)
 	}
+	if _, err := tx.Exec(ctx, `DELETE FROM plant_actuator_schedule_windows WHERE actuator_id = $1`, schedule.ActuatorID); err != nil {
+		return plant.ActuatorSchedule{}, err
+	}
+	for position, window := range windows {
+		if _, err := tx.Exec(ctx, `INSERT INTO plant_actuator_schedule_windows
+			(actuator_id, position, start_minute, end_minute) VALUES ($1,$2,$3,$4)`,
+			schedule.ActuatorID, position, window.StartMinute, window.EndMinute); err != nil {
+			return plant.ActuatorSchedule{}, classify(err)
+		}
+	}
+	saved.Windows = append([]plant.ActuatorScheduleWindow(nil), windows...)
 	if err := insertActuatorEvent(ctx, tx, plant.ActuatorEvent{
 		ActuatorID: schedule.ActuatorID, Action: "schedule_updated", Actor: actor,
-		Source: source, Detail: fmt.Sprintf("%04d-%04d %s enabled=%t", schedule.StartMinute, schedule.EndMinute, schedule.Timezone, schedule.Enabled),
+		Source: source, Detail: fmt.Sprintf("%s %s enabled=%t", formatScheduleWindows(windows), schedule.Timezone, schedule.Enabled),
 	}); err != nil {
 		return plant.ActuatorSchedule{}, err
 	}
 	return saved, tx.Commit(ctx)
+}
+
+func formatScheduleWindows(windows []plant.ActuatorScheduleWindow) string {
+	formatted := make([]string, 0, len(windows))
+	for _, window := range windows {
+		formatted = append(formatted, fmt.Sprintf("%04d-%04d", window.StartMinute, window.EndMinute))
+	}
+	return strings.Join(formatted, ",")
 }
 
 func (s *Store) DeleteLightSchedule(ctx context.Context, actuatorID uuid.UUID, actor string, source plant.Source) error {

@@ -50,11 +50,13 @@ func (d Deps) actuators(ctx context.Context, out io.Writer, args []string) error
 		if lease, err := d.Store.ActiveActuatorLease(ctx, actuator.ID); err == nil {
 			state = "on until " + lease.Deadline.Format(stamp)
 		}
-		if schedule := actuator.LightSchedule; schedule != nil {
-			state = fmt.Sprintf("schedule=%02d:%02d-%02d:%02d %s enabled=%t",
-				schedule.StartMinute/60, schedule.StartMinute%60,
-				schedule.EndMinute/60, schedule.EndMinute%60,
-				schedule.Timezone, schedule.Enabled)
+		schedule := actuator.LightSchedule
+		if actuator.Kind == plant.ActuatorFan {
+			schedule = actuator.FanSchedule
+		}
+		if schedule != nil {
+			state = fmt.Sprintf("schedule=%s %s enabled=%t",
+				formatAgentScheduleWindows(schedule.EffectiveWindows()), schedule.Timezone, schedule.Enabled)
 		}
 		assignedPlants := make([]string, 0, len(actuator.PlantIDs))
 		for _, plantID := range actuator.PlantIDs {
@@ -110,6 +112,8 @@ func (d Deps) lightSchedule(ctx context.Context, out io.Writer, args []string) e
 	idRaw := set.String("id", "", "allowlisted Planty actuator UUID")
 	start := set.String("start", "", "local start time HH:MM")
 	end := set.String("end", "", "local end time HH:MM")
+	var windowValues scheduleWindowValues
+	set.Var(&windowValues, "window", "local window HH:MM-HH:MM; repeat for split schedules")
 	timezone := set.String("timezone", "America/New_York", "IANA timezone")
 	enabled := set.Bool("enabled", true, "whether the schedule is active")
 	if err := parse(set, args); err != nil {
@@ -119,25 +123,67 @@ func (d Deps) lightSchedule(ctx context.Context, out io.Writer, args []string) e
 	if err != nil {
 		return err
 	}
-	startMinute, err := parseClockMinute(*start)
-	if err != nil {
-		return fmt.Errorf("--start: %w", err)
-	}
-	endMinute, err := parseClockMinute(*end)
-	if err != nil {
-		return fmt.Errorf("--end: %w", err)
+	windows := make([]plant.ActuatorScheduleWindow, 0, max(1, len(windowValues)))
+	if len(windowValues) == 0 {
+		window, err := parseScheduleWindow(*start + "-" + *end)
+		if err != nil {
+			return fmt.Errorf("--start/--end: %w", err)
+		}
+		windows = append(windows, window)
+	} else {
+		for _, value := range windowValues {
+			window, err := parseScheduleWindow(value)
+			if err != nil {
+				return fmt.Errorf("--window %q: %w", value, err)
+			}
+			windows = append(windows, window)
+		}
 	}
 	schedule, err := d.Store.SetLightSchedule(ctx, plant.LightSchedule{
-		ActuatorID: actuator.ID, StartMinute: startMinute, EndMinute: endMinute,
-		Timezone: *timezone, Enabled: *enabled,
+		ActuatorID: actuator.ID, Windows: windows, Timezone: *timezone, Enabled: *enabled,
 	}, "planty agent", plant.SourceAgent)
 	if err != nil {
 		return err
 	}
-	_, _ = fmt.Fprintf(out, "scheduled %s for %s from %02d:%02d to %02d:%02d %s enabled=%t\n",
-		actuator.Name, p.CommonName, schedule.StartMinute/60, schedule.StartMinute%60,
-		schedule.EndMinute/60, schedule.EndMinute%60, schedule.Timezone, schedule.Enabled)
+	_, _ = fmt.Fprintf(out, "scheduled %s for %s at %s %s enabled=%t\n",
+		actuator.Name, p.CommonName, formatAgentScheduleWindows(schedule.Windows),
+		schedule.Timezone, schedule.Enabled)
 	return nil
+}
+
+type scheduleWindowValues []string
+
+func (v *scheduleWindowValues) String() string { return strings.Join(*v, ",") }
+
+func (v *scheduleWindowValues) Set(value string) error {
+	*v = append(*v, value)
+	return nil
+}
+
+func parseScheduleWindow(value string) (plant.ActuatorScheduleWindow, error) {
+	start, end, ok := strings.Cut(value, "-")
+	if !ok {
+		return plant.ActuatorScheduleWindow{}, errors.New("window must be HH:MM-HH:MM")
+	}
+	startMinute, err := parseClockMinute(start)
+	if err != nil {
+		return plant.ActuatorScheduleWindow{}, err
+	}
+	endMinute, err := parseClockMinute(end)
+	if err != nil {
+		return plant.ActuatorScheduleWindow{}, err
+	}
+	return plant.ActuatorScheduleWindow{StartMinute: startMinute, EndMinute: endMinute}, nil
+}
+
+func formatAgentScheduleWindows(windows []plant.ActuatorScheduleWindow) string {
+	formatted := make([]string, 0, len(windows))
+	for _, window := range windows {
+		formatted = append(formatted, fmt.Sprintf("%02d:%02d-%02d:%02d",
+			window.StartMinute/60, window.StartMinute%60,
+			window.EndMinute/60, window.EndMinute%60))
+	}
+	return strings.Join(formatted, ",")
 }
 
 func (d Deps) assignedLight(ctx context.Context, slug, idRaw string) (plant.Plant, plant.Actuator, error) {

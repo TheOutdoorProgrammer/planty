@@ -48,9 +48,13 @@ func TestActuatorEntityDomainUsesTheHomeAssistantEntity(t *testing.T) {
 	}
 }
 
-func TestLightScheduleUsesItsTimezoneAndSupportsOvernightWindows(t *testing.T) {
+func TestLightScheduleUsesMultipleTimezoneAwareWindows(t *testing.T) {
 	schedule := LightSchedule{
-		ActuatorID: uuid.New(), StartMinute: 20 * 60, EndMinute: 6 * 60,
+		ActuatorID: uuid.New(), Windows: []ActuatorScheduleWindow{
+			{StartMinute: 20 * 60, EndMinute: 6 * 60},
+			{StartMinute: 8 * 60, EndMinute: 9 * 60},
+			{StartMinute: 12 * 60, EndMinute: 13 * 60},
+		},
 		Timezone: "America/New_York", Enabled: true,
 	}
 	for _, test := range []struct {
@@ -58,7 +62,9 @@ func TestLightScheduleUsesItsTimezoneAndSupportsOvernightWindows(t *testing.T) {
 		want bool
 	}{
 		{at: "2026-08-31T01:00:00Z", want: true},
-		{at: "2026-08-31T12:00:00Z", want: false},
+		{at: "2026-08-31T12:30:00Z", want: true},
+		{at: "2026-08-31T16:30:00Z", want: true},
+		{at: "2026-08-31T15:00:00Z", want: false},
 	} {
 		at, err := time.Parse(time.RFC3339, test.at)
 		if err != nil {
@@ -77,5 +83,13 @@ func TestLightScheduleUsesItsTimezoneAndSupportsOvernightWindows(t *testing.T) {
 	schedule.Timezone = "Nowhere/Imaginary"
 	if !errors.Is(schedule.Valid(), ErrInvalid) {
 		t.Fatal("accepted an unknown timezone")
+	}
+	schedule.Timezone = "America/New_York"
+	schedule.Windows = []ActuatorScheduleWindow{
+		{StartMinute: 20 * 60, EndMinute: 6 * 60},
+		{StartMinute: 5 * 60, EndMinute: 7 * 60},
+	}
+	if !errors.Is(schedule.Valid(), ErrInvalid) {
+		t.Fatal("accepted overlapping overnight windows")
 	}
 }

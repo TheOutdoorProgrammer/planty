@@ -78,8 +78,8 @@ The Claude Code CLI and OpenAI-compatible harness can selectively open offered h
 
 Home Assistant supplies sensor readings, a forecast, the optional LetPot watering line, and explicitly registered plant fans, smart plugs, or grow lights.
 Planty can run a registered actuator for at most one hour from a plant page or an evidence-driven assessment, records successful shared airflow against every assigned plant, and persists the shutdown deadline before Home Assistant receives `turn_on`.
-Owner-configured daily fan and grow-light schedules are persisted separately, restored after restarts, and defer to an active bounded fan run.
-Grow lights instead use direct state control and a Planty-owned, timezone-aware daily schedule that the app or an assigned AI agent can change.
+Owner-configured daily fan and grow-light schedules persist up to 12 non-overlapping time windows, survive restarts, and defer to an active bounded fan run.
+Grow lights instead use direct state control and a Planty-owned, timezone-aware daily schedule whose windows the app or an assigned AI agent can change.
 It is not a notification transport.
 Planty sends scheduled alerts directly to registered iOS devices through APNs and fails the job when native delivery is unavailable.
 

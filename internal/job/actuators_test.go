@@ -136,7 +136,10 @@ func TestActuatorControlEnforcesLightScheduleWithoutCreatingALease(t *testing.T)
 		t.Fatal(err)
 	}
 	if _, err := db.SetLightSchedule(ctx, plant.LightSchedule{
-		ActuatorID: actuator.ID, StartMinute: 8 * 60, EndMinute: 20 * 60,
+		ActuatorID: actuator.ID, Windows: []plant.ActuatorScheduleWindow{
+			{StartMinute: 8 * 60, EndMinute: 9 * 60},
+			{StartMinute: 12 * 60, EndMinute: 13 * 60},
+		},
 		Timezone: "UTC", Enabled: true,
 	}, "tester", plant.SourceApp); err != nil {
 		t.Fatal(err)

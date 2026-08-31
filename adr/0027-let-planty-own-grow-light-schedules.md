@@ -4,7 +4,7 @@ Date: 2026-08-30
 
 ## Status
 
-Accepted.
+Accepted. Amended, see [Amendments](#amendments).
 
 ## Context and Problem Statement
 
@@ -39,3 +39,9 @@ Extend Planty's existing allowlisted actuator registration with a light kind. Pe
 
 - Home Assistant automation mutation broadens credentials and splits ownership across two APIs
 - Lease renewal is fragile, noisy, and violates the durable deadline model
+
+## Amendments
+
+### 2026-08-31: Multiple daily windows
+
+[ADR-0032](0032-model-actuator-schedules-as-ordered-daily-windows.md) supersedes this record's one-window schedule shape for both grow lights and fans. Planty ownership, timezone-aware reconciliation, allowlisted actuation, and explicit manual control remain unchanged.

@@ -178,12 +178,14 @@ Physical controls and cold:
               planty agent lightstate --plant <slug> --id <uuid> --state on|off
               example: planty agent lightstate --plant seedlings --id 2c658779-4967-4831-b579-a6ed2584769c --state on
 
-  lightschedule  create or replace an assigned light's daily schedule. Times
-              are local HH:MM and --timezone is an IANA name. Overnight
-              intervals are supported. Use --enabled=false to pause it.
+  lightschedule  create or replace an assigned light's daily schedule. Repeat
+              --window for split periods. Times are local HH:MM and --timezone
+              is an IANA name. Overnight windows are supported. Use
+              --enabled=false to pause it. Legacy --start and --end set one window.
               planty agent lightschedule --plant <slug> --id <uuid>
-                --start <HH:MM> --end <HH:MM> [--timezone <name>] [--enabled=true|false]
-              example: planty agent lightschedule --plant seedlings --id 2c658779-4967-4831-b579-a6ed2584769c --start 07:00 --end 21:00 --timezone America/New_York
+                --window <HH:MM-HH:MM> [--window <HH:MM-HH:MM> ...]
+                [--timezone <name>] [--enabled=true|false]
+              example: planty agent lightschedule --plant seedlings --id 2c658779-4967-4831-b579-a6ed2584769c --window 07:00-09:00 --window 16:00-21:00 --timezone America/New_York
 
   water       run the LetPot watering pass, exactly as the manual command
               does: survey the calibrated probes, pump only if something reads

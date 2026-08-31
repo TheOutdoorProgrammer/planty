@@ -57,3 +57,29 @@ func TestAgentActuatorVerbsUsePlantyIDAndIdempotency(t *testing.T) {
 		t.Fatalf("airflow observations = %#v err=%v", observations, err)
 	}
 }
+
+func TestAgentLightScheduleAcceptsRepeatedWindows(t *testing.T) {
+	deps, grown, ctx := toxicityDeps(t)
+	actuator, err := deps.Store.RegisterActuator(ctx, plant.Actuator{
+		EntityID: "switch.agent_light", Name: "Agent light", Kind: plant.ActuatorLight,
+		PlantIDs: []uuid.UUID{grown.ID},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	output, err := runVerbCtx(t, ctx, deps, "lightschedule",
+		"--plant", grown.Slug, "--id", actuator.ID.String(),
+		"--window", "07:00-08:00", "--window", "12:00-13:00", "--timezone", "UTC")
+	if err != nil || !strings.Contains(output, "07:00-08:00,12:00-13:00") {
+		t.Fatalf("lightschedule = %q err=%v", output, err)
+	}
+	schedule, err := deps.Store.LightSchedule(ctx, actuator.ID)
+	if err != nil || len(schedule.Windows) != 2 {
+		t.Fatalf("stored schedule = %#v err=%v", schedule, err)
+	}
+	if _, err := runVerbCtx(t, ctx, deps, "lightschedule",
+		"--plant", grown.Slug, "--id", actuator.ID.String(),
+		"--window", "07:00-09:00", "--window", "08:00-10:00", "--timezone", "UTC"); err == nil {
+		t.Fatal("accepted overlapping windows")
+	}
+}

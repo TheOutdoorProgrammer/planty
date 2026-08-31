@@ -14,7 +14,7 @@ Planty does not call Home Assistant notification services or `script.announce`.
 
 ## Greenhouse airflow
 
-Planty owns daily on/off schedules for registered semantic fans. Disable any recurring Home Assistant automation for the same entity so two controllers cannot fight. Home Assistant may retain an independent maximum-on watchdog sized beyond the intended Planty schedule window, because a physical backstop is not a second source of recurring intent.
+Planty owns daily on/off schedules with multiple windows for registered semantic fans. Disable any recurring Home Assistant automation for the same entity so two controllers cannot fight. Home Assistant may retain an independent maximum-on watchdog sized beyond the longest intended Planty window, because a physical backstop is not a second source of recurring intent.
 
 ## Mushroom care
 

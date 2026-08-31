@@ -8,7 +8,10 @@ import (
 	"github.com/google/uuid"
 )
 
-const MaxActuatorDuration = time.Hour
+const (
+	MaxActuatorDuration        = time.Hour
+	MaxActuatorScheduleWindows = 12
+)
 
 type ActuatorKind string
 
@@ -74,30 +77,63 @@ func (a Actuator) EntityDomain() (string, error) {
 }
 
 type ActuatorSchedule struct {
-	ActuatorID       uuid.UUID  `json:"actuator_id"`
-	StartMinute      int        `json:"start_minute"`
-	EndMinute        int        `json:"end_minute"`
-	Timezone         string     `json:"timezone"`
-	Enabled          bool       `json:"enabled"`
-	LastAppliedState *bool      `json:"last_applied_state,omitempty"`
-	LastAppliedAt    *time.Time `json:"last_applied_at,omitempty"`
-	LastError        string     `json:"last_error,omitempty"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ActuatorID       uuid.UUID                `json:"actuator_id"`
+	StartMinute      int                      `json:"start_minute"`
+	EndMinute        int                      `json:"end_minute"`
+	Windows          []ActuatorScheduleWindow `json:"windows"`
+	Timezone         string                   `json:"timezone"`
+	Enabled          bool                     `json:"enabled"`
+	LastAppliedState *bool                    `json:"last_applied_state,omitempty"`
+	LastAppliedAt    *time.Time               `json:"last_applied_at,omitempty"`
+	LastError        string                   `json:"last_error,omitempty"`
+	CreatedAt        time.Time                `json:"created_at"`
+	UpdatedAt        time.Time                `json:"updated_at"`
+}
+
+type ActuatorScheduleWindow struct {
+	StartMinute int `json:"start_minute"`
+	EndMinute   int `json:"end_minute"`
+}
+
+func (s ActuatorSchedule) EffectiveWindows() []ActuatorScheduleWindow {
+	if len(s.Windows) > 0 {
+		return s.Windows
+	}
+	return []ActuatorScheduleWindow{{StartMinute: s.StartMinute, EndMinute: s.EndMinute}}
 }
 
 func (s ActuatorSchedule) Valid() error {
 	if s.ActuatorID == uuid.Nil {
 		return invalid("actuator_id is required")
 	}
-	if s.StartMinute < 0 || s.StartMinute > 1439 || s.EndMinute < 0 || s.EndMinute > 1439 {
-		return invalid("actuator schedule minutes must be between 0 and 1439")
-	}
-	if s.StartMinute == s.EndMinute {
-		return invalid("actuator schedule start and end must differ")
-	}
 	if _, err := time.LoadLocation(strings.TrimSpace(s.Timezone)); err != nil {
 		return invalid("unknown actuator schedule timezone %q", s.Timezone)
+	}
+	windows := s.EffectiveWindows()
+	if len(windows) > MaxActuatorScheduleWindows {
+		return invalid("actuator schedule may contain at most %d windows", MaxActuatorScheduleWindows)
+	}
+	occupied := [24 * 60]bool{}
+	for _, window := range windows {
+		if err := window.Valid(); err != nil {
+			return err
+		}
+		for minute := window.StartMinute; minute != window.EndMinute; minute = (minute + 1) % (24 * 60) {
+			if occupied[minute] {
+				return invalid("actuator schedule windows must not overlap")
+			}
+			occupied[minute] = true
+		}
+	}
+	return nil
+}
+
+func (w ActuatorScheduleWindow) Valid() error {
+	if w.StartMinute < 0 || w.StartMinute > 1439 || w.EndMinute < 0 || w.EndMinute > 1439 {
+		return invalid("actuator schedule minutes must be between 0 and 1439")
+	}
+	if w.StartMinute == w.EndMinute {
+		return invalid("actuator schedule start and end must differ")
 	}
 	return nil
 }
@@ -112,10 +148,15 @@ func (s ActuatorSchedule) WantsOn(at time.Time) (bool, error) {
 	location, _ := time.LoadLocation(s.Timezone)
 	local := at.In(location)
 	minute := local.Hour()*60 + local.Minute()
-	if s.StartMinute < s.EndMinute {
-		return minute >= s.StartMinute && minute < s.EndMinute, nil
+	for _, window := range s.EffectiveWindows() {
+		if window.StartMinute < window.EndMinute && minute >= window.StartMinute && minute < window.EndMinute {
+			return true, nil
+		}
+		if window.StartMinute > window.EndMinute && (minute >= window.StartMinute || minute < window.EndMinute) {
+			return true, nil
+		}
 	}
-	return minute >= s.StartMinute || minute < s.EndMinute, nil
+	return false, nil
 }
 
 type LightSchedule = ActuatorSchedule

@@ -4,7 +4,9 @@ Date: 2026-08-30
 
 ## Status
 
-Accepted. Supersedes [ADR-0014](0014-keep-physical-safety-outside-model-prompts.md).
+Accepted. Supersedes [ADR-0014](0014-keep-physical-safety-outside-model-prompts.md). The one-window schedule shape is superseded by [ADR-0032](0032-model-actuator-schedules-as-ordered-daily-windows.md).
+
+Planty still exclusively owns recurring fan intent and manual leases still take priority.
 
 ## Context and Problem Statement
 

@@ -123,7 +123,7 @@ Deleting an actuator only removes it from the active allowlist; historical lease
 An active actuator cannot be removed until it has been stopped.
 
 Planty owns bounded ad hoc runs only.
-Fans and grow lights each support one optional daily schedule. The schedule stores local start and end minutes plus an IANA timezone, supports windows that cross midnight, and is reconciled every minute. Disabled schedules enforce off. Planty reads Home Assistant state before acting so a correct device is not toggled repeatedly, records every command or failure in the actuator ledger, and never accepts a caller-supplied entity ID. A bounded manual or agent fan lease takes priority over its schedule. Planty owns these schedules; a second Home Assistant automation for the same actuator would be a competing controller and should not exist.
+Fans and grow lights each support one optional daily schedule with up to 12 ordered, non-overlapping windows. The schedule stores one IANA timezone and local start and end minutes for each window, supports windows that cross midnight, and is reconciled every minute. Disabled schedules enforce off. Planty reads Home Assistant state before acting so a correct device is not toggled repeatedly, records every command or failure in the actuator ledger, and never accepts a caller-supplied entity ID. A bounded manual or agent fan lease takes priority over its schedule. Planty owns these schedules; a second Home Assistant automation for the same actuator would be a competing controller and should not exist.
 
 ## readings
 
