@@ -48,8 +48,6 @@ struct AirflowControlSheet: View {
 
                 if let actuator = selectedActuator {
                     airflowSection(actuator)
-                    ActuatorScheduleSections(actuator: actuator)
-                        .id(actuator.id)
                 } else {
                     ContentUnavailableView(
                         "No fan assigned",
@@ -184,12 +182,13 @@ struct AirflowControlSheet: View {
     }
 }
 
-struct LightControlSheet: View {
+struct ScheduleControlSheet: View {
     let plant: Plant
 
     @Environment(AppSession.self) private var session
     @Environment(\.dismiss) private var dismiss
-    @State private var selectedActuatorID: UUID?
+    @State private var selectedLightID: UUID?
+    @State private var selectedFanID: UUID?
 
     private var lights: [Actuator] {
         session.actuators.registered
@@ -197,8 +196,18 @@ struct LightControlSheet: View {
             .filter { $0.kind == .light }
     }
 
+    private var fans: [Actuator] {
+        session.actuators.registered
+            .assigned(to: plant.id)
+            .filter { $0.kind == .fan }
+    }
+
     private var selectedLight: Actuator? {
-        lights.first { $0.id == selectedActuatorID } ?? lights.first
+        lights.first { $0.id == selectedLightID } ?? lights.first
+    }
+
+    private var selectedFan: Actuator? {
+        fans.first { $0.id == selectedFanID } ?? fans.first
     }
 
     var body: some View {
@@ -206,7 +215,7 @@ struct LightControlSheet: View {
             Form {
                 if lights.count > 1 {
                     Section("Light") {
-                        Picker("Light", selection: $selectedActuatorID) {
+                        Picker("Light", selection: $selectedLightID) {
                             ForEach(lights) { light in
                                 Text(light.name).tag(Optional(light.id))
                             }
@@ -217,17 +226,34 @@ struct LightControlSheet: View {
                 if let light = selectedLight {
                     LightControlSections(actuator: light)
                         .id(light.id)
-                } else {
+                }
+
+                if fans.count > 1 {
+                    Section("Fan") {
+                        Picker("Fan", selection: $selectedFanID) {
+                            ForEach(fans) { fan in
+                                Text(fan.name).tag(Optional(fan.id))
+                            }
+                        }
+                    }
+                }
+
+                if let fan = selectedFan {
+                    ActuatorScheduleSections(actuator: fan)
+                        .id(fan.id)
+                }
+
+                if lights.isEmpty && fans.isEmpty {
                     ContentUnavailableView(
-                        "No light assigned",
-                        systemImage: "lightbulb.slash",
-                        description: Text("Register a Home Assistant light in Settings first.")
+                        "No scheduled devices assigned",
+                        systemImage: "calendar.badge.exclamationmark",
+                        description: Text("Assign a fan or light to this plant in Settings first.")
                     )
                 }
             }
             .scrollContentBackground(.hidden)
             .plantyPage()
-            .navigationTitle("Grow lights")
+            .navigationTitle("Schedules")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -235,7 +261,8 @@ struct LightControlSheet: View {
                 }
             }
             .task {
-                selectedActuatorID = selectedActuatorID ?? lights.first?.id
+                selectedLightID = selectedLightID ?? lights.first?.id
+                selectedFanID = selectedFanID ?? fans.first?.id
             }
         }
     }

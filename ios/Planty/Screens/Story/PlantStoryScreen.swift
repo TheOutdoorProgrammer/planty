@@ -10,7 +10,7 @@ struct PlantStoryScreen: View {
     @State private var isEditingToxicity = false
     @State private var isLoggingCare = false
     @State private var isManagingAirflow = false
-    @State private var isManagingLights = false
+    @State private var isManagingSchedules = false
     @State private var isCreatingDerivedPlant = false
     @State private var isHarvesting = false
     @State private var isConfirmingDeath = false
@@ -174,8 +174,8 @@ struct PlantStoryScreen: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .sheet(isPresented: $isManagingLights) {
-            LightControlSheet(plant: store.plant)
+        .sheet(isPresented: $isManagingSchedules) {
+            ScheduleControlSheet(plant: store.plant)
                 .presentationDetents([.large])
         }
         .sheet(isPresented: $isCreatingDerivedPlant) {
@@ -378,18 +378,18 @@ struct PlantStoryScreen: View {
                     .accessibilityLabel("Control airflow for \(store.plant.commonName)")
                 }
 
-                if !plantLights.isEmpty {
+                if !scheduledActuators.isEmpty {
                     Button {
-                        isManagingLights = true
+                        isManagingSchedules = true
                     } label: {
                         ActionFace(
-                            "Grow lights",
-                            icon: "lightbulb.led.fill",
-                            detail: lightStatus
+                            "Schedules",
+                            icon: "calendar.badge.clock",
+                            detail: scheduleStatus
                         )
                     }
                     .buttonStyle(SecondaryButtonStyle())
-                    .accessibilityLabel("Control grow lights for \(store.plant.commonName)")
+                    .accessibilityLabel("Manage schedules for \(store.plant.commonName)")
                 }
 
                 NavigationLink {
@@ -427,20 +427,21 @@ struct PlantStoryScreen: View {
         session.actuators.registered.assigned(to: store.plant.id).filter { $0.kind == .light }
     }
 
+    private var scheduledActuators: [Actuator] {
+        plantLights + plantActuators
+    }
+
     private var activePlantActuator: Actuator? {
         plantActuators.first {
             $0.isOn == true || session.actuators.leases[$0.id]?.isActive == true
         }
     }
 
-    private var lightStatus: String {
-        let lightsOn = plantLights.filter { $0.isOn == true }.count
-        let known = plantLights.filter { $0.isOn != nil }.count
-        if lightsOn > 0 {
-            return plantLights.count == 1 ? "On, tap to control" : "\(lightsOn) of \(plantLights.count) on"
-        }
-        if known == plantLights.count { return "Off, tap to control" }
-        return "Status unavailable"
+    private var scheduleStatus: String {
+        let enabled = scheduledActuators.filter { $0.dailySchedule?.enabled == true }.count
+        if enabled == 1 { return "1 schedule enabled" }
+        if enabled > 1 { return "\(enabled) schedules enabled" }
+        return "Set daily times"
     }
 
     private var referenceActions: some View {

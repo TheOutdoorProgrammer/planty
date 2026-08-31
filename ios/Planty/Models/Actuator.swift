@@ -49,6 +49,14 @@ extension Actuator {
 }
 
 extension Actuator {
+    var dailySchedule: ActuatorSchedule? {
+        switch kind {
+        case .fan: fanSchedule
+        case .light: lightSchedule
+        default: nil
+        }
+    }
+
     var isOn: Bool? {
         switch currentState?.lowercased() {
         case "on": true

@@ -82,8 +82,7 @@ struct ActuatorScheduleSections: View {
 
     init(actuator: Actuator) {
         actuatorID = actuator.id
-        let schedule = actuator.kind == .fan ? actuator.fanSchedule : actuator.lightSchedule
-        _draft = State(initialValue: ActuatorScheduleDraft(schedule: schedule))
+        _draft = State(initialValue: ActuatorScheduleDraft(schedule: actuator.dailySchedule))
     }
 
     private var actuator: Actuator? {
@@ -91,8 +90,7 @@ struct ActuatorScheduleSections: View {
     }
 
     private var schedule: ActuatorSchedule? {
-        guard let actuator else { return nil }
-        return actuator.kind == .fan ? actuator.fanSchedule : actuator.lightSchedule
+        actuator?.dailySchedule
     }
 
     private var noun: String {
@@ -121,7 +119,7 @@ struct ActuatorScheduleSections: View {
                         .disabled(isWorking)
                     }
                 } header: {
-                    Text("Daily schedule")
+                    Text("\(actuator.name) schedule")
                 } footer: {
                     Text(scheduleFooter)
                 }

@@ -276,6 +276,29 @@ struct SettingsAutomationTests {
         #expect(loaded.endMinute == 1_200)
         #expect(loaded.timezone == "America/Chicago")
         #expect(!loaded.enabled)
+
+        let light = Actuator(
+            id: actuatorID,
+            entityID: "switch.grow_light",
+            name: "Grow light",
+            kind: .light,
+            plantIDs: [],
+            createdAt: .now,
+            updatedAt: .now,
+            lightSchedule: saved
+        )
+        let fan = Actuator(
+            id: actuatorID,
+            entityID: "switch.grow_fan",
+            name: "Grow fan",
+            kind: .fan,
+            plantIDs: [],
+            createdAt: .now,
+            updatedAt: .now,
+            fanSchedule: saved
+        )
+        #expect(light.dailySchedule == saved)
+        #expect(fan.dailySchedule == saved)
     }
 
     @Test("Fan schedules use the fan route and preserve daily window")

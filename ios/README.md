@@ -41,7 +41,7 @@ The app has four tabs:
 
 - **Today** shows current care actions and garden incidents, distinguishes calm from stale or incomplete evidence, and opens room-grouped care rounds.
 - **Capture** takes or imports a photograph, identifies or selects a plant, saves the timeline entry, and records quick care.
-- **Plants** opens the searchable library and each plant's story, including bounded fan control with shared airflow records, on-demand photo analysis, before-and-after care follow-ups, chat replies that continue after the app closes, photo overlays, and printable QR labels.
+- **Plants** opens the searchable library and each plant's story, including bounded fan control with shared airflow records, one screen for fan and grow-light schedules, on-demand photo analysis, before-and-after care follow-ups, chat replies that continue after the app closes, photo overlays, and printable QR labels.
 - **More** contains bounded household experiments, the one highest-value missing evidence input, away mode, cold shelter state, owner questions, harvest history, postmortem lessons, owner updates, and settings.
 
 On iPad the tab hierarchy becomes a sidebar-adaptable layout instead of stretching the phone tab bar.
