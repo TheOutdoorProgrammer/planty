@@ -79,6 +79,7 @@ struct ActuatorSchedule: Codable, Sendable, Hashable {
     let actuatorID: UUID
     let startMinute: Int
     let endMinute: Int
+    let windows: [ActuatorScheduleWindow]?
     let timezone: String
     let enabled: Bool
     let lastAppliedState: Bool?
@@ -91,6 +92,7 @@ struct ActuatorSchedule: Codable, Sendable, Hashable {
         case actuatorID = "actuator_id"
         case startMinute = "start_minute"
         case endMinute = "end_minute"
+        case windows
         case timezone
         case enabled
         case lastAppliedState = "last_applied_state"
@@ -99,6 +101,47 @@ struct ActuatorSchedule: Codable, Sendable, Hashable {
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
+
+    init(
+        actuatorID: UUID,
+        startMinute: Int,
+        endMinute: Int,
+        timezone: String,
+        enabled: Bool,
+        lastAppliedState: Bool?,
+        lastAppliedAt: Date?,
+        lastError: String?,
+        createdAt: Date,
+        updatedAt: Date,
+        windows: [ActuatorScheduleWindow]? = nil
+    ) {
+        self.actuatorID = actuatorID
+        self.startMinute = startMinute
+        self.endMinute = endMinute
+        self.windows = windows
+        self.timezone = timezone
+        self.enabled = enabled
+        self.lastAppliedState = lastAppliedState
+        self.lastAppliedAt = lastAppliedAt
+        self.lastError = lastError
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+
+    var dailyWindows: [ActuatorScheduleWindow] {
+        if let windows, !windows.isEmpty { return windows }
+        return [ActuatorScheduleWindow(startMinute: startMinute, endMinute: endMinute)]
+    }
+}
+
+struct ActuatorScheduleWindow: Codable, Sendable, Hashable {
+    let startMinute: Int
+    let endMinute: Int
+
+    enum CodingKeys: String, CodingKey {
+        case startMinute = "start_minute"
+        case endMinute = "end_minute"
+    }
 }
 
 typealias LightSchedule = ActuatorSchedule
@@ -106,6 +149,7 @@ typealias LightSchedule = ActuatorSchedule
 struct LightScheduleRequest: Codable, Sendable, Equatable {
     let startMinute: Int
     let endMinute: Int
+    let windows: [ActuatorScheduleWindow]
     let timezone: String
     let enabled: Bool
     let actor: String
@@ -113,28 +157,89 @@ struct LightScheduleRequest: Codable, Sendable, Equatable {
     enum CodingKeys: String, CodingKey {
         case startMinute = "start_minute"
         case endMinute = "end_minute"
+        case windows
         case timezone, enabled, actor
+    }
+
+    init(windows: [ActuatorScheduleWindow], timezone: String, enabled: Bool, actor: String) {
+        startMinute = windows.first?.startMinute ?? 0
+        endMinute = windows.first?.endMinute ?? 0
+        self.windows = windows
+        self.timezone = timezone
+        self.enabled = enabled
+        self.actor = actor
     }
 }
 
 struct LightScheduleDraft: Equatable {
-    var startMinute: Int
-    var endMinute: Int
+    var windows: [ActuatorScheduleWindowDraft]
     var timezone: String
     var enabled: Bool
 
     init(schedule: ActuatorSchedule?, defaultTimezone: String = TimeZone.current.identifier) {
-        startMinute = schedule?.startMinute ?? 7 * 60
-        endMinute = schedule?.endMinute ?? 21 * 60
+        windows = (schedule?.dailyWindows ?? [ActuatorScheduleWindow(startMinute: 7 * 60, endMinute: 21 * 60)])
+            .map(ActuatorScheduleWindowDraft.init)
         timezone = schedule?.timezone ?? defaultTimezone
         enabled = schedule?.enabled ?? true
     }
 
+    var startMinute: Int {
+        get { windows.first?.startMinute ?? 0 }
+        set { windows[0].startMinute = newValue }
+    }
+
+    var endMinute: Int {
+        get { windows.first?.endMinute ?? 0 }
+        set { windows[0].endMinute = newValue }
+    }
+
+    var requestWindows: [ActuatorScheduleWindow] {
+        windows.map { ActuatorScheduleWindow(startMinute: $0.startMinute, endMinute: $0.endMinute) }
+    }
+
     var canSave: Bool {
-        (0..<24 * 60).contains(startMinute)
-            && (0..<24 * 60).contains(endMinute)
-            && startMinute != endMinute
-            && !timezone.isEmpty
+        !timezone.isEmpty && windowsAreValid
+    }
+
+    mutating func addWindow() {
+        guard windows.count < 12 else { return }
+        let priorEnd = windows.last?.endMinute ?? 6 * 60
+        let start = (priorEnd + 60) % (24 * 60)
+        let end = (start + 60) % (24 * 60)
+        windows.append(ActuatorScheduleWindowDraft(startMinute: start, endMinute: end))
+    }
+
+    private var windowsAreValid: Bool {
+        guard !windows.isEmpty, windows.count <= 12 else { return false }
+        var occupied = Array(repeating: false, count: 24 * 60)
+        for window in windows {
+            guard (0..<24 * 60).contains(window.startMinute),
+                  (0..<24 * 60).contains(window.endMinute),
+                  window.startMinute != window.endMinute else { return false }
+            var minute = window.startMinute
+            while minute != window.endMinute {
+                guard !occupied[minute] else { return false }
+                occupied[minute] = true
+                minute = (minute + 1) % (24 * 60)
+            }
+        }
+        return true
+    }
+}
+
+struct ActuatorScheduleWindowDraft: Identifiable, Equatable {
+    let id: UUID
+    var startMinute: Int
+    var endMinute: Int
+
+    init(id: UUID = UUID(), startMinute: Int, endMinute: Int) {
+        self.id = id
+        self.startMinute = startMinute
+        self.endMinute = endMinute
+    }
+
+    init(_ window: ActuatorScheduleWindow) {
+        self.init(startMinute: window.startMinute, endMinute: window.endMinute)
     }
 }
 

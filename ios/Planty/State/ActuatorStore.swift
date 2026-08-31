@@ -233,8 +233,7 @@ final class ActuatorStore {
 
     func setSchedule(
         _ actuator: Actuator,
-        startMinute: Int,
-        endMinute: Int,
+        windows: [ActuatorScheduleWindow],
         timezone: String,
         enabled: Bool
     ) async -> PlantyError? {
@@ -243,8 +242,7 @@ final class ActuatorStore {
         }
         do {
             let request = ActuatorScheduleRequest(
-                startMinute: startMinute,
-                endMinute: endMinute,
+                windows: windows,
                 timezone: timezone,
                 enabled: enabled,
                 actor: "owner"

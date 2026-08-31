@@ -251,7 +251,7 @@ struct SettingsAutomationTests {
         #expect(unknown.stateLabel == "Status unknown")
     }
 
-    @Test("Light schedules preserve their timezone and reject a zero-length window")
+    @Test("Light schedules preserve multiple windows and reject overlaps")
     func lightScheduleDraftIsValid() {
         var draft = LightScheduleDraft(schedule: nil, defaultTimezone: "America/New_York")
         #expect(draft.canSave)
@@ -262,18 +262,23 @@ struct SettingsAutomationTests {
         let saved = LightSchedule(
             actuatorID: actuatorID,
             startMinute: 480,
-            endMinute: 1_200,
+            endMinute: 540,
             timezone: "America/Chicago",
             enabled: false,
             lastAppliedState: nil,
             lastAppliedAt: nil,
             lastError: nil,
             createdAt: .now,
-            updatedAt: .now
+            updatedAt: .now,
+            windows: [
+                ActuatorScheduleWindow(startMinute: 480, endMinute: 540),
+                ActuatorScheduleWindow(startMinute: 720, endMinute: 780)
+            ]
         )
         let loaded = LightScheduleDraft(schedule: saved, defaultTimezone: "America/New_York")
         #expect(loaded.startMinute == 480)
-        #expect(loaded.endMinute == 1_200)
+        #expect(loaded.endMinute == 540)
+        #expect(loaded.windows.count == 2)
         #expect(loaded.timezone == "America/Chicago")
         #expect(!loaded.enabled)
 
@@ -301,15 +306,28 @@ struct SettingsAutomationTests {
         #expect(fan.dailySchedule == saved)
     }
 
-    @Test("Fan schedules use the fan route and preserve daily window")
+    @Test("Schedule drafts add windows and reject overlaps")
+    func scheduleDraftRejectsOverlaps() {
+        var draft = LightScheduleDraft(schedule: nil, defaultTimezone: "America/New_York")
+        draft.addWindow()
+        #expect(draft.windows.count == 2)
+        #expect(draft.canSave)
+        draft.windows[1].startMinute = draft.windows[0].startMinute
+        draft.windows[1].endMinute = draft.windows[0].endMinute
+        #expect(!draft.canSave)
+    }
+
+    @Test("Fan schedules use the fan route and preserve daily windows")
     func fanScheduleUsesSemanticRoute() async throws {
         let stub = IsolatedStubTransport()
         stub.respond(json: scheduleJSON)
         let schedule = try await stub.client().setFanSchedule(
             id: actuatorID,
             request: ActuatorScheduleRequest(
-                startMinute: 540,
-                endMinute: 1_020,
+                windows: [
+                    ActuatorScheduleWindow(startMinute: 540, endMinute: 600),
+                    ActuatorScheduleWindow(startMinute: 900, endMinute: 1_020)
+                ],
                 timezone: "America/New_York",
                 enabled: true,
                 actor: "owner"
@@ -317,7 +335,8 @@ struct SettingsAutomationTests {
         )
 
         #expect(schedule.startMinute == 540)
-        #expect(schedule.endMinute == 1_020)
+        #expect(schedule.endMinute == 600)
+        #expect(schedule.dailyWindows.count == 2)
         #expect(stub.requests.first?.url?.path == "/v1/actuators/\(actuatorID.uuidString)/fan-schedule")
     }
 
@@ -375,7 +394,8 @@ struct SettingsAutomationTests {
 
     private var scheduleJSON: String {
         """
-        {"actuator_id":"\(actuatorID.uuidString)","start_minute":540,"end_minute":1020,
+        {"actuator_id":"\(actuatorID.uuidString)","start_minute":540,"end_minute":600,
+         "windows":[{"start_minute":540,"end_minute":600},{"start_minute":900,"end_minute":1020}],
          "timezone":"America/New_York","enabled":true,"created_at":"2026-08-30T12:00:00Z",
          "updated_at":"2026-08-30T12:00:00Z"}
         """

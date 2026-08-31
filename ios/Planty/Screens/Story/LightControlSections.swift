@@ -102,8 +102,32 @@ struct ActuatorScheduleSections: View {
             if let actuator {
                 Section {
                     Toggle("Schedule enabled", isOn: $draft.enabled)
-                    DatePicker("Turn on", selection: timeBinding(\.startMinute), displayedComponents: .hourAndMinute)
-                    DatePicker("Turn off", selection: timeBinding(\.endMinute), displayedComponents: .hourAndMinute)
+
+                    ForEach($draft.windows) { $window in
+                        LabeledContent("Window \(windowNumber(window.id))") {
+                            if draft.windows.count > 1 {
+                                Button("Remove", role: .destructive) {
+                                    draft.windows.removeAll { $0.id == window.id }
+                                }
+                            }
+                        }
+                        DatePicker(
+                            "Turn on",
+                            selection: timeBinding($window.startMinute),
+                            displayedComponents: .hourAndMinute
+                        )
+                        DatePicker(
+                            "Turn off",
+                            selection: timeBinding($window.endMinute),
+                            displayedComponents: .hourAndMinute
+                        )
+                    }
+
+                    Button("Add another window", systemImage: "plus") {
+                        draft.addWindow()
+                    }
+                    .disabled(draft.windows.count >= 12)
+
                     LabeledContent("Timezone", value: draft.timezone)
 
                     Button(isWorking ? "Working…" : "Save schedule") {
@@ -163,7 +187,7 @@ struct ActuatorScheduleSections: View {
     }
 
     private var scheduleFooter: String {
-        let base = "Planty checks this schedule every minute and controls only "
+        let base = "Add up to 12 non-overlapping windows. Planty checks them every minute and controls only "
             + "this registered Home Assistant \(noun). Overnight windows are supported."
         if actuator?.kind == .fan {
             return base + " A timed manual run takes priority until it stops."
@@ -171,12 +195,16 @@ struct ActuatorScheduleSections: View {
         return base
     }
 
-    private func timeBinding(_ keyPath: WritableKeyPath<ActuatorScheduleDraft, Int>) -> Binding<Date> {
+    private func windowNumber(_ id: UUID) -> Int {
+        (draft.windows.firstIndex { $0.id == id } ?? 0) + 1
+    }
+
+    private func timeBinding(_ minute: Binding<Int>) -> Binding<Date> {
         Binding(
-            get: { date(for: draft[keyPath: keyPath]) },
+            get: { date(for: minute.wrappedValue) },
             set: { date in
                 let parts = Calendar.current.dateComponents([.hour, .minute], from: date)
-                draft[keyPath: keyPath] = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+                minute.wrappedValue = (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
             }
         )
     }
@@ -196,8 +224,7 @@ struct ActuatorScheduleSections: View {
         defer { isWorking = false }
         failure = await session.actuators.setSchedule(
             actuator,
-            startMinute: draft.startMinute,
-            endMinute: draft.endMinute,
+            windows: draft.requestWindows,
             timezone: draft.timezone,
             enabled: draft.enabled
         )

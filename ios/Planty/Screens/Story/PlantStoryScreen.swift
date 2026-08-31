@@ -438,9 +438,11 @@ struct PlantStoryScreen: View {
     }
 
     private var scheduleStatus: String {
-        let enabled = scheduledActuators.filter { $0.dailySchedule?.enabled == true }.count
-        if enabled == 1 { return "1 schedule enabled" }
-        if enabled > 1 { return "\(enabled) schedules enabled" }
+        let enabled = scheduledActuators.compactMap(\.dailySchedule)
+            .filter(\.enabled)
+            .reduce(0) { $0 + $1.dailyWindows.count }
+        if enabled == 1 { return "1 daily window" }
+        if enabled > 1 { return "\(enabled) daily windows" }
         return "Set daily times"
     }
 

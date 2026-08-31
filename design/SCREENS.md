@@ -80,7 +80,7 @@ Photograph comparison becomes available when at least two photos exist.
 Unknown toxicity is labeled “Not checked” and is never styled as safe.
 An assigned fan appears as an Airflow action on the plant story.
 The sheet offers bounded duration choices, names every other plant sharing the fan before start, shows the active countdown, and provides an explicit stop.
-The plant story exposes one Schedules screen for every assigned fan and grow light. It keeps grow-light state controls beside the persisted daily windows for both device kinds, including overnight windows, timezone, enabled state, and the last reconciliation result.
+The plant story exposes one Schedules screen for every assigned fan and grow light. It keeps grow-light state controls beside up to 12 persisted daily windows for both device kinds, including overnight windows, timezone, enabled state, and the last reconciliation result. Owners can add and remove individual windows while keeping one schedule-level enabled switch.
 Soil calibration shows the latest raw probe reading and timestamp, and loads any saved dry and wet baselines into the editable fields.
 The plant dashboard shows the actual soil probe value beside its calibrated relative value. Pending AI baseline proposals show the before and after values, the resulting relative change, and Approve and Deny controls.
 
