@@ -92,6 +92,16 @@ struct PushRegistrationTests {
         }
     }
 
+    @Test("A push route remains pending until the app consumes it")
+    func pendingRoute() {
+        let routes = PushRouteCenter()
+
+        routes.open(.capture)
+
+        #expect(routes.takePending() == .capture)
+        #expect(routes.takePending() == nil)
+    }
+
     @Test("A push destination is not hidden behind an open settings sheet")
     func routedPushDismissesSettings() {
         let session = AppSession(

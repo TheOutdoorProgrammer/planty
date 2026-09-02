@@ -9,7 +9,7 @@ enum PushProgress: Equatable {
     case failed(String)
 }
 
-enum PlantyPushRoute: Sendable {
+enum PlantyPushRoute: Sendable, Equatable {
     case today
     case settings
     case capture
@@ -28,6 +28,23 @@ enum PlantyPushRoute: Sendable {
         case "capture": self = .capture
         default: self = .today
         }
+    }
+}
+
+@Observable
+@MainActor
+final class PushRouteCenter {
+    static let shared = PushRouteCenter()
+
+    private(set) var pending: PlantyPushRoute?
+
+    func open(_ route: PlantyPushRoute) {
+        pending = route
+    }
+
+    func takePending() -> PlantyPushRoute? {
+        defer { pending = nil }
+        return pending
     }
 }
 
@@ -246,15 +263,13 @@ final class PlantyAppDelegate: NSObject, UIApplicationDelegate {
 extension PlantyAppDelegate: UNUserNotificationCenterDelegate {
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
-        didReceive response: UNNotificationResponse
-    ) async {
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping @Sendable () -> Void
+    ) {
         let route = PlantyPushRoute(userInfo: response.notification.request.content.userInfo)
-        await MainActor.run {
-            NotificationCenter.default.post(name: .plantyPushOpened, object: route)
+        Task { @MainActor in
+            PushRouteCenter.shared.open(route)
+            completionHandler()
         }
     }
-}
-
-extension Notification.Name {
-    static let plantyPushOpened = Notification.Name("planty.push.opened")
 }

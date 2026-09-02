@@ -5,6 +5,7 @@ import SwiftUI
 /// does and keeps the camera one tap away from everywhere.
 struct RootTabView: View {
     @Environment(AppSession.self) private var session
+    @State private var pushRoutes = PushRouteCenter.shared
 
     var body: some View {
         @Bindable var session = session
@@ -31,8 +32,8 @@ struct RootTabView: View {
         .sheet(isPresented: $session.isShowingCareRound) {
             CareRoundScreen()
         }
-        .onReceive(NotificationCenter.default.publisher(for: .plantyPushOpened)) { notification in
-            guard let route = notification.object as? PlantyPushRoute else { return }
+        .onChange(of: pushRoutes.pending, initial: true) { _, pending in
+            guard pending != nil, let route = pushRoutes.takePending() else { return }
             session.openPushRoute(route)
         }
         .onOpenURL { session.openDeepLink($0) }
