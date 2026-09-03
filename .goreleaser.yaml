@@ -39,7 +39,7 @@ homebrew_casks:
     # what `brew install planty` gives you.
     skip_upload: auto
     repository:
-      owner: TheOutdoorProgrammer
+      owner: NerdsWhoFish
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
@@ -88,7 +88,7 @@ release:
   footer: |
     **Install**
 
-    macOS: `brew install TheOutdoorProgrammer/tap/planty`
+    macOS: `brew install NerdsWhoFish/tap/planty`
 
     The service itself runs from the container image, not this binary:
     `ghcr.io/theoutdoorprogrammer/planty`.
