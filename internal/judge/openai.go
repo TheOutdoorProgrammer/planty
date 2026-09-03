@@ -10,6 +10,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // openaiBackend answers through any endpoint speaking OpenAI chat completions,
@@ -88,6 +90,10 @@ func (b *openaiBackend) Judge(ctx context.Context, req Request) (Outcome, error)
 	if err != nil {
 		return Outcome{}, err
 	}
+	sessionID := uuid.New()
+	if req.Session != nil && req.Session.ID != uuid.Nil {
+		sessionID = req.Session.ID
+	}
 
 	// Built per request, not per backend: what the model may do belongs to the
 	// call that granted it, and a conversation must not inherit another's.
@@ -95,12 +101,16 @@ func (b *openaiBackend) Judge(ctx context.Context, req Request) (Outcome, error)
 	if req.Acting != nil || len(req.Offered) > 0 {
 		box = newToolbox(req.Acting, req.Offered...)
 	}
-	return b.converse(ctx, req, messages, box)
+	return b.converse(ctx, req, messages, box, sessionID)
 }
 
 // call performs one round trip. finish_reason is deliberately ignored: luna
 // returns null on success, so branching on it would reject good answers.
 func (b *openaiBackend) call(ctx context.Context, body chatRequest) (chatResponse, error) {
+	return b.callWithSession(ctx, body, uuid.Nil)
+}
+
+func (b *openaiBackend) callWithSession(ctx context.Context, body chatRequest, sessionID uuid.UUID) (chatResponse, error) {
 	raw, err := json.Marshal(body)
 	if err != nil {
 		return chatResponse{}, fmt.Errorf("encode request: %w", err)
@@ -113,6 +123,9 @@ func (b *openaiBackend) call(ctx context.Context, body chatRequest) (chatRespons
 	}
 	request.Header.Set("Content-Type", "application/json")
 	request.Header.Set("Authorization", "Bearer "+b.provider.Key())
+	if b.provider.ID == "opencode-go" && sessionID != uuid.Nil {
+		request.Header.Set("X-Opencode-Session", sessionID.String())
+	}
 
 	response, err := b.client.Do(request)
 	if err != nil {

@@ -13,6 +13,8 @@ import (
 	"slices"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // rounds caps the conversation. A model that has not answered after this many
@@ -288,7 +290,7 @@ func splitArgs(command string) ([]string, error) {
 
 // converse runs the model to an answer, performing whatever tool calls it asks
 // for along the way and recording each as a step the phone can show.
-func (b *openaiBackend) converse(ctx context.Context, req Request, messages []chatMessage, box *toolbox) (Outcome, error) {
+func (b *openaiBackend) converse(ctx context.Context, req Request, messages []chatMessage, box *toolbox, sessionID uuid.UUID) (Outcome, error) {
 	var out Outcome
 	out.Model = modelFor(req, b.model)
 
@@ -303,7 +305,7 @@ func (b *openaiBackend) converse(ctx context.Context, req Request, messages []ch
 			body.ResponseFormat = nil
 		}
 
-		reply, err := b.call(ctx, body)
+		reply, err := b.callWithSession(ctx, body, sessionID)
 		if err != nil {
 			return Outcome{}, err
 		}
@@ -317,7 +319,7 @@ func (b *openaiBackend) converse(ctx context.Context, req Request, messages []ch
 				return Outcome{}, fmt.Errorf("%s returned no answer", b.provider.ID)
 			}
 			if box != nil && len(req.Schema) > 0 {
-				return b.render(ctx, req, messages, answer.Content, out)
+				return b.render(ctx, req, messages, answer.Content, out, sessionID)
 			}
 			out.Answer = answer.Content
 			return out, nil
@@ -351,14 +353,14 @@ func (b *openaiBackend) converse(ctx context.Context, req Request, messages []ch
 
 // render asks for the answer a second time in the schema, with no tools to
 // reach for. It is the other half of withholding the schema during the loop.
-func (b *openaiBackend) render(ctx context.Context, req Request, messages []chatMessage, draft string, out Outcome) (Outcome, error) {
+func (b *openaiBackend) render(ctx context.Context, req Request, messages []chatMessage, draft string, out Outcome, sessionID uuid.UUID) (Outcome, error) {
 	messages = append(messages,
 		chatMessage{Role: "assistant", Content: draft},
 		chatMessage{Role: "user", Content: "Give that same answer in the required JSON format. " +
 			"Do not change what it says, and do not look anything else up."},
 	)
 
-	reply, err := b.call(ctx, b.request(req, messages))
+	reply, err := b.callWithSession(ctx, b.request(req, messages), sessionID)
 	if err != nil {
 		return Outcome{}, err
 	}

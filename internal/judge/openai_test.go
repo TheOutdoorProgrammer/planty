@@ -8,6 +8,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 // serve stands up an endpoint that replies with the given bodies in order, and
@@ -90,6 +92,30 @@ func TestTheSchemaAndEffortReachTheWire(t *testing.T) {
 	}
 	if body.Messages[0].Role != "system" {
 		t.Errorf("the system prompt is not first: %q", body.Messages[0].Role)
+	}
+}
+
+func TestOpenCodeReceivesStableConversationSessionHeader(t *testing.T) {
+	var headers []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		headers = append(headers, r.Header.Get("X-Opencode-Session"))
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(replied(t, `{}`)))
+	}))
+	defer server.Close()
+
+	backend := newOpenAIBackend(Provider{
+		ID: "opencode-go", Kind: KindOpenAI, BaseURL: server.URL,
+	}, "test-model")
+	conversation := uuid.New()
+	if _, err := backend.Judge(context.Background(), Request{
+		Session: &Session{ID: conversation},
+		Turns:   []Turn{ask(text("hello"))},
+	}); err != nil {
+		t.Fatalf("Judge: %v", err)
+	}
+	if len(headers) != 1 || headers[0] != conversation.String() {
+		t.Fatalf("X-Opencode-Session = %v, want %q", headers, conversation)
 	}
 }
 
