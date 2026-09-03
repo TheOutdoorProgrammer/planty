@@ -161,6 +161,7 @@ jobs:
       # cached COPY layers must never reach the published image.
       docker-cache: false
       docker-dry-run: false
+      tap-owner: NerdsWhoFish
     secrets:
       fledge-server: ${{ secrets.FLEDGE_URL }}
       tap-app-id: ${{ secrets.TAP_APP_ID }}
