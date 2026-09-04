@@ -26,17 +26,44 @@ func scanSensor(row pgx.Row) (plant.SensorLink, error) {
 
 // LinkSensor attaches a Home Assistant entity to a plant or a zone.
 func (s *Store) LinkSensor(ctx context.Context, l plant.SensorLink) (plant.SensorLink, error) {
+	l.Zone = strings.TrimSpace(l.Zone)
 	if err := l.Valid(); err != nil {
 		return plant.SensorLink{}, err
 	}
-	row := s.pool.QueryRow(ctx, `
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return plant.SensorLink{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var existingID uuid.UUID
+	var currentPlantID *uuid.UUID
+	var currentZone string
+	err = tx.QueryRow(ctx, `SELECT id, plant_id, coalesce(zone, '') FROM sensor_links
+		WHERE ha_entity_id = $1 AND role = $2 FOR UPDATE`, l.HAEntityID, l.Role).Scan(
+		&existingID, &currentPlantID, &currentZone,
+	)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		return plant.SensorLink{}, classify(err)
+	}
+	assignment := plant.SensorAssignment{PlantID: l.PlantID, Zone: l.Zone}
+	if err == nil && sensorTargetChanged(currentPlantID, currentZone, assignment) {
+		if err := denyPendingCalibrationProposals(ctx, tx, existingID); err != nil {
+			return plant.SensorLink{}, err
+		}
+	}
+
+	link, err := scanSensor(tx.QueryRow(ctx, `
 		INSERT INTO sensor_links (plant_id, zone, ha_entity_id, role)
 		VALUES ($1, nullif($2,''), $3, $4)
 		ON CONFLICT (ha_entity_id, role) DO UPDATE
 			SET plant_id = excluded.plant_id, zone = excluded.zone
 		RETURNING `+sensorColumns,
-		l.PlantID, l.Zone, l.HAEntityID, l.Role)
-	return scanSensor(row)
+		l.PlantID, l.Zone, l.HAEntityID, l.Role))
+	if err != nil {
+		return plant.SensorLink{}, err
+	}
+	return link, tx.Commit(ctx)
 }
 
 func (s *Store) AssignSensor(ctx context.Context, id uuid.UUID, assignment plant.SensorAssignment) (plant.SensorLink, error) {
@@ -61,9 +88,7 @@ func (s *Store) AssignSensor(ctx context.Context, id uuid.UUID, assignment plant
 		return plant.SensorLink{}, err
 	}
 	if sensorTargetChanged(currentPlantID, currentZone, assignment) {
-		if _, err := tx.Exec(ctx, `UPDATE sensor_calibration_proposals
-			SET status = 'denied', resolved_at = now(), resolved_by = 'sensor reassigned'
-			WHERE sensor_link_id = $1 AND status = 'pending'`, id); err != nil {
+		if err := denyPendingCalibrationProposals(ctx, tx, id); err != nil {
 			return plant.SensorLink{}, err
 		}
 	}
@@ -83,6 +108,13 @@ func sensorTargetChanged(currentPlantID *uuid.UUID, currentZone string, assignme
 		return true
 	}
 	return currentPlantID != nil && *currentPlantID != *assignment.PlantID
+}
+
+func denyPendingCalibrationProposals(ctx context.Context, tx pgx.Tx, sensorID uuid.UUID) error {
+	_, err := tx.Exec(ctx, `UPDATE sensor_calibration_proposals
+		SET status = 'denied', resolved_at = now(), resolved_by = 'sensor reassigned'
+		WHERE sensor_link_id = $1 AND status = 'pending'`, sensorID)
+	return err
 }
 
 // Calibrate records a soil probe's own dry and wet baselines.
