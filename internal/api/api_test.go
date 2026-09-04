@@ -749,6 +749,34 @@ func TestSensorLinkAndCalibration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if rec, _ := do(t, h, http.MethodPut, "/v1/sensors/"+id+"/assignment", map[string]any{
+		"zone": "greenhouse",
+	}); rec.Code != http.StatusBadRequest {
+		t.Fatalf("soil place reassignment: got %d, want 400", rec.Code)
+	}
+	otherSlug := createPlant(t, h, map[string]any{
+		"common_name": "New pot", "slug": unique("new-pot"),
+	})
+	other, err := db.GetPlant(ctx, otherSlug)
+	if err != nil {
+		t.Fatalf("read reassignment target: %v", err)
+	}
+	rec, reassigned := do(t, h, http.MethodPut, "/v1/sensors/"+id+"/assignment", map[string]any{
+		"plant_id": other.ID.String(),
+	})
+	if rec.Code != http.StatusOK {
+		t.Fatalf("reassign: got %d, body %s", rec.Code, rec.Body.String())
+	}
+	if reassigned["id"] != id || reassigned["plant_id"] != other.ID.String() {
+		t.Fatalf("reassignment changed link identity or missed target: %#v", reassigned)
+	}
+	if reassigned["dry_baseline"] != float64(20) || reassigned["wet_baseline"] != float64(70) {
+		t.Fatalf("moving a probe lost its calibration: %#v", reassigned)
+	}
+	readingAfterMove, err := db.LatestReading(ctx, sensorID)
+	if err != nil || readingAfterMove.ID != reading.ID {
+		t.Fatalf("moving a probe lost its reading: %#v err=%v", readingAfterMove, err)
+	}
 	proposal, created, err := db.ProposeCalibration(ctx, plant.CalibrationProposal{
 		SensorLinkID: sensorID, ReadingID: reading.ID, ProposedDry: 10, ProposedWet: 80,
 		Reason: "Recorded endpoints support a wider range.", ModelVersion: "test",
@@ -756,7 +784,7 @@ func TestSensorLinkAndCalibration(t *testing.T) {
 	if err != nil || !created {
 		t.Fatalf("proposal created=%t err=%v", created, err)
 	}
-	rec, detail := do(t, h, http.MethodGet, "/v1/plants/"+slug, nil)
+	rec, detail := do(t, h, http.MethodGet, "/v1/plants/"+otherSlug, nil)
 	if rec.Code != http.StatusOK || len(detail["calibration_proposals"].([]any)) != 1 {
 		t.Fatalf("plant calibration proposals = %d %#v", rec.Code, detail)
 	}
@@ -779,6 +807,11 @@ func TestSensorLinkAndCalibration(t *testing.T) {
 	if rec, _ := do(t, h, http.MethodPatch, "/v1/sensors/"+id,
 		map[string]any{"dry_baseline": 20, "wet_baseline": 70}); rec.Code != http.StatusBadRequest {
 		t.Errorf("temperature calibration: got %d, want 400", rec.Code)
+	}
+	if rec, moved := do(t, h, http.MethodPut, "/v1/sensors/"+id+"/assignment", map[string]any{
+		"zone": "greenhouse",
+	}); rec.Code != http.StatusOK || moved["plant_id"] != nil || moved["zone"] != "greenhouse" {
+		t.Fatalf("temperature place reassignment = %d %#v", rec.Code, moved)
 	}
 }
 

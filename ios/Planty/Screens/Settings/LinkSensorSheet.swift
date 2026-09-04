@@ -25,7 +25,7 @@ struct SensorLinkDraft: Sendable, Equatable {
             guard let plantID else { return nil }
             return NewSensorLink(plantID: plantID, zone: nil, haEntityID: trimmedEntityID, role: role)
         case .zone:
-            guard !trimmedZone.isEmpty else { return nil }
+            guard role != .soilMoisture, !trimmedZone.isEmpty else { return nil }
             return NewSensorLink(plantID: nil, zone: trimmedZone, haEntityID: trimmedEntityID, role: role)
         }
     }
@@ -54,6 +54,16 @@ struct LinkSensorSheet: View {
     @State private var hasLoadedPlants = false
     @State private var action = AsyncSheetAction()
 
+    init(
+        api: any PlantyAPI,
+        plantID: UUID? = nil,
+        onLinked: @escaping (SensorLink) -> Void
+    ) {
+        self.api = api
+        self.onLinked = onLinked
+        _draft = State(initialValue: SensorLinkDraft(plantID: plantID))
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -61,9 +71,14 @@ struct LinkSensorSheet: View {
                     Picker("Measures", selection: $draft.role) {
                         ForEach(SensorLinkDraft.offerableRoles, id: \.self) { role in Text(role.label).tag(role) }
                     }
+                    .onChange(of: draft.role) { _, role in
+                        if role == .soilMoisture { draft.target = .plant }
+                    }
 
                     Picker("Entity source", selection: $entitySource) {
-                        ForEach(EntityEntrySource.allCases, id: \.self) { source in Text(source.label).tag(source) }
+                        ForEach(EntityEntrySource.allCases, id: \.self) { source in
+                            Text(source.label).tag(source)
+                        }
                     }
                     .pickerStyle(.segmented)
 
@@ -74,22 +89,32 @@ struct LinkSensorSheet: View {
                 } header: {
                     Text("Home Assistant entity")
                 } footer: {
-                    Text("Planty asks its server for names, rooms and availability; the Home Assistant token never goes to this phone. Use Custom ID for an unusual entity the suggestions omit.")
+                    Text(
+                        "Planty asks its server for names, rooms and availability; "
+                            + "the Home Assistant token never goes to this phone. "
+                            + "Use Custom ID for an unusual entity the suggestions omit."
+                    )
                 }
 
                 if !draft.haEntityID.isEmpty && !draft.entityIDLooksRight {
                     Section {
-                        Label("Entity ids look like sensor.monstera_soil_moisture: a domain, a dot, a name, no spaces.", systemImage: "exclamationmark.triangle.fill")
+                        Label(
+                            "Entity ids look like sensor.monstera_soil_moisture: "
+                                + "a domain, a dot, a name, no spaces.",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
                             .foregroundStyle(PlantyColor.orange)
                     }
                 }
 
                 Section {
-                    Picker("Speaks for", selection: $draft.target) {
-                        Text("One plant").tag(SensorLinkDraft.Target.plant)
-                        Text("A place").tag(SensorLinkDraft.Target.zone)
+                    if draft.role != .soilMoisture {
+                        Picker("Speaks for", selection: $draft.target) {
+                            Text("One plant").tag(SensorLinkDraft.Target.plant)
+                            Text("A place").tag(SensorLinkDraft.Target.zone)
+                        }
+                        .pickerStyle(.segmented)
                     }
-                    .pickerStyle(.segmented)
 
                     switch draft.target {
                     case .plant: plantPicker
@@ -103,12 +128,19 @@ struct LinkSensorSheet: View {
                         )
                     }
                 } footer: {
-                    Text("A probe in a pot serves that plant. An ambient sensor can serve a Place: one porch thermometer speaks for every pot there.")
+                    Text(
+                        "A probe in a pot serves that plant. An ambient sensor can serve a Place: "
+                            + "one porch thermometer speaks for every pot there."
+                    )
                 }
 
                 if let failure = action.error {
                     Section {
-                        Label("\(failure.errorDescription ?? "The service did not answer.") Nothing was linked; your selection is still here.", systemImage: "exclamationmark.triangle.fill")
+                        Label(
+                            "\(failure.errorDescription ?? "The service did not answer.") "
+                                + "Nothing was linked; your selection is still here.",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
                             .foregroundStyle(PlantyColor.orange)
                     }
                 }
@@ -119,14 +151,21 @@ struct LinkSensorSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .interactiveDismissDisabled(action.isRunning)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(action.isRunning) }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                        .disabled(action.isRunning)
+                }
                 ToolbarItem(placement: .confirmationAction) {
                     Button(action.isRunning ? "Linking…" : "Link") { Task { await attemptSave() } }
                         .disabled(draft.newLink() == nil || action.isRunning)
                 }
             }
             .sheet(isPresented: $showingEntityPicker) {
-                HomeAssistantEntityPicker(entities: entities, role: draft.role, selection: $draft.haEntityID)
+                HomeAssistantEntityPicker(
+                    entities: entities,
+                    role: draft.role,
+                    selection: $draft.haEntityID
+                )
             }
             .task { await loadPlants() }
             .task { await loadEntities() }
@@ -134,16 +173,25 @@ struct LinkSensorSheet: View {
         }
     }
 
-    private var selectedEntity: HomeAssistantEntity? { entities.first { $0.entityID == draft.trimmedEntityID } }
+    private var selectedEntity: HomeAssistantEntity? {
+        entities.first { $0.entityID == draft.trimmedEntityID }
+    }
 
     @ViewBuilder private var discoveredEntityControl: some View {
         if let entitiesError {
-            Label(entitiesError.errorDescription ?? "Could not read Home Assistant entities.", systemImage: "exclamationmark.triangle.fill")
+            Label(
+                entitiesError.errorDescription ?? "Could not read Home Assistant entities.",
+                systemImage: "exclamationmark.triangle.fill"
+            )
                 .foregroundStyle(PlantyColor.orange)
             Button("Try discovery again") { Task { await loadEntities() } }
             Button("Enter an entity ID manually") { entitySource = .custom }
         } else if !hasLoadedEntities {
-            HStack(spacing: 12) { ProgressView(); Text("Reading Home Assistant entities…").foregroundStyle(PlantyColor.secondaryText) }
+            HStack(spacing: 12) {
+                ProgressView()
+                Text("Reading Home Assistant entities…")
+                    .foregroundStyle(PlantyColor.secondaryText)
+            }
         } else if entities.isEmpty {
             Text("No sensor entities were found.").foregroundStyle(PlantyColor.secondaryText)
             Button("Enter an entity ID manually") { entitySource = .custom }
@@ -151,12 +199,20 @@ struct LinkSensorSheet: View {
             Button { showingEntityPicker = true } label: {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(selectedEntity?.friendlyName ?? (draft.trimmedEntityID.isEmpty ? "Choose an entity" : "Custom entity ID")).foregroundStyle(.primary)
+                        Text(
+                            selectedEntity?.friendlyName
+                                ?? (draft.trimmedEntityID.isEmpty ? "Choose an entity" : "Custom entity ID")
+                        )
+                        .foregroundStyle(.primary)
                         if !draft.trimmedEntityID.isEmpty {
-                            Text(draft.trimmedEntityID).font(.caption.monospaced()).foregroundStyle(PlantyColor.secondaryText)
+                            Text(draft.trimmedEntityID)
+                                .font(.caption.monospaced())
+                                .foregroundStyle(PlantyColor.secondaryText)
                         }
                     }
-                    Spacer(); Image(systemName: "chevron.right").foregroundStyle(PlantyColor.secondaryText)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(PlantyColor.secondaryText)
                 }
             }
             .buttonStyle(.plain)
@@ -169,17 +225,25 @@ struct LinkSensorSheet: View {
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled()
         if hasLoadedEntities && !entities.isEmpty {
-            Button("Choose from Home Assistant") { entitySource = .discovered; showingEntityPicker = true }
+            Button("Choose from Home Assistant") {
+                entitySource = .discovered
+                showingEntityPicker = true
+            }
         }
     }
 
     @ViewBuilder private var plantPicker: some View {
         if let plantsError {
-            Text(plantsError.errorDescription ?? "Could not load the plants.").foregroundStyle(PlantyColor.orange)
+            Text(plantsError.errorDescription ?? "Could not load the plants.")
+                .foregroundStyle(PlantyColor.orange)
         } else if !hasLoadedPlants {
-            HStack(spacing: 12) { ProgressView(); Text("Loading plants…").foregroundStyle(PlantyColor.secondaryText) }
+            HStack(spacing: 12) {
+                ProgressView()
+                Text("Loading plants…").foregroundStyle(PlantyColor.secondaryText)
+            }
         } else if plants.isEmpty {
-            Text("No plants yet. Add one first, or link the sensor to a place.").foregroundStyle(PlantyColor.secondaryText)
+            Text("No plants yet. Add one first, or link the sensor to a place.")
+                .foregroundStyle(PlantyColor.secondaryText)
         } else {
             Picker("Plant", selection: $draft.plantID) {
                 Text("Choose a plant").tag(UUID?.none)
@@ -189,15 +253,24 @@ struct LinkSensorSheet: View {
     }
 
     private func loadPlants() async {
-        do { plants = try await api.plants(filter: .live); plantsError = nil }
-        catch { guard !PlantyError.isCancellation(error) else { return }; plantsError = PlantyError.from(error) }
+        do {
+            plants = try await api.plants(filter: .live)
+            plantsError = nil
+        } catch {
+            guard !PlantyError.isCancellation(error) else { return }
+            plantsError = PlantyError.from(error)
+        }
         hasLoadedPlants = true
     }
 
     private func loadEntities() async {
         hasLoadedEntities = false; entitiesError = nil
-        do { entities = try await api.homeAssistantEntities() }
-        catch { guard !PlantyError.isCancellation(error) else { return }; entitiesError = PlantyError.from(error) }
+        do {
+            entities = try await api.homeAssistantEntities()
+        } catch {
+            guard !PlantyError.isCancellation(error) else { return }
+            entitiesError = PlantyError.from(error)
+        }
         hasLoadedEntities = true
     }
 
@@ -222,15 +295,24 @@ private struct HomeAssistantEntityPicker: View {
         NavigationStack {
             List {
                 if !likelyMatches.isEmpty {
-                    Section("\(role.label) suggestions") { ForEach(likelyMatches) { entity in entityRow(entity) } }
+                    Section("\(role.label) suggestions") {
+                        ForEach(likelyMatches) { entity in entityRow(entity) }
+                    }
                 }
                 if shouldShowOtherMatches && !otherMatches.isEmpty {
-                    Section("Other sensor entities") { ForEach(otherMatches) { entity in entityRow(entity) } }
+                    Section("Other sensor entities") {
+                        ForEach(otherMatches) { entity in entityRow(entity) }
+                    }
                 }
                 if likelyMatches.isEmpty && (!shouldShowOtherMatches || otherMatches.isEmpty) {
                     Section {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(search.isEmpty ? "No likely \(role.label.lowercased()) entities" : "No matching entities").font(.headline)
+                            Text(
+                                search.isEmpty
+                                    ? "No likely \(role.label.lowercased()) entities"
+                                    : "No matching entities"
+                            )
+                            .font(.headline)
                             Text("Try another search, show every sensor, or return and use Custom ID.")
                                 .font(.subheadline).foregroundStyle(PlantyColor.secondaryText)
                             if !showAll { Button("Show all sensors") { showAll = true } }
@@ -243,31 +325,54 @@ private struct HomeAssistantEntityPicker: View {
             .searchable(text: $search, prompt: "Name, entity ID, or area")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-                ToolbarItem(placement: .primaryAction) { Button(showAll ? "Suggestions" : "All sensors") { showAll.toggle() } }
+                ToolbarItem(placement: .primaryAction) {
+                    Button(showAll ? "Suggestions" : "All sensors") { showAll.toggle() }
+                }
             }
         }
     }
 
-    private var allMatches: [HomeAssistantEntity] { HomeAssistantEntityFilter.all(in: entities, matching: search) }
-    private var likelyMatches: [HomeAssistantEntity] { HomeAssistantEntityFilter.likely(in: entities, for: role, matching: search) }
-    private var otherMatches: [HomeAssistantEntity] {
-        let likelyIDs = Set(likelyMatches.map(\.entityID)); return allMatches.filter { !likelyIDs.contains($0.entityID) }
+    private var allMatches: [HomeAssistantEntity] {
+        HomeAssistantEntityFilter.all(in: entities, matching: search)
     }
-    private var shouldShowOtherMatches: Bool { showAll || !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+    private var likelyMatches: [HomeAssistantEntity] {
+        HomeAssistantEntityFilter.likely(in: entities, for: role, matching: search)
+    }
+    private var otherMatches: [HomeAssistantEntity] {
+        let likelyIDs = Set(likelyMatches.map(\.entityID))
+        return allMatches.filter { !likelyIDs.contains($0.entityID) }
+    }
+    private var shouldShowOtherMatches: Bool {
+        showAll || !search.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     private func entityRow(_ entity: HomeAssistantEntity) -> some View {
         Button { selection = entity.entityID; dismiss() } label: {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
-                        Text(entity.friendlyName).font(.body.weight(.medium)).foregroundStyle(.primary)
-                        if !entity.available { Text("Unavailable").font(.caption2.weight(.semibold)).foregroundStyle(PlantyColor.orange) }
+                        Text(entity.friendlyName)
+                            .font(.body.weight(.medium))
+                            .foregroundStyle(.primary)
+                        if !entity.available {
+                            Text("Unavailable")
+                                .font(.caption2.weight(.semibold))
+                                .foregroundStyle(PlantyColor.orange)
+                        }
                     }
-                    Text(entity.entityID).font(.caption.monospaced()).foregroundStyle(PlantyColor.secondaryText)
-                    if let metadata = entity.metadataLabel { Text(metadata).font(.caption).foregroundStyle(PlantyColor.secondaryText) }
+                    Text(entity.entityID)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(PlantyColor.secondaryText)
+                    if let metadata = entity.metadataLabel {
+                        Text(metadata)
+                            .font(.caption)
+                            .foregroundStyle(PlantyColor.secondaryText)
+                    }
                 }
                 Spacer()
-                if selection == entity.entityID { Image(systemName: "checkmark").font(.body.weight(.semibold)) }
+                if selection == entity.entityID {
+                    Image(systemName: "checkmark").font(.body.weight(.semibold))
+                }
             }
         }
         .buttonStyle(.plain)

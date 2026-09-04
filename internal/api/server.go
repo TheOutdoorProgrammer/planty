@@ -206,6 +206,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeListSensors, s.listSensors)
 	mux.HandleFunc(routeLinkSensor, s.linkSensor)
 	mux.HandleFunc(routeCalibrateSensor, s.calibrateSensor)
+	mux.HandleFunc(routeUpdateSensorAssignment, s.updateSensorAssignment)
 	mux.HandleFunc(routeApproveCalibrationProposal, s.approveCalibrationProposal)
 	mux.HandleFunc(routeDenyCalibrationProposal, s.denyCalibrationProposal)
 

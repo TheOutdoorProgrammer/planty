@@ -1,6 +1,10 @@
 package plant
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/google/uuid"
+)
 
 func TestOnlyTerminalStatusesCanArchiveAPlant(t *testing.T) {
 	for _, status := range []Status{StatusDead, StatusRemoved} {
@@ -167,6 +171,29 @@ func TestSoilSensorMustBelongToAPlant(t *testing.T) {
 	orphan := SensorLink{HAEntityID: "sensor.soil", Role: RoleSoilMoisture, Zone: "greenhouse"}
 	if err := orphan.Valid(); err == nil {
 		t.Fatal("a soil probe measures one pot, so it must name a plant")
+	}
+}
+
+func TestSensorAssignmentNamesExactlyOneSubject(t *testing.T) {
+	plantID := uuid.New()
+	for name, assignment := range map[string]SensorAssignment{
+		"neither": {},
+		"both":    {PlantID: &plantID, Zone: "greenhouse"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if err := assignment.Valid(RoleAmbientTemp); err == nil {
+				t.Fatal("ambiguous sensor assignment was accepted")
+			}
+		})
+	}
+	if err := (SensorAssignment{PlantID: &plantID}).Valid(RoleSoilMoisture); err != nil {
+		t.Fatalf("plant soil assignment: %v", err)
+	}
+	if err := (SensorAssignment{Zone: "greenhouse"}).Valid(RoleSoilMoisture); err == nil {
+		t.Fatal("soil moisture was assigned to a place instead of one pot")
+	}
+	if err := (SensorAssignment{Zone: "greenhouse"}).Valid(RoleAmbientHumidity); err != nil {
+		t.Fatalf("ambient sensor place assignment: %v", err)
 	}
 }
 

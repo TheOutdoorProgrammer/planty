@@ -120,5 +120,6 @@ const (
 	routeUpdateNote                 = "PATCH /v1/notes/{id}"
 	routeUpdatePlant                = "PATCH /v1/plants/{slug}"
 	routeUpdatePolicy               = "PUT /v1/policies/{id}"
+	routeUpdateSensorAssignment     = "PUT /v1/sensors/{id}/assignment"
 	routeUploadPhoto                = "POST /v1/plants/{slug}/photos"
 )

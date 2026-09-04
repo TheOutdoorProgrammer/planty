@@ -137,6 +137,25 @@ func (s *Server) linkSensor(w http.ResponseWriter, r *http.Request) {
 	s.ok(w, http.StatusCreated, created)
 }
 
+func (s *Server) updateSensorAssignment(w http.ResponseWriter, r *http.Request) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	var assignment plant.SensorAssignment
+	if err := json.NewDecoder(r.Body).Decode(&assignment); err != nil {
+		s.fail(w, http.StatusBadRequest, err)
+		return
+	}
+	link, err := s.store.AssignSensor(r.Context(), id, assignment)
+	if err != nil {
+		s.fail(w, http.StatusInternalServerError, err)
+		return
+	}
+	s.ok(w, http.StatusOK, link)
+}
+
 func (s *Server) calibrateSensor(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {

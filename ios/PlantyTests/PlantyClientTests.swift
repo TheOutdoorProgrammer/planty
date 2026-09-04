@@ -66,8 +66,11 @@ struct PlantyClientTests {
             """
         stub.respond(routes: [
             "/v1/push-devices": receipt,
-            "/v1/push/health": "{\"server\":{\"configured\":true,\"environment\":\"production\",\"bundle_id\":\"zone.stout.Planty\"},\"registration\":\(receipt)}",
-            "/v1/push/test": #"{"status":"accepted_by_apns"}"#,
+            "/v1/push/health": """
+                {"server":{"configured":true,"environment":"production",\
+                "bundle_id":"zone.stout.Planty"},"registration":\(receipt)}
+                """,
+            "/v1/push/test": #"{"status":"accepted_by_apns"}"#
         ])
         let client = stub.client()
 
@@ -92,7 +95,7 @@ struct PlantyClientTests {
         #expect(accepted.installationID == installation)
         #expect(health.registration?.acceptedAt != nil)
         #expect(stub.requests.map { $0.url?.path } == [
-            "/v1/push-devices", "/v1/push/health", "/v1/push/test",
+            "/v1/push-devices", "/v1/push/health", "/v1/push/test"
         ])
         #expect(stub.requests[1].url?.query?.contains("installation_id=") == true)
     }
@@ -326,6 +329,35 @@ struct PlantyClientTests {
         #expect(request.httpMethod == "PATCH")
         #expect(request.url?.path == "/v1/sensors/\(id.uuidString)")
         #expect(saved.isCalibrated)
+    }
+
+    @Test("A sensor assignment is replaced without changing the link")
+    func assignsASensor() async throws {
+        let id = UUID()
+        let plantID = UUID()
+        StubTransport.respond(json: """
+            {
+              "id": "\(id.uuidString)",
+              "plant_id": "\(plantID.uuidString)",
+              "ha_entity_id": "sensor.mona_moisture",
+              "role": "soil_moisture",
+              "created_at": "2026-08-01T09:00:00Z"
+            }
+            """)
+
+        let saved = try await StubTransport.client().assignSensor(
+            id: id,
+            to: SensorAssignment(plantID: plantID, zone: nil)
+        )
+
+        let request = try #require(StubResponder.shared.requests.first)
+        #expect(request.httpMethod == "PUT")
+        #expect(request.url?.path == "/v1/sensors/\(id.uuidString)/assignment")
+        #expect(saved.id == id)
+        #expect(saved.plantID == plantID)
+        let body = try fields(of: request)
+        #expect(body["plant_id"] as? String == plantID.uuidString)
+        #expect(body["zone"] == nil)
     }
 
     @Test("Sensor settings receive the latest reading with each link")

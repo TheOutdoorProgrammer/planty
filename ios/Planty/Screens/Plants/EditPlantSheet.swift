@@ -157,11 +157,14 @@ struct PlantEditForm {
 struct EditPlantSheet: View {
     let plant: Plant
     let choices: ManagedChoicesStore
+    let api: any PlantyAPI
+    let sensors: [SensorSeries]
     let save: (PlantPatch) async -> PlantyError?
 
     /// Separate because shelter has its own endpoint, and moving it here is
     /// what stopped it being tapped by accident on the plant's own page.
     let setSheltered: (Bool) async -> PlantyError?
+    let onSensorsChanged: () -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var form: PlantEditForm
@@ -171,13 +174,19 @@ struct EditPlantSheet: View {
     init(
         plant: Plant,
         choices: ManagedChoicesStore,
+        api: any PlantyAPI,
+        sensors: [SensorSeries],
         save: @escaping (PlantPatch) async -> PlantyError?,
-        setSheltered: @escaping (Bool) async -> PlantyError? = { _ in nil }
+        setSheltered: @escaping (Bool) async -> PlantyError? = { _ in nil },
+        onSensorsChanged: @escaping () -> Void = {}
     ) {
         self.plant = plant
         self.choices = choices
+        self.api = api
+        self.sensors = sensors
         self.save = save
         self.setSheltered = setSheltered
+        self.onSensorsChanged = onSensorsChanged
         _form = State(initialValue: PlantEditForm(plant: plant))
     }
 
@@ -279,6 +288,19 @@ struct EditPlantSheet: View {
                     Picker("How hard to reach", selection: $form.accessibility) {
                         ForEach(accessibilityOptions, id: \.self) { Text($0.editLabel).tag($0) }
                     }
+                }
+
+                Section {
+                    NavigationLink("Sensor connections") {
+                        PlantSensorConnectionsScreen(
+                            api: api,
+                            plant: plant,
+                            sensors: sensors,
+                            onChanged: onSensorsChanged
+                        )
+                    }
+                } footer: {
+                    Text("Assign moisture, temperature, humidity, and light sensors that speak for this plant.")
                 }
 
                 Section("The pot") {

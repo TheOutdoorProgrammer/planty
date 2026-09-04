@@ -2,6 +2,7 @@ package plant
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -39,6 +40,23 @@ type SensorLink struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type SensorAssignment struct {
+	PlantID *uuid.UUID `json:"plant_id,omitempty"`
+	Zone    string     `json:"zone,omitempty"`
+}
+
+func (a SensorAssignment) Valid(role SensorRole) error {
+	hasPlant := a.PlantID != nil
+	hasZone := strings.TrimSpace(a.Zone) != ""
+	if hasPlant == hasZone {
+		return invalid("a sensor assignment needs exactly one plant or place")
+	}
+	if role == RoleSoilMoisture && !hasPlant {
+		return invalid("a soil moisture sensor must belong to a plant")
+	}
+	return nil
+}
+
 // Calibrated reports whether a soil link has usable dry and wet baselines.
 func (s SensorLink) Calibrated() bool {
 	return s.Role.RequiresCalibration() && s.DryBaseline != nil && s.WetBaseline != nil &&
@@ -66,13 +84,7 @@ func (s SensorLink) Valid() error {
 	if s.HAEntityID == "" {
 		return invalid("ha_entity_id is required")
 	}
-	if s.PlantID == nil && s.Zone == "" {
-		return invalid("a sensor link needs either a plant or a zone")
-	}
-	if s.Role == RoleSoilMoisture && s.PlantID == nil {
-		return invalid("a soil moisture sensor must belong to a plant")
-	}
-	return nil
+	return (SensorAssignment{PlantID: s.PlantID, Zone: s.Zone}).Valid(s.Role)
 }
 
 // Reading is one sample. It keys on the link rather than the plant, because the

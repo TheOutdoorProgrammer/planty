@@ -10,6 +10,7 @@ The selected tab uses the green product tint and a filled SF Symbol.
 Tab labels remain visible at accessibility text sizes.
 
 Settings opens as a sheet and contains API configuration, connection testing, data freshness, household notes, sensor links, registered actuators, build information, per-job model assignments, and controls for launching scheduled work.
+Every sensor row opens its assignment settings, where its plant or place can be changed. Soil moisture also exposes its probe calibration there. A plant's Edit screen links to the same sensor connections, including moisture, temperature, humidity, and illuminance, so assignments can be managed from either side without changing sensor identity or losing readings.
 The current connection test proves API reachability only; APNs diagnostics remain roadmap work.
 
 ## Shared states

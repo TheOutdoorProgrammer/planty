@@ -53,12 +53,24 @@ struct SettingsSensorLinkTests {
         #expect(link?.role == .ambientTemp)
     }
 
+    @Test("Soil moisture cannot speak for a whole place")
+    func soilMoistureNeedsOnePlant() {
+        var draft = SensorLinkDraft()
+        draft.haEntityID = "sensor.greenhouse_soil"
+        draft.role = .soilMoisture
+        draft.target = .zone
+        draft.zone = "Greenhouse"
+
+        #expect(draft.newLink() == nil)
+    }
+
     /// A chosen plant must not ride along on a zone link: the service takes
     /// exactly one of the two.
     @Test("Switching target drops the other half")
     func targetsAreExclusive() {
         var draft = SensorLinkDraft()
         draft.haEntityID = "sensor.porch_temp"
+        draft.role = .ambientTemp
         draft.plantID = UUID()
         draft.target = .zone
         draft.zone = "porch"
@@ -81,5 +93,47 @@ struct SettingsSensorLinkTests {
     func neverOffersUnknown() {
         #expect(!SensorLinkDraft.offerableRoles.contains(.unknown))
         #expect(!SensorLinkDraft.offerableRoles.isEmpty)
+    }
+
+    @Test("Every offered sensor role can move to another plant")
+    func everyRoleCanMoveToAnotherPlant() throws {
+        let first = UUID()
+        let second = UUID()
+        for role in SensorLinkDraft.offerableRoles {
+            let link = SensorLink(
+                id: UUID(),
+                plantID: first,
+                zone: nil,
+                haEntityID: "sensor.test",
+                role: role,
+                createdAt: .reference
+            )
+            var draft = SensorAssignmentDraft(link: link)
+            draft.plantID = second
+
+            let assignment = try #require(draft.assignment(for: role))
+            #expect(assignment.plantID == second)
+            #expect(assignment.zone == nil)
+        }
+    }
+
+    @Test("Ambient sensors can move between a plant and a place")
+    func ambientSensorsCanMoveToAPlace() throws {
+        let link = SensorLink(
+            id: UUID(),
+            plantID: UUID(),
+            zone: nil,
+            haEntityID: "sensor.room_temperature",
+            role: .ambientTemp,
+            createdAt: .reference
+        )
+        var draft = SensorAssignmentDraft(link: link)
+        draft.target = .zone
+        draft.zone = "  Living room  "
+
+        let assignment = try #require(draft.assignment(for: .ambientTemp))
+        #expect(assignment.plantID == nil)
+        #expect(assignment.zone == "Living room")
+        #expect(draft.assignment(for: .soilMoisture) == nil)
     }
 }

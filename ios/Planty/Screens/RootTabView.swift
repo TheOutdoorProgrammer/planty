@@ -46,6 +46,8 @@ struct RootTabView: View {
             NavigationStack { PolicySettingsScreen() }
         } else if ProcessInfo.processInfo.environment["PLANTY_START_SETTINGS_ROUTE"] == "scheduled-jobs" {
             NavigationStack { ScheduledJobsScreen() }
+        } else if ProcessInfo.processInfo.environment["PLANTY_START_SETTINGS_ROUTE"] == "sensors" {
+            NavigationStack { SensorListScreen(api: session.api) }
         } else {
             SettingsScreen()
         }

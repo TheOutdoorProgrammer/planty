@@ -99,6 +99,8 @@ A plant is watched by zero or more Home Assistant entities.
 
 An uncalibrated soil link produces readings but must never produce an automated watering decision. A calibrated reading is presented as both the actual probe value and its relative position between that probe's dry and wet baselines.
 
+A sensor link may be reassigned to another plant or, for ambient roles, another place. Reassignment keeps the link ID, readings, Home Assistant entity, role, and soil calibration together because they describe the same physical probe. Changing the entity or measurement role creates or selects a different link instead of rewriting that history.
+
 The daily AI may propose replacement baselines only from a fresh reading and a currently calibrated soil link. Proposals preserve the actual reading, old and proposed baselines, old and proposed relative values, model, and reason. They never apply themselves. The plant dashboard requires an owner to approve or deny each proposal, and the store accepts at most one proposal per probe in any 72-hour window.
 
 ## Plant-dedicated actuators

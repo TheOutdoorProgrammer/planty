@@ -120,6 +120,7 @@ enum APIPath {
     static func updateNote(id: String) -> String { "/v1/notes/\(id)" }
     static func updatePlant(slug: String) -> String { "/v1/plants/\(slug)" }
     static func updatePolicy(id: String) -> String { "/v1/policies/\(id)" }
+    static func updateSensorAssignment(id: String) -> String { "/v1/sensors/\(id)/assignment" }
     static func uploadPhoto(slug: String) -> String { "/v1/plants/\(slug)/photos" }
 }
 

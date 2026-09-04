@@ -167,6 +167,14 @@ struct PlantyClient: PlantyAPI {
         try await send("POST", APIPath.linkSensor, body: link)
     }
 
+    func assignSensor(id: UUID, to assignment: SensorAssignment) async throws -> SensorLink {
+        try await send(
+            "PUT",
+            APIPath.updateSensorAssignment(id: id.uuidString),
+            body: assignment
+        )
+    }
+
     func postmortem(slug: String) async throws -> Postmortem {
         try await send("POST", APIPath.createPostmortem(slug: escaped(slug)),
                        body: EmptyBody(), patience: Patience.model)

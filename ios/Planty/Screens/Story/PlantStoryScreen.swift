@@ -142,12 +142,19 @@ struct PlantStoryScreen: View {
             }
         }
         .sheet(isPresented: $isEditing) {
-            EditPlantSheet(plant: store.plant, choices: session.choices) { patch in
+            EditPlantSheet(
+                plant: store.plant,
+                choices: session.choices,
+                api: session.api,
+                sensors: store.series
+            ) { patch in
                 let failure = await store.saveEdits(patch)
                 if failure == nil { session.library.apply(store.plant) }
                 return failure
             } setSheltered: { indoors in
                 await store.setSheltered(indoors)
+            } onSensorsChanged: {
+                Task { await store.load() }
             }
         }
         .sheet(isPresented: $isShowingLabel) {

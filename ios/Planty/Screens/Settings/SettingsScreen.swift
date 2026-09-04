@@ -348,9 +348,10 @@ struct SensorListScreen: View {
     let api: any PlantyAPI
 
     @State private var sensors: [SensorSeries] = []
+    @State private var plants: [Plant] = []
     @State private var hasLoaded = false
     @State private var error: PlantyError?
-    @State private var calibrating: SensorSeries?
+    @State private var editing: SensorSeries?
     @State private var isLinking = false
 
     var body: some View {
@@ -373,20 +374,14 @@ struct SensorListScreen: View {
                 emptyState
             }
             ForEach(sensors) { sensor in
-                let link = sensor.link
-                if link.role.requiresCalibration {
-                    Button {
-                        calibrating = sensor
-                    } label: {
-                        row(for: link)
-                    }
-                    .buttonStyle(.plain)
-                    .listRowBackground(PlantyColor.surface)
-                    .accessibilityHint("Opens calibration.")
-                } else {
-                    row(for: link)
-                        .listRowBackground(PlantyColor.surface)
+                Button {
+                    editing = sensor
+                } label: {
+                    row(for: sensor.link)
                 }
+                .buttonStyle(.plain)
+                .listRowBackground(PlantyColor.surface)
+                .accessibilityHint("Opens sensor settings.")
             }
         }
         .scrollContentBackground(.hidden)
@@ -402,14 +397,13 @@ struct SensorListScreen: View {
                 }
             }
         }
-        .sheet(item: $calibrating) { sensor in
-            CalibrateSensorSheet(link: sensor.link, latest: sensor.latest) { calibration in
-                await apply(calibration, to: sensor)
-            }
+        .sheet(item: $editing) { sensor in
+            SensorAssignmentSheet(api: api, sensor: sensor, onSaved: apply)
         }
         .sheet(isPresented: $isLinking) {
             LinkSensorSheet(api: api) { saved in
-                sensors.append(SensorSeries(link: saved, readings: []))
+                let readings = sensors.first(where: { $0.id == saved.id })?.readings ?? []
+                apply(SensorSeries(link: saved, readings: readings))
             }
         }
         .task { await load() }
@@ -438,6 +432,9 @@ struct SensorListScreen: View {
             Text(link.role.label)
                 .font(.caption)
                 .foregroundStyle(PlantyColor.secondaryText)
+            Label(targetLabel(for: link), systemImage: link.plantID == nil ? "mappin" : "leaf.fill")
+                .font(.caption)
+                .foregroundStyle(PlantyColor.secondaryText)
             if link.role.requiresCalibration {
                 Label(
                     link.isCalibrated ? "Calibrated" : "Not calibrated, so it cannot drive watering",
@@ -457,26 +454,35 @@ struct SensorListScreen: View {
 
     private func load() async {
         do {
-            sensors = try await api.sensors()
+            async let sensorTask = api.sensors()
+            async let plantTask = api.plants(filter: .live)
+            sensors = try await sensorTask
+            plants = (try? await plantTask) ?? []
             error = nil
         } catch {
             guard !PlantyError.isCancellation(error) else { return }
             self.error = PlantyError.from(error)
         }
         hasLoaded = true
+        #if DEBUG
+        if let role = ProcessInfo.processInfo.environment["PLANTY_START_SENSOR_SETTINGS"] {
+            editing = sensors.first { $0.link.role.rawValue == role } ?? sensors.first
+        }
+        #endif
     }
 
-    /// Returns the failure so the calibration sheet can stay open with the
-    /// typed baselines instead of dismissing into a list-level error.
-    private func apply(_ calibration: SensorCalibration, to sensor: SensorSeries) async -> PlantyError? {
-        do {
-            let saved = try await api.calibrate(sensorID: sensor.id, to: calibration)
-            if let index = sensors.firstIndex(where: { $0.id == saved.id }) {
-                sensors[index] = SensorSeries(link: saved, readings: sensor.readings)
-            }
-            return nil
-        } catch {
-            return PlantyError.from(error)
+    private func targetLabel(for link: SensorLink) -> String {
+        if let plantID = link.plantID {
+            return plants.first(where: { $0.id == plantID })?.commonName ?? "Assigned plant"
+        }
+        return link.zone?.nilIfBlank ?? "Assigned place"
+    }
+
+    private func apply(_ saved: SensorSeries) {
+        if let index = sensors.firstIndex(where: { $0.id == saved.id }) {
+            sensors[index] = saved
+        } else {
+            sensors.append(saved)
         }
     }
 }

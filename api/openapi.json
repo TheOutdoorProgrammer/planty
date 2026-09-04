@@ -125,6 +125,7 @@
       "post": {"operationId": "linkSensor"}
     },
     "/v1/sensors/{id}": {"patch": {"operationId": "calibrateSensor"}},
+    "/v1/sensors/{id}/assignment": {"put": {"operationId": "updateSensorAssignment"}},
     "/v1/calibration-proposals/{id}/approve": {"post": {"operationId": "approveCalibrationProposal"}},
     "/v1/calibration-proposals/{id}/deny": {"post": {"operationId": "denyCalibrationProposal"}},
     "/v1/questions": {

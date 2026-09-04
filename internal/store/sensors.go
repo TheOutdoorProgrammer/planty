@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -36,6 +37,52 @@ func (s *Store) LinkSensor(ctx context.Context, l plant.SensorLink) (plant.Senso
 		RETURNING `+sensorColumns,
 		l.PlantID, l.Zone, l.HAEntityID, l.Role)
 	return scanSensor(row)
+}
+
+func (s *Store) AssignSensor(ctx context.Context, id uuid.UUID, assignment plant.SensorAssignment) (plant.SensorLink, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return plant.SensorLink{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	var currentPlantID *uuid.UUID
+	var currentZone string
+	var role plant.SensorRole
+	if err := tx.QueryRow(ctx, `SELECT plant_id, coalesce(zone, ''), role
+		FROM sensor_links WHERE id = $1 FOR UPDATE`, id).Scan(&currentPlantID, &currentZone, &role); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return plant.SensorLink{}, ErrNotFound
+		}
+		return plant.SensorLink{}, classify(err)
+	}
+	assignment.Zone = strings.TrimSpace(assignment.Zone)
+	if err := assignment.Valid(role); err != nil {
+		return plant.SensorLink{}, err
+	}
+	if sensorTargetChanged(currentPlantID, currentZone, assignment) {
+		if _, err := tx.Exec(ctx, `UPDATE sensor_calibration_proposals
+			SET status = 'denied', resolved_at = now(), resolved_by = 'sensor reassigned'
+			WHERE sensor_link_id = $1 AND status = 'pending'`, id); err != nil {
+			return plant.SensorLink{}, err
+		}
+	}
+	link, err := scanSensor(tx.QueryRow(ctx, `
+		UPDATE sensor_links
+		SET plant_id = $2, zone = nullif($3, '')
+		WHERE id = $1
+		RETURNING `+sensorColumns, id, assignment.PlantID, assignment.Zone))
+	if err != nil {
+		return plant.SensorLink{}, err
+	}
+	return link, tx.Commit(ctx)
+}
+
+func sensorTargetChanged(currentPlantID *uuid.UUID, currentZone string, assignment plant.SensorAssignment) bool {
+	if currentZone != assignment.Zone || (currentPlantID == nil) != (assignment.PlantID == nil) {
+		return true
+	}
+	return currentPlantID != nil && *currentPlantID != *assignment.PlantID
 }
 
 // Calibrate records a soil probe's own dry and wet baselines.

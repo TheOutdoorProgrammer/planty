@@ -115,6 +115,7 @@ protocol PlantyAPI: Sendable {
     func ask(_ question: ScratchQuestion) async throws -> PlantAnswer
     func createPlantFromPhoto(_ request: PlantFromPhoto) async throws -> PlantFromPhotoResult
     func linkSensor(_ link: NewSensorLink) async throws -> SensorLink
+    func assignSensor(id: UUID, to assignment: SensorAssignment) async throws -> SensorLink
     func postmortem(slug: String) async throws -> Postmortem
     func postmortems() async throws -> [Postmortem]
     func plantHealth(slug: String) async throws -> PlantHealthResponse
@@ -144,6 +145,10 @@ protocol PlantyAPI: Sendable {
 }
 
 extension PlantyAPI {
+    func assignSensor(id: UUID, to assignment: SensorAssignment) async throws -> SensorLink {
+        throw PlantyError.server(status: 503, message: "Sensor assignment is unavailable from this client.")
+    }
+
     func derivePlant(from slug: String, draft: DerivedPlantDraft) async throws -> DerivedPlantResponse {
         throw PlantyError.server(status: 503, message: "Plant derivation is unavailable from this client.")
     }
@@ -525,6 +530,16 @@ struct NewSensorLink: Codable, Sendable, Hashable {
         case zone
         case haEntityID = "ha_entity_id"
         case role
+    }
+}
+
+struct SensorAssignment: Codable, Sendable, Hashable {
+    var plantID: UUID?
+    var zone: String?
+
+    enum CodingKeys: String, CodingKey {
+        case plantID = "plant_id"
+        case zone
     }
 }
 
