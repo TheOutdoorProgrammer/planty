@@ -268,14 +268,15 @@ func TestOfferedHistoricalPhotoIsOpenedOnDemandWithoutActingPrivileges(t *testin
 		t.Fatalf("photo-only request got the wrong toolbox: %+v", (*seen)[0].Tools)
 	}
 	last := (*seen)[1].Messages[len((*seen)[1].Messages)-1]
-	// The in-memory request keeps the concrete []contentPart type; marshal it
-	// to assert the tool result actually carries image bytes, not another label.
+	if last.Role != "user" {
+		t.Fatalf("selected image has role %q, want user", last.Role)
+	}
 	raw, err := json.Marshal(last.Content)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(raw), "data:image/jpeg;base64,") {
-		t.Fatalf("tool result did not carry the selected image: %s", raw)
+		t.Fatalf("user message did not carry the selected image: %s", raw)
 	}
 	if len(out.Steps) == 0 || out.Steps[0].Tool != "historical_photo" {
 		t.Fatalf("opened photo was not disclosed: %+v", out.Steps)

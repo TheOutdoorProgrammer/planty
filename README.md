@@ -70,6 +70,9 @@ The configured fallback selected by `PLANTY_JUDGE` can use the Claude Code subsc
 Daily assessment and consultation are acting jobs, so they require the Claude Code CLI or OpenAI-compatible harness; the direct Anthropic API fallback remains available only to one-shot jobs that do not execute Planty tools.
 Current photographs can reach any verified vision model, and acting providers must advertise offered-photo access before they can be assigned to consultations.
 The Claude Code CLI and OpenAI-compatible harness can selectively open offered history; the direct Anthropic API remains explicitly ineligible.
+The OpenAI-compatible harness gives the prompt and photo tool the same numbered catalogue, with explicit zero-based arguments and recoverable validation errors.
+Selected images follow the complete batch of text tool replies as user image content, so providers receive the Chat Completions vision format even when several photos are opened together.
+Photo access emits `model.photo.open` spans with the offered count, selected index, and outcome, without photograph bytes, labels, or conversation content.
 
 [ADR 0001](adr/0001-buy-judgments-through-the-claude-code-cli.md) explains the subscription-backed default.
 [ADR 0007](adr/0007-choose-a-model-per-job.md) records per-job selection, and [ADR 0008](adr/0008-run-the-acting-loop-in-the-openai-compatible-harness.md) records the later shared tool loop.
