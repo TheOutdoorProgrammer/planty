@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 
@@ -208,16 +209,19 @@ func openAIReasoningEffort(model string, effort Effort) string {
 	return string(effort)
 }
 
-// messagesForChat flattens a conversation into chat messages. Offered photos
-// are named rather than attached, exactly as the Anthropic path does: sending
-// every photo with every question is the cost this deliberately avoids.
+// Offered photos stay on demand; their catalogue uses the same indices as
+// the tool definition, so the prompt and toolbox cannot disagree.
 func messagesForChat(req Request) ([]chatMessage, error) {
 	out := make([]chatMessage, 0, len(req.Turns)+2)
 	if req.System != "" {
 		out = append(out, chatMessage{Role: "system", Content: req.System})
 	}
 
-	for _, turn := range withOffers(req) {
+	turns := req.Turns
+	if len(req.Offered) > 0 {
+		turns = append(slices.Clone(turns), ask(text(offeredPhotoInstructions(req.Offered))))
+	}
+	for _, turn := range turns {
 		role := "user"
 		if turn.Role == RoleAssistant {
 			role = "assistant"

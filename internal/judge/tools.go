@@ -15,6 +15,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 // rounds caps the conversation. A model that has not answered after this many
@@ -80,16 +82,11 @@ func (t *toolbox) definitions() []toolDef {
 	}
 
 	if len(t.offers) > 0 {
-		var labels strings.Builder
-		for i, offer := range t.offers {
-			fmt.Fprintf(&labels, "%d: %s\n", i, offer.Label)
-		}
 		defs = append(defs, toolDef{
 			Type: "function",
 			Function: functionDef{
-				Name: "historical_photo",
-				Description: "Open one offered historical photograph by index. " +
-					"Only call this when seeing it could change the answer. Available:\n" + labels.String(),
+				Name:        "historical_photo",
+				Description: offeredPhotoInstructions(t.offers),
 				Parameters: map[string]any{
 					"type":                 "object",
 					"additionalProperties": false,
@@ -97,6 +94,7 @@ func (t *toolbox) definitions() []toolDef {
 					"properties": map[string]any{
 						"index": map[string]any{
 							"type": "integer", "minimum": 0, "maximum": len(t.offers) - 1,
+							"description": "The zero-based index printed in the available photograph list, not a photo ID or message number.",
 						},
 					},
 				},
@@ -130,7 +128,8 @@ func (t *toolbox) definitions() []toolDef {
 // refusal is an answer, not an error: the model is expected to read the reason
 // and say so rather than retry blindly.
 type toolResult struct {
-	Content any
+	Content string
+	Images  []contentPart
 	Summary string
 }
 
@@ -152,30 +151,67 @@ func (t *toolbox) run(ctx context.Context, call toolCall) toolResult {
 	case "web_fetch":
 		return textResult(t.fetch(ctx, args.URL))
 	case "historical_photo":
-		if args.Index == nil || *args.Index < 0 || *args.Index >= len(t.offers) {
-			return textResult("That historical photograph index does not exist.")
-		}
-		offer := t.offers[*args.Index]
-		prepared, err := prepareModelImage(ctx, &Image{Media: offer.Media, Bytes: offer.Bytes})
-		if err != nil {
-			return textResult("That historical photograph could not be opened: " + err.Error())
-		}
-		return toolResult{
-			Content: []contentPart{
-				{Type: "text", Text: offer.Label},
-				{Type: "image_url", ImageURL: &imageURL{URL: "data:" + prepared.Media + ";base64," +
-					base64.StdEncoding.EncodeToString(prepared.Bytes)}},
-			},
-			Summary: "Opened " + offer.Label,
-		}
+		return t.openPhoto(ctx, args.Index)
 	default:
 		return textResult(fmt.Sprintf("There is no tool called %q.", call.Function.Name))
 	}
 }
 
+func offeredPhotoInstructions(offers []Offer) string {
+	if len(offers) == 0 {
+		return "No photographs are available to open in this request."
+	}
+	var b strings.Builder
+	b.WriteString("Photographs are available through historical_photo. " +
+		"When asked to look at a photograph, open it before answering. " +
+		"For questions the text record answers, opening photographs is optional. " +
+		"Call with a JSON object containing the zero-based index, for example {\"index\":0}. " +
+		"Use only the indices below, not photo IDs, dates, or message numbers. Available:\n")
+	for i, offer := range offers {
+		fmt.Fprintf(&b, "%d: %s\n", i, offer.Label)
+	}
+	return b.String()
+}
+
+func (t *toolbox) openPhoto(ctx context.Context, index *int) toolResult {
+	ctx, span := otel.Tracer("planty/judge").Start(ctx, "model.photo.open")
+	defer span.End()
+	span.SetAttributes(attribute.Int("photo.offered_count", len(t.offers)))
+	if len(t.offers) == 0 {
+		span.SetAttributes(attribute.String("photo.status", "unavailable"))
+		return textResult(offeredPhotoInstructions(t.offers))
+	}
+	if index == nil {
+		span.SetAttributes(attribute.String("photo.status", "missing_index"))
+		return textResult("Missing required integer argument index. " + offeredPhotoInstructions(t.offers))
+	}
+	span.SetAttributes(attribute.Int("photo.index", *index))
+	if *index < 0 || *index >= len(t.offers) {
+		span.SetAttributes(attribute.String("photo.status", "invalid_index"))
+		return textResult(fmt.Sprintf("Photograph index %d is outside the available range 0 through %d. ",
+			*index, len(t.offers)-1) + offeredPhotoInstructions(t.offers))
+	}
+	offer := t.offers[*index]
+	prepared, err := prepareModelImage(ctx, &Image{Media: offer.Media, Bytes: offer.Bytes})
+	if err != nil {
+		span.SetAttributes(attribute.String("photo.status", "unreadable"))
+		return textResult("That historical photograph could not be opened: " + err.Error())
+	}
+	span.SetAttributes(attribute.String("photo.status", "opened"))
+	return toolResult{
+		Content: "Opened " + offer.Label + ". The image follows the tool results in a user message.",
+		Images: []contentPart{
+			{Type: "text", Text: fmt.Sprintf("historical_photo index %d: %s", *index, offer.Label)},
+			{Type: "image_url", ImageURL: &imageURL{URL: "data:" + prepared.Media + ";base64," +
+				base64.StdEncoding.EncodeToString(prepared.Bytes)}},
+		},
+		Summary: "Opened " + offer.Label,
+	}
+}
+
 func (t *toolbox) runAgent(ctx context.Context, command string) string {
 	command = strings.TrimSpace(command)
-	if t.acting.Refuse == nil {
+	if t.acting == nil || t.acting.Refuse == nil {
 		return "Refused: nothing may be run here."
 	}
 	if reason := t.acting.Refuse(command, t.acting.AgentVerbs); reason != "" {
@@ -203,6 +239,9 @@ func (t *toolbox) runAgent(ctx context.Context, command string) string {
 }
 
 func (t *toolbox) fetch(ctx context.Context, raw string) string {
+	if t.acting == nil {
+		return "Refused: no web access was granted."
+	}
 	parsed, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
 		return "That URL could not be read: " + err.Error()
@@ -333,6 +372,7 @@ func (b *openaiBackend) converse(ctx context.Context, req Request, messages []ch
 			Content:   answer.Content,
 			ToolCalls: answer.ToolCalls,
 		})
+		var images []contentPart
 		for _, call := range answer.ToolCalls {
 			result := box.run(ctx, call)
 			out.addStep(Step{
@@ -346,6 +386,12 @@ func (b *openaiBackend) converse(ctx context.Context, req Request, messages []ch
 				ToolCallID: call.ID,
 				Content:    result.Content,
 			})
+			images = append(images, result.Images...)
+		}
+		// Chat Completions tool messages are text-only. Resolve every tool call
+		// before adding images as user content, including for parallel calls.
+		if len(images) > 0 {
+			messages = append(messages, chatMessage{Role: "user", Content: images})
 		}
 	}
 	return Outcome{}, fmt.Errorf("%s kept calling tools without answering", b.provider.ID)
