@@ -24,6 +24,9 @@ permissions:
 jobs:
   ios:
     name: iOS archive
+    permissions:
+      contents: read
+      id-token: write
     # Xcode 26 is the default here, which the iOS 26 deployment target needs.
     runs-on: [self-hosted, macOS, ARM64, mini-2, release, planty]
     steps:
@@ -36,6 +39,9 @@ jobs:
 
       - name: Toolchain
         run: xcodebuild -version
+
+      - name: Native telemetry tests
+        run: swift test --package-path ios/Packages/NativeTelemetry
 
       - name: Test
         working-directory: ios
@@ -131,6 +137,22 @@ jobs:
           test "$(plutil -extract Entitlements.application-identifier raw -o - "$profile")" = "$TEAM.zone.stout.Planty"
           test "$(plutil -extract Entitlements.aps-environment raw -o - "$profile")" = production
           test "$(plutil -extract Entitlements.get-task-allow raw -o - "$profile")" = false
+
+      - name: Match private symbols to the signed app
+        run: |
+          set -euo pipefail
+          xcrun dwarfdump --uuid "$RUNNER_TEMP/exported-app/Payload/Planty.app/Planty" \
+            | cut -d ' ' -f 1-3 | LC_ALL=C sort > "$RUNNER_TEMP/app-uuids.txt"
+          xcrun dwarfdump --uuid "$RUNNER_TEMP/Planty.xcarchive/dSYMs/Planty.app.dSYM" \
+            | cut -d ' ' -f 1-3 | LC_ALL=C sort > "$RUNNER_TEMP/symbol-uuids.txt"
+          test -s "$RUNNER_TEMP/app-uuids.txt"
+          diff -u "$RUNNER_TEMP/app-uuids.txt" "$RUNNER_TEMP/symbol-uuids.txt"
+
+      - name: Retain private symbols before distribution
+        if: ${{ !inputs.dry-run }}
+        env:
+          PLANTY_BASE_URL: ${{ secrets.PLANTY_BASE_URL }}
+        run: go run ./cmd/planty publish-symbols "$RUNNER_TEMP/Planty.xcarchive/dSYMs"
 
       # Only Xcode stays on macOS. Quill hands the signed archive to its Linux
       # release job, where GoReleaser, Fledge and Docker share one transaction.

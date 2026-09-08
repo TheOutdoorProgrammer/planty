@@ -136,7 +136,15 @@ func (s *Symbolizer) Resolve(ctx context.Context, crash Crash) ([]ResolvedFrame,
 	}
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
+	architecture := crash.Architecture
 	reader, err := s.Store.Get(ctx, key)
+	// MetricKit reports platform architecture; an arm64e device can run an
+	// arm64 app slice. Its exact UUID still has to match the trusted object.
+	if err != nil && architecture == "arm64e" {
+		architecture = "arm64"
+		key, _ = SymbolKey(crash.ImageUUID, architecture)
+		reader, err = s.Store.Get(ctx, key)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +153,7 @@ func (s *Symbolizer) Resolve(ctx context.Context, crash Crash) ([]ResolvedFrame,
 	if err != nil {
 		return nil, err
 	}
-	base, size, err := inspectSymbols(data, crash.ImageUUID, crash.Architecture)
+	base, size, err := inspectSymbols(data, crash.ImageUUID, architecture)
 	if err != nil {
 		return nil, err
 	}
@@ -169,7 +177,7 @@ func (s *Symbolizer) Resolve(ctx context.Context, crash Crash) ([]ResolvedFrame,
 	if err := errors.Join(writeErr, closeErr); err != nil {
 		return nil, err
 	}
-	command := exec.CommandContext(ctx, s.Command, "--obj="+file.Name(), "--default-arch="+crash.Architecture, "--output-style=JSON", "--basenames", "--no-inlines", "--no-debuginfod")
+	command := exec.CommandContext(ctx, s.Command, "--obj="+file.Name(), "--default-arch="+architecture, "--output-style=JSON", "--basenames", "--no-inlines", "--no-debuginfod")
 	command.Env = append(os.Environ(), "LLVM_SYMBOLIZER_OPTS=", "DEBUGINFOD_URLS=")
 	command.WaitDelay = time.Second
 	command.Stdin = strings.NewReader(addresses.String())
@@ -224,7 +232,7 @@ func (output *boundedOutput) Write(data []byte) (int, error) {
 func (r *Relay) crashAttributes(ctx context.Context, crash Crash) []*common.KeyValue {
 	attributes := []*common.KeyValue{
 		textAttribute("crash.image.uuid", uuid.MustParse(crash.ImageUUID).String()),
-		textAttribute("crash.image.architecture", crash.Architecture),
+		textAttribute("crash.reported.architecture", crash.Architecture),
 	}
 	offsets := make([]string, len(crash.Frames))
 	for i, frame := range crash.Frames {
