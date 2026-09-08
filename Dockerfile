@@ -28,14 +28,22 @@ RUN set -eux; \
     install -D -m 0755 /tmp/claude /out/claude; \
     /out/claude --version
 
+FROM alpine:3.22 AS symbols
+
+# hadolint ignore=DL3018
+RUN apk add --no-cache llvm20
+
 FROM alpine:3.22
 
 # The CLI shells out and reads its own config, so this cannot be distroless.
 # bash specifically: the Bash tool runs bash, not busybox sh, and without it
 # every command the model tries comes back as a broken shell.
 # hadolint ignore=DL3018
-RUN apk add --no-cache ca-certificates libgcc libstdc++ bash \
+RUN apk add --no-cache ca-certificates libgcc libstdc++ bash llvm20-libs libcurl \
     && adduser -D -u 65532 -h /home/planty planty
+
+COPY --from=symbols /usr/lib/llvm20/bin/llvm-symbolizer /usr/local/bin/llvm-symbolizer
+RUN llvm-symbolizer --version
 
 # GoReleaser already built the exact binary being published. BuildKit sets
 # TARGETARCH for each platform, and GoReleaser includes the Go architecture

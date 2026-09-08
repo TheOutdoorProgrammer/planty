@@ -20,6 +20,7 @@ import (
 	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/job"
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
+	"github.com/TheOutdoorProgrammer/planty/internal/nativetelemetry"
 	"github.com/TheOutdoorProgrammer/planty/internal/photos"
 	"github.com/TheOutdoorProgrammer/planty/internal/policy"
 	"github.com/TheOutdoorProgrammer/planty/internal/push"
@@ -49,6 +50,7 @@ const usage = `planty <command>
   gate     PreToolUse hook deciding whether a tool call may proceed
   seed     load the sabbatical plants and their open questions
   migrate  apply database migrations and exit
+  publish-symbols  publish archived native symbols using trusted CI identity
   version  print the version and exit`
 
 func main() {
@@ -74,6 +76,9 @@ func run(log *slog.Logger) (runErr error) {
 	if os.Args[1] == "version" {
 		fmt.Printf("planty %s (%s)\n", version, commit)
 		return nil
+	}
+	if os.Args[1] == "publish-symbols" {
+		return publishNativeSymbols(os.Args[2:])
 	}
 
 	if os.Args[1] == "gate" {
@@ -215,6 +220,7 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 		server = server.WithScheduledJobs(launcher)
 	}
 	go reconcileActuators(ctx, actuatorControl(db, log), log)
+	var nativeSymbols nativetelemetry.ObjectStore
 	if config, enabled := photoConfig(); enabled {
 		manager := photos.Manage(ctx, config, func(state photos.State, err error) {
 			if err != nil {
@@ -224,7 +230,18 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 			log.Info("photo storage ready", "judge", backendName(seat), "can_act", acting() != nil)
 		})
 		server = server.WithPhotos(manager, seat)
+		configureNativeSymbols(ctx, server, manager)
+		nativeSymbols = manager
 	}
+	nativeEndpoint := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))
+	if strings.EqualFold(os.Getenv("OTEL_SDK_DISABLED"), "true") {
+		nativeEndpoint = ""
+	}
+	nativeRelay, err := nativetelemetry.New(nativeEndpoint, nativetelemetry.NewSymbolizer(nativeSymbols))
+	if err != nil {
+		return err
+	}
+	server = server.WithNativeTelemetry(nativeRelay)
 	server.StartConversationWorker(ctx)
 
 	srv := &http.Server{

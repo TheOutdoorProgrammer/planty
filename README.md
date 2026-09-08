@@ -89,8 +89,22 @@ Planty sends scheduled alerts directly to registered iOS devices through APNs an
 MinIO stores photograph bytes and PostgreSQL stores their metadata and object keys.
 `PLANTY_S3_PUBLIC_ENDPOINT` must name the same bucket through a hostname the phone can reach because a presigned URL cannot be rewritten after signing.
 
-Every application route requires a deployment-scoped bearer token, while Kubernetes liveness and readiness probes remain public.
+Application routes require a deployment-scoped bearer token. Private native-symbol publication requires a verified GitHub release workflow identity instead. Kubernetes liveness and readiness probes remain public.
 The service still belongs on the LAN because the pod holds credentials for Home Assistant, model providers, APNs, and object storage.
+
+## Native diagnostics
+
+`POST /v1/native-telemetry` accepts a versioned, bounded diagnostic envelope through the existing application authentication. It forwards sanitized logs and traces to `OTEL_EXPORTER_OTLP_ENDPOINT` and returns 204 only after both signals are accepted. Clients retain the same event IDs on transport failures, 429, or 503; duplicate delivery is possible if an acknowledgement is lost.
+
+The envelope contains `schema_version: 1`, the originating numeric `release` and `build`, and at most 16 events within 64 KiB. Each event has a fresh UUID-v4 `id`, UTC `timestamp`, `operation`, `outcome`, and bounded `duration_ms`. Operations are `app.start`, `notification.open`, `api.request`, `app.crash`, and `app.hang`. Outcomes are `success`, `failure`, and `cancelled`. Failures require a closed `error_class`: `transport`, `timeout`, `unauthorized`, `server`, `decoding`, `crash`, `hang`, or `other`. Unknown fields are rejected. Events older than 30 days or more than five minutes in the future are rejected.
+
+Crash and hang events include only app-image `image_uuid`, `architecture` (`arm64`, `arm64e`, or `x86_64`), and up to 64 text-relative `frames` containing integer `offset` values. The relay matches private symbols by UUID and architecture, then uses LLVM to resolve safe function names, file basenames and line numbers. Missing symbols leave explicitly unresolved frame identities. The additional `telemetry.delivery` operation reports only `queue_full` or `queue_expired` failures, so bounded replay loss can be detected after delivery recovers. Raw exception messages, notification contents, user identifiers, memory dumps, credentials, and URLs are not accepted.
+
+`PUT /v1/native-symbols/{image_uuid}/{architecture}` retains a raw, thin dSYM DWARF object of at most 64 MiB under a private object-storage prefix. It has no download or presigned-URL route. Writes are atomic create-if-absent; identical retries succeed and conflicting replacements return 409. Configure `PLANTY_SYMBOLS_REPOSITORY` and its immutable numeric `PLANTY_SYMBOLS_REPOSITORY_ID` to enable publication. GitHub identity must have audience `planty-native-symbols`, the exact repository identity, `refs/heads/main`, and that repository's `.github/workflows/release.yml` workflow dispatched from main.
+
+From that trusted release job, `planty publish-symbols <archive-dSYMs-directory>` reads the existing `PLANTY_BASE_URL` and GitHub's `ACTIONS_ID_TOKEN_REQUEST_URL` / `ACTIONS_ID_TOKEN_REQUEST_TOKEN`. The job needs `id-token: write`. The command validates each archived object and publishes it without placing a long-lived upload credential in CI, printing credentials, or exposing symbols in public releases or images. Symbol publication must finish before distributing the corresponding native build.
+
+[ADR 0033](adr/0033-relay-bounded-native-diagnostics-and-retain-private-release.md) records the capture and transport choices. The backend intake does not by itself instrument already-installed clients. MetricKit delivery is controlled by iOS and may be delayed or absent; finite local replay and collector storage also prevent a guarantee of capturing every crash.
 
 ## Repository map
 
