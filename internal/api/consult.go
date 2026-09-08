@@ -34,36 +34,36 @@ type consultRequest struct {
 // one to ask anything is what made this hard to use.
 func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 	if s.judge == nil {
-		s.fail(w, http.StatusServiceUnavailable,
+		s.fail(w, r, http.StatusServiceUnavailable,
 			errors.New("asking about a plant needs a judge, and none is configured"))
 		return
 	}
 
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	var ask consultRequest
 	if err := json.NewDecoder(r.Body).Decode(&ask); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if ask.Message == "" {
-		s.fail(w, http.StatusBadRequest, errors.New("no question was asked"))
+		s.fail(w, r, http.StatusBadRequest, errors.New("no question was asked"))
 		return
 	}
 
 	prior, conversation, err := s.conversationHistory(r.Context(), p.ID, ask.ConversationID)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	history, err := job.Gather(r.Context(), s.store, p, time.Now().Add(-judge.ConsultWindow))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -75,7 +75,7 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 	if ask.Photo != "" {
 		shot, raw, media, err := s.keepAnswerPhoto(r.Context(), p, ask.Photo)
 		if err != nil {
-			s.fail(w, statusForPhoto(err), err)
+			s.fail(w, r, statusForPhoto(err), err)
 			return
 		}
 		attached = &shot.ID
@@ -88,7 +88,7 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 	answer, err := s.judge.Consult(
 		r.Context(), history, offered, ask.Message, prior, conversation)
 	if err != nil {
-		s.fail(w, http.StatusBadGateway, err)
+		s.fail(w, r, http.StatusBadGateway, err)
 		return
 	}
 
@@ -100,7 +100,7 @@ func (s *Server) consult(w http.ResponseWriter, r *http.Request) {
 		PhotoID:        attached,
 	})
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 

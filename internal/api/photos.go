@@ -40,19 +40,19 @@ var photoTypes = map[string]string{
 // keeps the phone client from having to build a multipart body.
 func (s *Server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 	if s.photos == nil {
-		s.fail(w, http.StatusServiceUnavailable, errors.New("photo storage is not configured"))
+		s.fail(w, r, http.StatusServiceUnavailable, errors.New("photo storage is not configured"))
 		return
 	}
 
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	body, contentType, caption, takenAt, err := readUpload(w, r)
 	if err != nil {
-		s.fail(w, statusForUpload(err), err)
+		s.fail(w, r, statusForUpload(err), err)
 		return
 	}
 	if takenAt.IsZero() {
@@ -61,7 +61,7 @@ func (s *Server) uploadPhoto(w http.ResponseWriter, r *http.Request) {
 
 	saved, err := s.keepPhoto(r.Context(), p, body, contentType, caption, takenAt)
 	if err != nil {
-		s.fail(w, statusForPhoto(err), err)
+		s.fail(w, r, statusForPhoto(err), err)
 		return
 	}
 	s.ok(w, http.StatusCreated, saved)
@@ -230,23 +230,23 @@ func parseUploadTime(raw string) (time.Time, error) {
 func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	cursor, err := decodeHistoryCursor(r.URL.Query().Get("cursor"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	limit, err := pageLimit(r.URL.Query(), 24)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	shots, next, err := s.store.PhotosPage(r.Context(), p.ID, cursor, limit)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -273,25 +273,25 @@ func (s *Server) timeline(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) deletePhoto(w http.ResponseWriter, r *http.Request) {
 	if s.photos == nil {
-		s.fail(w, http.StatusServiceUnavailable, errors.New("photo storage is not configured"))
+		s.fail(w, r, http.StatusServiceUnavailable, errors.New("photo storage is not configured"))
 		return
 	}
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	shot, err := s.store.RequestPhotoDeletion(r.Context(), id)
 	if err != nil {
-		s.fail(w, http.StatusNotFound, err)
+		s.fail(w, r, http.StatusNotFound, err)
 		return
 	}
 	if err := s.photos.Delete(r.Context(), shot.StorageKey); err != nil {
-		s.fail(w, http.StatusServiceUnavailable, err)
+		s.fail(w, r, http.StatusServiceUnavailable, err)
 		return
 	}
 	if err := s.store.FinalizePhotoDeletion(r.Context(), id); err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -3,6 +3,7 @@ package telemetry
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -49,6 +51,46 @@ func HTTPHandler(next http.Handler, operation string) http.Handler {
 }
 
 func LogHandler(next slog.Handler) slog.Handler { return traceHandler{Handler: next} }
+
+func StartJob(ctx context.Context, command string) (context.Context, func(error)) {
+	switch command {
+	case "ingest", "verify-water", "reconcile-actuators", "prune-photos", "daily", "retry", "cold", "away", "chase", "remind", "thirst", "water", "autopsy", "agent", "seed", "migrate":
+	default:
+		command = "unknown"
+	}
+	ctx, span := otel.Tracer("planty/jobs").Start(ctx, "planty.job."+command)
+	return ctx, func(err error) {
+		if err != nil {
+			span.SetStatus(codes.Error, "job failed")
+			span.SetAttributes(attribute.String("error.type", fmt.Sprintf("%T", err)))
+		}
+		span.End()
+	}
+}
+
+func WithContext(ctx context.Context, logger *slog.Logger) *slog.Logger {
+	return slog.New(contextHandler{Handler: logger.Handler(), context: ctx})
+}
+
+type contextHandler struct {
+	slog.Handler
+	context context.Context
+}
+
+func (handler contextHandler) Handle(ctx context.Context, record slog.Record) error {
+	if !trace.SpanContextFromContext(ctx).IsValid() {
+		ctx = handler.context
+	}
+	return handler.Handler.Handle(ctx, record)
+}
+
+func (handler contextHandler) WithAttrs(attributes []slog.Attr) slog.Handler {
+	return contextHandler{Handler: handler.Handler.WithAttrs(attributes), context: handler.context}
+}
+
+func (handler contextHandler) WithGroup(name string) slog.Handler {
+	return contextHandler{Handler: handler.Handler.WithGroup(name), context: handler.context}
+}
 
 func configured() bool {
 	if strings.EqualFold(strings.TrimSpace(os.Getenv("OTEL_SDK_DISABLED")), "true") {

@@ -9,14 +9,20 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/TheOutdoorProgrammer/planty/internal/telemetry"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func TestFailSanitizesServerErrorsAndCorrelatesLogs(t *testing.T) {
 	var logs bytes.Buffer
-	s := &Server{log: slog.New(slog.NewTextHandler(&logs, nil))}
+	s := &Server{log: slog.New(telemetry.LogHandler(slog.NewTextHandler(&logs, nil)))}
 	rec := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/synthetic", nil)
+	span := trace.NewSpanContext(trace.SpanContextConfig{TraceID: trace.TraceID{1}, SpanID: trace.SpanID{2}})
+	request = request.WithContext(trace.ContextWithSpanContext(request.Context(), span))
 
-	s.fail(rec, http.StatusInternalServerError,
+	s.fail(rec, request, http.StatusInternalServerError,
 		errors.New("postgres dial failed: password=super-secret"))
 
 	if rec.Code != http.StatusInternalServerError {
@@ -45,8 +51,11 @@ func TestFailSanitizesServerErrorsAndCorrelatesLogs(t *testing.T) {
 	if strings.Contains(rec.Body.String(), "super-secret") {
 		t.Fatal("internal error detail leaked in response")
 	}
-	if !strings.Contains(logs.String(), "super-secret") {
-		t.Fatal("internal error detail was not retained in logs")
+	if strings.Contains(logs.String(), "super-secret") {
+		t.Fatal("private error detail leaked into logs")
+	}
+	if !strings.Contains(logs.String(), span.TraceID().String()) || !strings.Contains(logs.String(), span.SpanID().String()) {
+		t.Fatal("error log lost trace correlation")
 	}
 	if !strings.Contains(logs.String(), body.RequestID) {
 		t.Fatal("request id was not retained in logs")
@@ -57,7 +66,7 @@ func TestFailKeepsCallerErrorDetail(t *testing.T) {
 	s := &Server{log: slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))}
 	rec := httptest.NewRecorder()
 
-	s.fail(rec, http.StatusBadRequest, errors.New("common_name is required"))
+	s.fail(rec, httptest.NewRequest(http.MethodGet, "/synthetic", nil), http.StatusBadRequest, errors.New("common_name is required"))
 
 	var body struct {
 		Error string `json:"error"`

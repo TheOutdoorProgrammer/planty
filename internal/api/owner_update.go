@@ -35,23 +35,23 @@ type ownerUpdateResponse struct {
 
 func (s *Server) createOwnerUpdate(w http.ResponseWriter, r *http.Request) {
 	if s.judge == nil {
-		s.fail(w, http.StatusServiceUnavailable, fmt.Errorf("owner updates need a configured model"))
+		s.fail(w, r, http.StatusServiceUnavailable, fmt.Errorf("owner updates need a configured model"))
 		return
 	}
 	var request ownerUpdateRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("decode owner update: %w", err))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("decode owner update: %w", err))
 		return
 	}
 	request.Steward = strings.TrimSpace(request.Steward)
 	if request.Steward == "" || request.Steward == plant.StewardSelf {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("a friend's steward name is required"))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("a friend's steward name is required"))
 		return
 	}
 
 	plants, err := s.store.ListPlants(r.Context(), store.PlantFilter{Steward: request.Steward})
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	active := plants[:0]
@@ -61,7 +61,7 @@ func (s *Server) createOwnerUpdate(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if len(active) == 0 {
-		s.fail(w, http.StatusNotFound, store.ErrNotFound)
+		s.fail(w, r, http.StatusNotFound, store.ErrNotFound)
 		return
 	}
 
@@ -73,7 +73,7 @@ func (s *Server) createOwnerUpdate(w http.ResponseWriter, r *http.Request) {
 	// library, so the update flow does not fan out one photo query per plant.
 	newest, err := s.store.NewestPhotos(r.Context(), plantIDs)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -82,12 +82,12 @@ func (s *Server) createOwnerUpdate(w http.ResponseWriter, r *http.Request) {
 	for _, p := range active {
 		observations, err := s.store.ObservationsSince(r.Context(), p.ID, since)
 		if err != nil {
-			s.fail(w, http.StatusInternalServerError, err)
+			s.fail(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		verdicts, err := s.store.VerdictsSince(r.Context(), p.ID, since)
 		if err != nil {
-			s.fail(w, http.StatusInternalServerError, err)
+			s.fail(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		record := judge.OwnerPlantWeek{Plant: p, Observations: observations, Verdicts: verdicts}
@@ -100,7 +100,7 @@ func (s *Server) createOwnerUpdate(w http.ResponseWriter, r *http.Request) {
 
 	summary, err := s.judge.OwnerUpdate(r.Context(), request.Steward, week)
 	if err != nil {
-		s.fail(w, http.StatusBadGateway, fmt.Errorf("generate owner update: %w", err))
+		s.fail(w, r, http.StatusBadGateway, fmt.Errorf("generate owner update: %w", err))
 		return
 	}
 

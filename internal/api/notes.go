@@ -21,7 +21,7 @@ type noteRequest struct {
 func (s *Server) listHouseholdNotes(w http.ResponseWriter, r *http.Request) {
 	notes, err := s.store.Notes(r.Context(), uuid.Nil)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{"notes": notes})
@@ -30,11 +30,11 @@ func (s *Server) listHouseholdNotes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) addHouseholdNote(w http.ResponseWriter, r *http.Request) {
 	var req noteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if req.Body == nil {
-		s.fail(w, http.StatusBadRequest, errors.New("a note needs a body"))
+		s.fail(w, r, http.StatusBadRequest, errors.New("a note needs a body"))
 		return
 	}
 
@@ -42,7 +42,7 @@ func (s *Server) addHouseholdNote(w http.ResponseWriter, r *http.Request) {
 		Title: derefOr(req.Title), Body: *req.Body,
 	})
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, written)
@@ -51,12 +51,12 @@ func (s *Server) addHouseholdNote(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listNotes(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	notes, err := s.store.Notes(r.Context(), p.ID)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{"notes": notes})
@@ -65,17 +65,17 @@ func (s *Server) listNotes(w http.ResponseWriter, r *http.Request) {
 func (s *Server) addNote(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	var req noteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if req.Body == nil {
-		s.fail(w, http.StatusBadRequest, errors.New("a note needs a body"))
+		s.fail(w, r, http.StatusBadRequest, errors.New("a note needs a body"))
 		return
 	}
 
@@ -83,7 +83,7 @@ func (s *Server) addNote(w http.ResponseWriter, r *http.Request) {
 		PlantID: p.ID, Title: derefOr(req.Title), Body: *req.Body,
 	})
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, written)
@@ -92,19 +92,19 @@ func (s *Server) addNote(w http.ResponseWriter, r *http.Request) {
 func (s *Server) updateNote(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	var req noteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	changed, err := s.store.UpdateNote(r.Context(), id, req.Title, req.Body)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, changed)
@@ -113,11 +113,11 @@ func (s *Server) updateNote(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteNote(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if err := s.store.DeleteNote(r.Context(), id); err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

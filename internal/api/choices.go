@@ -33,7 +33,7 @@ type managedChoicesResponse struct {
 func (s *Server) listManagedChoices(w http.ResponseWriter, r *http.Request) {
 	candidates, err := s.store.ChoiceCandidates(r.Context())
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 

@@ -31,29 +31,29 @@ type enqueuePlantMessageRequest struct {
 
 func (s *Server) enqueuePlantMessage(w http.ResponseWriter, r *http.Request) {
 	if s.judge == nil {
-		s.fail(w, http.StatusServiceUnavailable,
+		s.fail(w, r, http.StatusServiceUnavailable,
 			errors.New("asking about a plant needs a judge, and none is configured"))
 		return
 	}
 
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	conversationID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	var request enqueuePlantMessageRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, MaxPhotoBytes*2)).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if request.ID == uuid.Nil || strings.TrimSpace(request.Message) == "" {
-		s.fail(w, http.StatusBadRequest, errors.New("message id and text are required"))
+		s.fail(w, r, http.StatusBadRequest, errors.New("message id and text are required"))
 		return
 	}
 
@@ -61,7 +61,7 @@ func (s *Server) enqueuePlantMessage(w http.ResponseWriter, r *http.Request) {
 	if request.Photo != "" {
 		shot, _, _, err := s.keepAnswerPhoto(r.Context(), p, request.Photo)
 		if err != nil {
-			s.fail(w, statusForPhoto(err), err)
+			s.fail(w, r, statusForPhoto(err), err)
 			return
 		}
 		attached = &shot.ID
@@ -72,11 +72,11 @@ func (s *Server) enqueuePlantMessage(w http.ResponseWriter, r *http.Request) {
 		Asked: request.Message, PhotoID: attached,
 	})
 	if errors.Is(err, store.ErrTurnConflict) || errors.Is(err, store.ErrConversationOwner) {
-		s.fail(w, http.StatusConflict, err)
+		s.fail(w, r, http.StatusConflict, err)
 		return
 	}
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -85,29 +85,29 @@ func (s *Server) enqueuePlantMessage(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) enqueueScratchMessage(w http.ResponseWriter, r *http.Request) {
 	if s.judge == nil {
-		s.fail(w, http.StatusServiceUnavailable,
+		s.fail(w, r, http.StatusServiceUnavailable,
 			errors.New("asking about a plant needs a judge, and none is configured"))
 		return
 	}
 	conversationID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	var request enqueuePlantMessageRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, MaxPhotoBytes*2)).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if request.ID == uuid.Nil || (strings.TrimSpace(request.Message) == "" && request.Photo == "") {
-		s.fail(w, http.StatusBadRequest,
+		s.fail(w, r, http.StatusBadRequest,
 			errors.New("message id and a question or photograph are required"))
 		return
 	}
 
 	_, attached, err := s.attach(r.Context(), conversationID, request.Photo, nil)
 	if err != nil {
-		s.fail(w, statusForPhoto(err), err)
+		s.fail(w, r, statusForPhoto(err), err)
 		return
 	}
 	queued, err := s.store.QueueConsultTurn(r.Context(), store.ConsultTurn{
@@ -115,11 +115,11 @@ func (s *Server) enqueueScratchMessage(w http.ResponseWriter, r *http.Request) {
 		Asked: strings.TrimSpace(request.Message), PhotoID: attached,
 	})
 	if errors.Is(err, store.ErrTurnConflict) || errors.Is(err, store.ErrConversationOwner) {
-		s.fail(w, http.StatusConflict, err)
+		s.fail(w, r, http.StatusConflict, err)
 		return
 	}
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	response := conversationTurnResponse(queued)
@@ -130,12 +130,12 @@ func (s *Server) enqueueScratchMessage(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listPlantConversations(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	conversations, err := s.store.Consultations(r.Context(), p.ID)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -160,17 +160,17 @@ func (s *Server) listPlantConversations(w http.ResponseWriter, r *http.Request) 
 func (s *Server) getPlantConversation(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	turns, err := s.store.Consultation(r.Context(), id, p.ID)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -186,12 +186,12 @@ func (s *Server) getPlantConversation(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getScratchConversation(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	turns, err := s.store.Consultation(r.Context(), id, uuid.Nil)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	transcript := make([]map[string]any, 0, len(turns))

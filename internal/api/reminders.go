@@ -15,13 +15,13 @@ import (
 func (s *Server) listReminders(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	reminders, err := s.store.Reminders(r.Context(), p.ID)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -37,7 +37,7 @@ func (s *Server) listReminders(w http.ResponseWriter, r *http.Request) {
 		if done, err := s.store.LastObserved(r.Context(), p.ID, reminder.Kind); err == nil {
 			e.LastDone = &done
 		} else if !errors.Is(err, store.ErrNotFound) {
-			s.fail(w, http.StatusInternalServerError, err)
+			s.fail(w, r, http.StatusInternalServerError, err)
 			return
 		}
 		e.Due = reminder.Due(e.LastDone, now)
@@ -46,7 +46,7 @@ func (s *Server) listReminders(w http.ResponseWriter, r *http.Request) {
 			if ok {
 				resolved, err := s.store.ReminderOccurrenceResolved(r.Context(), reminder.ID, slot)
 				if err != nil {
-					s.fail(w, http.StatusInternalServerError, err)
+					s.fail(w, r, http.StatusInternalServerError, err)
 					return
 				}
 				e.Due = !resolved
@@ -70,13 +70,13 @@ type reminderRequest struct {
 func (s *Server) setReminder(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	var ask reminderRequest
 	if err := json.NewDecoder(r.Body).Decode(&ask); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -95,7 +95,7 @@ func (s *Server) setReminder(w http.ResponseWriter, r *http.Request) {
 		Note:      ask.Note,
 	})
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, saved)
@@ -104,13 +104,13 @@ func (s *Server) setReminder(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteReminder(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	if err := s.store.DeleteReminder(r.Context(),
 		p.ID, plant.ObservationKind(r.PathValue("kind"))); err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{"deleted": true})

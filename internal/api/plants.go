@@ -28,7 +28,7 @@ func (s *Server) listPlants(w http.ResponseWriter, r *http.Request) {
 
 	plants, err := s.store.ListPlants(r.Context(), filter)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{
@@ -96,7 +96,7 @@ func (s *Server) withThumbnails(r *http.Request, plants []plant.Plant) []listedP
 func (s *Server) createPlant(w http.ResponseWriter, r *http.Request) {
 	var p plant.Plant
 	if err := json.NewDecoder(r.Body).Decode(&p); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -104,7 +104,7 @@ func (s *Server) createPlant(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.store.CreatePlant(r.Context(), p)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, created)
@@ -113,13 +113,13 @@ func (s *Server) createPlant(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	history, next, err := s.store.ObservationsPage(r.Context(), p.ID, nil, 20)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -131,7 +131,7 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 	if lineage, err := s.store.PlantLineage(r.Context(), p.ID); err == nil {
 		body["lineage"] = lineage
 	} else if !errors.Is(err, store.ErrNotFound) {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	if cursor := encodeHistoryCursor(next); cursor != "" {
@@ -140,7 +140,7 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 	if at, err := s.store.LastWatered(r.Context(), p.ID); err == nil {
 		body["last_watered"] = at
 	} else if !errors.Is(err, store.ErrNotFound) {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -148,7 +148,7 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 	// link loses its role, calibration, and stable identity on the client.
 	links, readings, err := s.sensorSnapshot(r.Context(), &p.ID)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	if len(links) > 0 {
@@ -157,7 +157,7 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 	}
 	proposals, err := s.store.PendingCalibrationProposals(r.Context(), p.ID)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	if len(proposals) > 0 {
@@ -166,7 +166,7 @@ func (s *Server) getPlant(w http.ResponseWriter, r *http.Request) {
 	if verdict, err := s.store.LatestVerdict(r.Context(), p.ID); err == nil {
 		body["verdict"] = verdict
 	} else if !errors.Is(err, store.ErrNotFound) {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, body)
@@ -209,13 +209,13 @@ func (s *Server) sensorSnapshot(
 func (s *Server) updatePlant(w http.ResponseWriter, r *http.Request) {
 	var patch store.PlantPatch
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	updated, err := s.store.UpdatePlant(r.Context(), r.PathValue("slug"), patch)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, updated)
@@ -229,11 +229,11 @@ func (s *Server) archivePlant(w http.ResponseWriter, r *http.Request) {
 		status = plant.StatusRemoved
 	}
 	if err := status.ValidateArchive(); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if err := s.store.ArchivePlant(r.Context(), r.PathValue("slug"), status); err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]string{"archived": r.PathValue("slug")})
@@ -242,12 +242,12 @@ func (s *Server) archivePlant(w http.ResponseWriter, r *http.Request) {
 func (s *Server) derivePlant(w http.ResponseWriter, r *http.Request) {
 	var request plant.DerivePlantRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	created, lineage, err := s.store.DerivePlant(r.Context(), r.PathValue("slug"), request)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, map[string]any{"plant": created, "lineage": lineage})
@@ -256,11 +256,11 @@ func (s *Server) derivePlant(w http.ResponseWriter, r *http.Request) {
 func (s *Server) restorePlant(w http.ResponseWriter, r *http.Request) {
 	restored, err := s.store.RestorePlant(r.Context(), r.PathValue("slug"))
 	if errors.Is(err, store.ErrNotFound) {
-		s.fail(w, http.StatusNotFound, err)
+		s.fail(w, r, http.StatusNotFound, err)
 		return
 	}
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, restored)
@@ -269,23 +269,23 @@ func (s *Server) restorePlant(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listObservations(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	cursor, err := decodeHistoryCursor(r.URL.Query().Get("cursor"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	limit, err := pageLimit(r.URL.Query(), 50)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	history, next, err := s.store.ObservationsPage(r.Context(), p.ID, cursor, limit)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{
@@ -297,13 +297,13 @@ func (s *Server) listObservations(w http.ResponseWriter, r *http.Request) {
 func (s *Server) addObservation(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	var o plant.Observation
 	if err := json.NewDecoder(r.Body).Decode(&o); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	o.PlantID = p.ID
@@ -313,7 +313,7 @@ func (s *Server) addObservation(w http.ResponseWriter, r *http.Request) {
 
 	created, err := s.store.AddObservation(r.Context(), o)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, created)
@@ -323,13 +323,13 @@ func (s *Server) addObservation(w http.ResponseWriter, r *http.Request) {
 func (s *Server) coldWatch(w http.ResponseWriter, r *http.Request) {
 	low, err := strconv.ParseFloat(r.URL.Query().Get("forecast_low_f"), 64)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, errors.New("forecast_low_f is required"))
+		s.fail(w, r, http.StatusBadRequest, errors.New("forecast_low_f is required"))
 		return
 	}
 
 	plants, err := s.store.ColdWatch(r.Context(), low)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{

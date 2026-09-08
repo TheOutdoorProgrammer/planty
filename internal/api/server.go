@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net"
 	"net/http"
@@ -241,7 +242,7 @@ func withRequestID(next http.Handler) http.Handler {
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Healthy(r.Context()); err != nil {
-		s.fail(w, http.StatusServiceUnavailable, err)
+		s.fail(w, r, http.StatusServiceUnavailable, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{
@@ -258,11 +259,11 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 // the process that is doing the healing.
 func (s *Server) ready(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Healthy(r.Context()); err != nil {
-		s.fail(w, http.StatusServiceUnavailable, err)
+		s.fail(w, r, http.StatusServiceUnavailable, err)
 		return
 	}
 	if state := s.photoState(); state == string(photos.StateStarting) || state == string(photos.StateUnavailable) {
-		s.fail(w, http.StatusServiceUnavailable, photos.ErrUnavailable)
+		s.fail(w, r, http.StatusServiceUnavailable, photos.ErrUnavailable)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]string{"status": "ready"})
@@ -295,7 +296,7 @@ func (s *Server) ok(w http.ResponseWriter, code int, body any) {
 // failures and internal detail. 4xx errors may explain the caller's mistake;
 // 5xx errors expose only a stable code and request id while the wrapped error
 // remains in structured logs.
-func (s *Server) fail(w http.ResponseWriter, code int, err error) {
+func (s *Server) fail(w http.ResponseWriter, r *http.Request, code int, err error) {
 	if isClientDisconnect(err) {
 		s.log.Debug("request canceled by client")
 		return
@@ -317,11 +318,11 @@ func (s *Server) fail(w http.ResponseWriter, code int, err error) {
 	publicMessage := err.Error()
 	if code >= http.StatusInternalServerError {
 		publicMessage = publicServerError(code)
-		s.log.Error("request failed",
+		s.log.ErrorContext(r.Context(), "request failed",
 			"request_id", requestID,
 			"status", code,
 			"code", publicErrorCode(code),
-			"error", err,
+			"error_type", fmt.Sprintf("%T", err),
 		)
 	}
 

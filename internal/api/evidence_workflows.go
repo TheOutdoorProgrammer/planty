@@ -33,13 +33,13 @@ func (s *Server) registerEvidenceWorkflowRoutes(mux *http.ServeMux) {
 func (s *Server) listRechecks(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	kind := plant.WindowRecheck
 	windows, err := s.store.EvidenceWindows(r.Context(), &p.ID, &kind)
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{"rechecks": windows, "count": len(windows)})
@@ -85,12 +85,12 @@ type recheckRequest struct {
 func (s *Server) proposeRecheck(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	var request recheckRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	baseline := make([]plant.EvidenceRef, len(request.Baseline))
@@ -109,7 +109,7 @@ func (s *Server) proposeRecheck(w http.ResponseWriter, r *http.Request) {
 		ProposedBy: plant.SourceApp, ProposedActor: request.Actor,
 	})
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, window)
@@ -134,7 +134,7 @@ type experimentRequest struct {
 func (s *Server) proposeExperiment(w http.ResponseWriter, r *http.Request) {
 	var request experimentRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	baseline := make([]plant.EvidenceRef, len(request.Baseline))
@@ -158,7 +158,7 @@ func (s *Server) proposeExperiment(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, window)
@@ -167,12 +167,12 @@ func (s *Server) proposeExperiment(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getEvidenceWindow(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	window, err := s.store.EvidenceWindow(r.Context(), id)
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	s.ok(w, http.StatusOK, window)
@@ -181,16 +181,16 @@ func (s *Server) getEvidenceWindow(w http.ResponseWriter, r *http.Request) {
 func (s *Server) getExperiment(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	window, err := s.store.EvidenceWindow(r.Context(), id)
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	if window.Kind != plant.WindowExperiment {
-		s.fail(w, http.StatusNotFound, store.ErrNotFound)
+		s.fail(w, r, http.StatusNotFound, store.ErrNotFound)
 		return
 	}
 	s.ok(w, http.StatusOK, window)
@@ -200,7 +200,7 @@ func (s *Server) listExperiments(w http.ResponseWriter, r *http.Request) {
 	kind := plant.WindowExperiment
 	windows, err := s.store.EvidenceWindows(r.Context(), nil, &kind)
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{"experiments": windows, "count": len(windows)})
@@ -212,18 +212,18 @@ type startEvidenceWindowRequest struct {
 }
 
 func (s *Server) startEvidenceWindow(w http.ResponseWriter, r *http.Request) {
-	id, ok := workflowID(s, w, r.PathValue("id"))
+	id, ok := workflowID(s, w, r, r.PathValue("id"))
 	if !ok {
 		return
 	}
 	var request startEvidenceWindowRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	window, err := s.store.StartEvidenceWindow(r.Context(), id, request.ObservationID, plant.SourceApp, request.Actor)
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	s.ok(w, http.StatusOK, window)
@@ -234,13 +234,13 @@ type reviewEvidenceWindowRequest struct {
 }
 
 func (s *Server) reviewEvidenceWindow(w http.ResponseWriter, r *http.Request) {
-	id, ok := workflowID(s, w, r.PathValue("id"))
+	id, ok := workflowID(s, w, r, r.PathValue("id"))
 	if !ok {
 		return
 	}
 	var request reviewEvidenceWindowRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	refs := make([]plant.EvidenceRef, len(request.Evidence))
@@ -249,7 +249,7 @@ func (s *Server) reviewEvidenceWindow(w http.ResponseWriter, r *http.Request) {
 	}
 	window, err := s.store.MarkEvidenceWindowReady(r.Context(), id, refs)
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	s.ok(w, http.StatusOK, window)
@@ -262,19 +262,19 @@ type concludeEvidenceWindowRequest struct {
 }
 
 func (s *Server) concludeEvidenceWindow(w http.ResponseWriter, r *http.Request) {
-	id, ok := workflowID(s, w, r.PathValue("id"))
+	id, ok := workflowID(s, w, r, r.PathValue("id"))
 	if !ok {
 		return
 	}
 	var request concludeEvidenceWindowRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	window, err := s.store.ConcludeEvidenceWindow(r.Context(), id, request.Outcome,
 		request.Conclusion, plant.SourceApp, request.Actor)
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	s.ok(w, http.StatusOK, window)
@@ -286,18 +286,18 @@ type cancelEvidenceWindowRequest struct {
 }
 
 func (s *Server) cancelEvidenceWindow(w http.ResponseWriter, r *http.Request) {
-	id, ok := workflowID(s, w, r.PathValue("id"))
+	id, ok := workflowID(s, w, r, r.PathValue("id"))
 	if !ok {
 		return
 	}
 	var request cancelEvidenceWindowRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	window, err := s.store.CancelEvidenceWindow(r.Context(), id, plant.SourceApp, request.Actor, request.Reason)
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	s.ok(w, http.StatusOK, window)
@@ -306,12 +306,12 @@ func (s *Server) cancelEvidenceWindow(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listGuardrails(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	windows, err := s.store.EvidenceWindows(r.Context(), &p.ID, nil)
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	active := make([]plant.EvidenceWindow, 0, len(windows))
@@ -331,13 +331,13 @@ type overrideGuardrailRequest struct {
 }
 
 func (s *Server) overrideGuardrail(w http.ResponseWriter, r *http.Request) {
-	id, ok := workflowID(s, w, r.PathValue("id"))
+	id, ok := workflowID(s, w, r, r.PathValue("id"))
 	if !ok {
 		return
 	}
 	var request overrideGuardrailRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	override, err := s.store.OverrideGuardrail(r.Context(), plant.GuardrailOverride{
@@ -345,28 +345,28 @@ func (s *Server) overrideGuardrail(w http.ResponseWriter, r *http.Request) {
 		Reason: request.Reason, Source: plant.SourceApp, Actor: request.Actor,
 	})
 	if err != nil {
-		workflowFail(s, w, err)
+		workflowFail(s, w, r, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, override)
 }
 
-func workflowID(s *Server, w http.ResponseWriter, raw string) (uuid.UUID, bool) {
+func workflowID(s *Server, w http.ResponseWriter, r *http.Request, raw string) (uuid.UUID, bool) {
 	id, err := uuid.Parse(strings.TrimSpace(raw))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("invalid evidence window id: %w", err))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("invalid evidence window id: %w", err))
 		return uuid.Nil, false
 	}
 	return id, true
 }
 
-func workflowFail(s *Server, w http.ResponseWriter, err error) {
+func workflowFail(s *Server, w http.ResponseWriter, r *http.Request, err error) {
 	switch {
 	case errors.Is(err, store.ErrNotFound):
-		s.fail(w, http.StatusNotFound, err)
+		s.fail(w, r, http.StatusNotFound, err)
 	case errors.Is(err, plant.ErrInvalid):
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 	default:
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 	}
 }
