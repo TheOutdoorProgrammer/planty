@@ -28,16 +28,18 @@ const requestIDHeader = "X-Request-ID"
 
 // Server routes HTTP onto the store.
 type Server struct {
-	store         *store.Store
-	log           *slog.Logger
-	photos        photos.Storage
-	judge         *judge.Judge
-	pushSender    *push.Sender
-	homeAssistant homeAssistantDiscoverer
-	actuatorHA    job.ActuatorHomeAssistant
-	scheduledJobs scheduledjob.Launcher
-	policyRunner  *job.PolicyRunner
-	bearerToken   string
+	store           *store.Store
+	log             *slog.Logger
+	photos          photos.Storage
+	judge           *judge.Judge
+	pushSender      *push.Sender
+	homeAssistant   homeAssistantDiscoverer
+	actuatorHA      job.ActuatorHomeAssistant
+	scheduledJobs   scheduledjob.Launcher
+	policyRunner    *job.PolicyRunner
+	bearerToken     string
+	nativeTelemetry http.Handler
+	nativeSymbols   http.Handler
 }
 
 // New builds a server. Photo storage and the judge are optional: without them
@@ -89,6 +91,16 @@ func (s *Server) WithBearerToken(token string) *Server {
 	return s
 }
 
+func (s *Server) WithNativeTelemetry(handler http.Handler) *Server {
+	s.nativeTelemetry = handler
+	return s
+}
+
+func (s *Server) WithNativeSymbols(handler http.Handler) *Server {
+	s.nativeSymbols = handler
+	return s
+}
+
 // Handler returns the routed mux. Route patterns are generated from the
 // OpenAPI contract so the server and clients cannot silently spell one
 // differently. Every response receives a request id for log correlation.
@@ -96,8 +108,18 @@ func (s *Server) Handler() http.Handler {
 	root := http.NewServeMux()
 	root.HandleFunc(routeHealth, s.health)
 	root.HandleFunc(routeReady, s.ready)
+	if s.nativeSymbols != nil {
+		root.Handle("PUT /v1/native-symbols/{image_uuid}/{architecture}", s.nativeSymbols)
+	}
 
 	mux := http.NewServeMux()
+	mux.Handle("POST /v1/native-telemetry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.nativeTelemetry == nil || s.bearerToken == "" {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		s.nativeTelemetry.ServeHTTP(w, r)
+	}))
 
 	mux.HandleFunc(routeListPlants, s.listPlants)
 	mux.HandleFunc(routeCreatePlant, s.createPlant)
