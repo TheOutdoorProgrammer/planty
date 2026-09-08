@@ -7,6 +7,9 @@ let package = Package(
     products: [.library(name: "NativeTelemetry", targets: ["NativeTelemetry"])],
     targets: [
         .target(name: "NativeTelemetry"),
-        .testTarget(name: "NativeTelemetryTests", dependencies: ["NativeTelemetry"])
+        .testTarget(
+            name: "NativeTelemetryTests", dependencies: ["NativeTelemetry"],
+            resources: [.copy("Fixtures")]
+        )
     ]
 )
