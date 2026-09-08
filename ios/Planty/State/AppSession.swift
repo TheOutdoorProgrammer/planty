@@ -116,6 +116,7 @@ final class AppSession {
         )
 
         configuration = PlantyConfiguration.resolve(defaults: defaults, tokens: tokens)
+        PlantyTelemetry.shared.configure(configuration)
         let client = PlantyClient(configuration: configuration, images: images)
         apiGeneration += 1
         api = client

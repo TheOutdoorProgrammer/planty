@@ -1,0 +1,13 @@
+# NativeTelemetry
+
+A bounded native event queue and authenticated HTTPS transport for application-owned telemetry relays.
+
+The package persists only its typed event contract: static operations and outcomes, error classes, originating release/build, random event UUID, timestamps, duration, and optionally an app binary UUID with architecture and text-relative frame offsets. It never stores credentials, endpoints, SQL, user/device identifiers, notification payloads, absolute addresses, diagnostic messages, or raw MetricKit reports. Its queue is excluded from device backups and protected until the first unlock on iOS.
+
+MetricKit supplies OS crash and hang diagnostics. Delivery can be delayed or absent, and requires the OS to deliver a diagnostic while the app can run. This is not an independent crash reporter and does not promise every crash or immediate next-launch delivery. A diagnostic without a usable app frame is omitted. The app-only projection preserves `offsetIntoBinaryTextSegment` unchanged and uses the diagnostic's release/build, never the currently installed build. Cross-module frames are dropped.
+
+OpenTelemetry Swift 2.5.0's MetricKit adapter was evaluated. Its diagnostic logger omits each diagnostic's originating application version/build and expands raw exception messages. Using Apple's public `MXMetricManagerSubscriber` directly retains the required origin identity and projects data before custom persistence. The authenticated application relay creates the OpenTelemetry traces/logs. No Grafana credential or general OTLP forwarding capability ships in the client.
+
+The queue holds at most 256 pending events and 16 quarantined events, with a 512 KiB file limit and 30-day expiry. Capacity drops the oldest pending events. Failed atomic writes leave the previous queue intact. Batches contain at most 16 events from one release/build and cannot exceed 64 KiB. Only HTTP 204 removes accepted events; ambiguous transport failures retain event UUIDs for at-least-once replay. HTTP 400/413/422 quarantine the batch, and other responses retry after at least 60 seconds. Quarantine contains sanitized events only. Repeated delivery is possible after a lost acknowledgment. Concurrent drains are coalesced, requests expire after ten seconds, and redirects are refused.
+
+`swift test` exercises privacy projection, originating build retention, bounded persistence, offline replay, rejection, and concurrent drain behavior. App integration must start capture once, supply its existing HTTPS API credential in memory, and drain on foreground/configuration changes. Neither this module nor the application exposes a deliberate crash action.

@@ -446,21 +446,33 @@ extension PlantyClient {
     }
 
     func perform(_ request: URLRequest, patient: Bool = false) async throws -> Data {
+        let started = ContinuousClock.now
         let data: Data
         let response: URLResponse
         do {
             (data, response) = try await (patient ? patientSession : session).data(for: request)
         } catch {
-            throw PlantyError.from(error)
+            let failure = PlantyError.from(error)
+            await PlantyTelemetry.shared.record(error: failure, durationMS: elapsedMS(since: started))
+            throw failure
         }
 
         guard let http = response as? HTTPURLResponse else {
+            await PlantyTelemetry.shared.record(error: .transport(""), durationMS: elapsedMS(since: started))
             throw PlantyError.transport("The service answered with no status.")
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw statusError(http.statusCode, data)
+            let failure = statusError(http.statusCode, data)
+            await PlantyTelemetry.shared.record(error: failure, durationMS: elapsedMS(since: started))
+            throw failure
         }
+        await PlantyTelemetry.shared.record(operation: .apiRequest, durationMS: elapsedMS(since: started))
         return data
+    }
+
+    private func elapsedMS(since started: ContinuousClock.Instant) -> Int {
+        let duration = started.duration(to: .now).components
+        return Int(min(max(duration.seconds, 0), 3_600) * 1_000 + duration.attoseconds / 1_000_000_000_000_000)
     }
 
     func statusError(_ status: Int, _ data: Data) -> PlantyError {
@@ -476,6 +488,7 @@ extension PlantyClient {
         do {
             return try PlantyCoders.decoder().decode(type, from: data)
         } catch {
+            Task { await PlantyTelemetry.shared.record(error: .decoding("")) }
             throw PlantyError.from(error)
         }
     }

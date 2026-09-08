@@ -242,6 +242,7 @@ final class PlantyAppDelegate: NSObject, UIApplicationDelegate {
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
+        PlantyTelemetry.shared.start()
         return true
     }
 
@@ -268,6 +269,7 @@ extension PlantyAppDelegate: UNUserNotificationCenterDelegate {
     ) {
         let route = PlantyPushRoute(userInfo: response.notification.request.content.userInfo)
         Task { @MainActor in
+            await PlantyTelemetry.shared.record(operation: .notificationOpen)
             PushRouteCenter.shared.open(route)
             completionHandler()
         }
