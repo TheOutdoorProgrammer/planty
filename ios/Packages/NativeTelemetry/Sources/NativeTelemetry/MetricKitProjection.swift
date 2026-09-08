@@ -1,6 +1,19 @@
 import Foundation
 
 public enum MetricKitProjection {
+    public static func event(
+        stackJSON: Data, executableName: String, platformArchitecture: String,
+        timestamp: Date, hang: Bool
+    ) -> NativeEvent {
+        let frames = NativeArchitecture(rawValue: platformArchitecture).flatMap { architecture in
+            crash(stackJSON: stackJSON, executableName: executableName, architecture: architecture)
+        }
+        return NativeEvent(
+            timestamp: timestamp, operation: hang ? .appHang : .appCrash,
+            outcome: .failure, errorClass: hang ? .hang : .crash, crash: frames
+        )
+    }
+
     public static func crash(
         stackJSON: Data, executableName: String, architecture: NativeArchitecture
     ) -> NativeCrash? {
@@ -52,11 +65,11 @@ public final class MetricKitCapture: NSObject, MXMetricManagerSubscriber, @unche
     deinit { MXMetricManager.shared.remove(self) }
 
     public func didReceive(_ payloads: [MXDiagnosticPayload]) {
-        for payload in payloads.prefix(16) {
-            for diagnostic in (payload.crashDiagnostics ?? []).prefix(16) {
+        for payload in payloads {
+            for diagnostic in payload.crashDiagnostics ?? [] {
                 capture(diagnostic, tree: diagnostic.callStackTree, timestamp: payload.timeStampEnd, hang: false)
             }
-            for diagnostic in (payload.hangDiagnostics ?? []).prefix(16) {
+            for diagnostic in payload.hangDiagnostics ?? [] {
                 capture(diagnostic, tree: diagnostic.callStackTree, timestamp: payload.timeStampEnd, hang: true)
             }
         }
@@ -65,14 +78,13 @@ public final class MetricKitCapture: NSObject, MXMetricManagerSubscriber, @unche
     private func capture(_ diagnostic: MXDiagnostic, tree: MXCallStackTree, timestamp: Date, hang: Bool) {
         guard let release = NativeRelease(
             release: diagnostic.applicationVersion, build: diagnostic.metaData.applicationBuildVersion
-        ), let architecture = NativeArchitecture(rawValue: diagnostic.metaData.platformArchitecture),
-        let crash = MetricKitProjection.crash(
-            stackJSON: tree.jsonRepresentation(), executableName: executableName, architecture: architecture
         ) else { return }
-        receive(release, NativeEvent(
-            timestamp: timestamp, operation: hang ? .appHang : .appCrash,
-            outcome: .failure, errorClass: hang ? .hang : .crash, crash: crash
-        ))
+        let event = MetricKitProjection.event(
+            stackJSON: tree.jsonRepresentation(), executableName: executableName,
+            platformArchitecture: diagnostic.metaData.platformArchitecture,
+            timestamp: timestamp, hang: hang
+        )
+        receive(release, event)
     }
 }
 #endif

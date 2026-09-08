@@ -29,8 +29,19 @@ public final class NativeHTTPTransport: NSObject, NativeTransport, URLSessionTas
         request.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         let (_, response) = try await session.bytes(for: request)
         guard let response = response as? HTTPURLResponse else { return .retry(after: 60) }
+        return Self.delivery(for: response, envelope: envelope)
+    }
+
+    static func delivery(for response: HTTPURLResponse, envelope: NativeEnvelope) -> NativeDelivery {
+        let minimalDiagnostic = envelope.events.contains { event in
+            event.crash == nil && event.outcome == .failure
+                && ((event.operation == .appCrash && event.errorClass == .crash)
+                    || (event.operation == .appHang && event.errorClass == .hang))
+        }
         switch response.statusCode {
         case 204: return .accepted
+        // Older relays require frames during a rolling upgrade.
+        case 400 where minimalDiagnostic: return .retry(after: 60)
         case 400, 413, 422: return .rejected
         default: return .retry(after: Double(response.value(forHTTPHeaderField: "Retry-After") ?? "") ?? 60)
         }
