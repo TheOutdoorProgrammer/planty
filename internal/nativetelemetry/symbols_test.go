@@ -96,20 +96,7 @@ func TestArchitectureFallbackStillRequiresExactImageUUID(t *testing.T) {
 }
 
 func TestLLVMSymbolizerResolvesRealDSYM(t *testing.T) {
-	command, err := exec.LookPath("llvm-symbolizer")
-	if image := os.Getenv("PLANTY_TEST_SYMBOLIZER_IMAGE"); image != "" {
-		if _, err := exec.LookPath("docker"); err != nil {
-			t.Fatal(err)
-		}
-		t.Setenv("PLANTY_TEST_SYMBOLIZER_IMAGE", image)
-		command = filepath.Join(t.TempDir(), "symbolizer")
-		wrapper := "#!/bin/sh\nsymbol_file=\"${1#--obj=}\"\nexec docker run --rm -i --entrypoint llvm-symbolizer --user \"$(id -u):$(id -g)\" -v \"$symbol_file:$symbol_file:ro\" \"$PLANTY_TEST_SYMBOLIZER_IMAGE\" \"$@\"\n"
-		if err := os.WriteFile(command, []byte(wrapper), 0700); err != nil {
-			t.Fatal(err)
-		}
-	} else if err != nil {
-		t.Skip("install llvm-symbolizer or set PLANTY_TEST_SYMBOLIZER_IMAGE for runtime integration")
-	}
+	command := testSymbolizerCommand(t)
 	store := &fixtureStore{data: fixtureSymbols(t)}
 	symbolizer := &Symbolizer{Store: store, Command: command}
 	frames, err := symbolizer.Resolve(context.Background(), Crash{ImageUUID: fixtureUUID, Architecture: "arm64", Frames: []Frame{{Offset: 0x328}, {Offset: 0x328}}})
@@ -127,6 +114,25 @@ func TestLLVMSymbolizerResolvesRealDSYM(t *testing.T) {
 	if err != nil || len(frames) != 1 || frames[0].Function != "native_crash_site" || store.key != "native-symbols/"+fixtureUUID+"/arm64/symbols.dwarf" {
 		t.Fatalf("platform architecture did not resolve the exact app UUID: %#v %v", frames, err)
 	}
+}
+
+func testSymbolizerCommand(t *testing.T) string {
+	t.Helper()
+	command, err := exec.LookPath("llvm-symbolizer")
+	if image := os.Getenv("PLANTY_TEST_SYMBOLIZER_IMAGE"); image != "" {
+		if _, err := exec.LookPath("docker"); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("PLANTY_TEST_SYMBOLIZER_IMAGE", image)
+		command = filepath.Join(t.TempDir(), "symbolizer")
+		wrapper := "#!/bin/sh\nsymbol_file=\"${1#--obj=}\"\nexec docker run --rm -i --entrypoint llvm-symbolizer --user \"$(id -u):$(id -g)\" -v \"$symbol_file:$symbol_file:ro\" \"$PLANTY_TEST_SYMBOLIZER_IMAGE\" \"$@\"\n"
+		if err := os.WriteFile(command, []byte(wrapper), 0700); err != nil {
+			t.Fatal(err)
+		}
+	} else if err != nil {
+		t.Skip("install llvm-symbolizer or set PLANTY_TEST_SYMBOLIZER_IMAGE for runtime integration")
+	}
+	return command
 }
 
 type fakeResolver []ResolvedFrame

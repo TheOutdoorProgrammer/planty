@@ -78,7 +78,7 @@ jobs:
       - name: Resolve a real dSYM with the runtime image
         env:
           PLANTY_TEST_SYMBOLIZER_IMAGE: planty-native-ci:latest
-        run: go test -count=1 -run TestLLVMSymbolizerResolvesRealDSYM ./internal/nativetelemetry
+        run: go test -count=1 -run 'Test(LLVMSymbolizerResolvesRealDSYM|MinIOLazySymbolFallback)$' ./internal/nativetelemetry
 
   ios:
     runs-on: [self-hosted, macOS, ARM64, mini-2, release, planty]
