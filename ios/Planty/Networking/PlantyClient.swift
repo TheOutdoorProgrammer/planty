@@ -480,10 +480,11 @@ extension PlantyClient {
     private func recordRequest(
         _ id: UUID, timestamp: Date, started: ContinuousClock.Instant, failure: PlantyError? = nil
     ) async {
+        let durationMS = min(max(elapsedMS(since: started), 0), 3_600_000)
         await telemetry(NativeEvent(
-            id: id, timestamp: timestamp, operation: .apiRequest,
+            id: id, timestamp: timestamp.addingTimeInterval(Double(durationMS) / 1_000), operation: .apiRequest,
             outcome: failure == nil ? .success : (failure == .cancelled ? .cancelled : .failure),
-            durationMS: elapsedMS(since: started),
+            durationMS: durationMS,
             errorClass: failure.map { PlantyTelemetry.classification(for: $0) } ?? .none
         ))
     }
