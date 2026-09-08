@@ -8,6 +8,36 @@
   "paths": {
     "/healthz": {"get": {"operationId": "health"}},
     "/readyz": {"get": {"operationId": "ready"}},
+    "/v1/native-telemetry": {
+      "post": {
+        "operationId": "postNativeTelemetry",
+        "description": "Accept a bounded native diagnostic envelope using application bearer authentication. Unknown fields are rejected; only sanitized operation outcomes and app-image-relative frames are permitted.",
+        "responses": {
+          "204": {"description": "Both OTLP logs and traces accepted by the collector."},
+          "400": {"description": "Invalid diagnostic envelope; quarantine locally."},
+          "401": {"description": "Application authentication required."},
+          "413": {"description": "Envelope exceeds 64 KiB."},
+          "429": {"description": "Retry after the specified delay."},
+          "503": {"description": "Delivery incomplete; retain and retry the same event IDs."}
+        }
+      }
+    },
+    "/v1/native-symbols/{image_uuid}/{architecture}": {
+      "put": {
+        "operationId": "putNativeSymbols",
+        "description": "Retain a private dSYM DWARF object. Requires verified GitHub release workflow identity; the application bearer token cannot authorize this operation.",
+        "requestBody": {"required": true, "content": {"application/octet-stream": {"schema": {"type": "string", "format": "binary"}}}},
+        "responses": {
+          "204": {"description": "Matching symbols durably retained."},
+          "400": {"description": "Invalid dSYM, UUID or architecture."},
+          "401": {"description": "Trusted release workflow identity required."},
+          "409": {"description": "Different symbols already exist for this identity."},
+          "413": {"description": "Object exceeds 64 MiB."},
+          "429": {"description": "Another symbol upload is active."},
+          "503": {"description": "Private symbol storage unavailable."}
+        }
+      }
+    },
     "/v1/plants": {
       "get": {"operationId": "listPlants"},
       "post": {"operationId": "createPlant"}

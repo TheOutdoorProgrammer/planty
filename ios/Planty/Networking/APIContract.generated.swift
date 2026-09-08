@@ -89,10 +89,12 @@ enum APIPath {
     static let listScheduledJobs = "/v1/scheduled-jobs"
     static let listSensors = "/v1/sensors"
     static func overrideGuardrail(id: String) -> String { "/v1/guardrails/\(id)/override" }
+    static let postNativeTelemetry = "/v1/native-telemetry"
     static let previewPolicy = "/v1/policies/preview"
     static let proposeExperiment = "/v1/experiments"
     static func proposeRecheck(slug: String) -> String { "/v1/plants/\(slug)/rechecks" }
     static let pushHealth = "/v1/push/health"
+    static func putNativeSymbols(image_uuid: String, architecture: String) -> String { "/v1/native-symbols/\(image_uuid)/\(architecture)" }
     static let ready = "/readyz"
     static let registerActuator = "/v1/actuators"
     static let registerPushDevice = "/v1/push-devices"

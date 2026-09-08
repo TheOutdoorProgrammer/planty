@@ -50,6 +50,7 @@ const usage = `planty <command>
   gate     PreToolUse hook deciding whether a tool call may proceed
   seed     load the sabbatical plants and their open questions
   migrate  apply database migrations and exit
+  publish-symbols  publish archived native symbols using trusted CI identity
   version  print the version and exit`
 
 func main() {
@@ -75,6 +76,9 @@ func run(log *slog.Logger) (runErr error) {
 	if os.Args[1] == "version" {
 		fmt.Printf("planty %s (%s)\n", version, commit)
 		return nil
+	}
+	if os.Args[1] == "publish-symbols" {
+		return publishNativeSymbols(os.Args[2:])
 	}
 
 	if os.Args[1] == "gate" {
@@ -226,6 +230,7 @@ func serve(ctx context.Context, db *store.Store, log *slog.Logger, notifications
 			log.Info("photo storage ready", "judge", backendName(seat), "can_act", acting() != nil)
 		})
 		server = server.WithPhotos(manager, seat)
+		configureNativeSymbols(ctx, server, manager)
 		nativeSymbols = manager
 	}
 	nativeEndpoint := strings.TrimSpace(os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT"))

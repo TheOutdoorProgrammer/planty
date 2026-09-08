@@ -28,7 +28,8 @@ var manual = map[string]string{
 	"water":               "moves water, so it is never scheduled",
 	"reconcile-actuators": "serve runs the same reconciliation loop; this is an independent recovery command for operators",
 
-	"version": "answers and exits, for a binary installed from the tap",
+	"version":         "answers and exits, for a binary installed from the tap",
+	"publish-symbols": "runs in trusted release CI after archiving and before native distribution",
 }
 
 var scheduledArgs = regexp.MustCompile(`args:\s*\["([\w-]+)"\]`)

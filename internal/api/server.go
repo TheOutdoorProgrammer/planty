@@ -109,11 +109,11 @@ func (s *Server) Handler() http.Handler {
 	root.HandleFunc(routeHealth, s.health)
 	root.HandleFunc(routeReady, s.ready)
 	if s.nativeSymbols != nil {
-		root.Handle("PUT /v1/native-symbols/{image_uuid}/{architecture}", s.nativeSymbols)
+		root.Handle(routePutNativeSymbols, s.nativeSymbols)
 	}
 
 	mux := http.NewServeMux()
-	mux.Handle("POST /v1/native-telemetry", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	mux.Handle(routePostNativeTelemetry, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.nativeTelemetry == nil || s.bearerToken == "" {
 			w.WriteHeader(http.StatusServiceUnavailable)
 			return
@@ -247,7 +247,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc(routeShelter, s.shelter)
 	mux.HandleFunc(routeUnshelter, s.unshelter)
 
-	var application http.Handler = browserWriteGuard(mux)
+	application := browserWriteGuard(mux)
 	if s.bearerToken != "" {
 		application = bearerAuth(s.bearerToken, application)
 	}
