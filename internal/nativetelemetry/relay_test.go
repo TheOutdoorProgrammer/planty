@@ -109,7 +109,7 @@ func TestRelayWaitsForCollectorAndPreservesOriginalIdentity(t *testing.T) {
 	defer mu.Unlock()
 	span := tracePayload.ResourceSpans[0].ScopeSpans[0].Spans[0]
 	log := logPayload.ResourceLogs[0].ScopeLogs[0].LogRecords[0]
-	if span.Name != "notification.open" || log.Body.GetStringValue() != span.Name || !bytes.Equal(span.TraceId, log.TraceId) || !bytes.Equal(span.SpanId, log.SpanId) {
+	if span.Name != "notification.open" || log.Body.GetStringValue() != span.Name || !bytes.Equal(span.TraceId, log.TraceId) || !bytes.Equal(span.SpanId, log.SpanId) || span.Flags != 1 || log.Flags != 1 {
 		t.Fatal("native trace and log lost their correlation")
 	}
 	if span.EndTimeUnixNano != uint64(envelope.Events[0].Timestamp.UnixNano()) || log.TimeUnixNano != span.EndTimeUnixNano {
@@ -229,6 +229,35 @@ func TestCrashRetainsOnlyBoundedUnresolvedFrames(t *testing.T) {
 		copy.Events[0].Crash = &crash
 		if copy.Validate(time.Now()) == nil {
 			t.Fatal("invalid crash accepted")
+		}
+	}
+}
+
+func TestQueueLossReportsUseOnlyDedicatedFailureClasses(t *testing.T) {
+	for _, class := range []string{"queue_full", "queue_expired"} {
+		envelope := fixtureEnvelope()
+		event := &envelope.Events[0]
+		event.Operation, event.Outcome, event.ErrorClass = "telemetry.delivery", "failure", class
+		if err := envelope.Validate(time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		relay, _ := New("", nil)
+		logs, _ := relay.records(context.Background(), envelope)
+		record := logs.ResourceLogs[0].ScopeLogs[0].LogRecords[0]
+		if record.Body.GetStringValue() != "telemetry.delivery" || record.Attributes[2].Value.GetStringValue() != class {
+			t.Fatal("queue loss signal lost its static classification")
+		}
+		event.Outcome = "success"
+		if envelope.Validate(time.Now()) == nil {
+			t.Fatal("queue loss success accepted")
+		}
+		event.Outcome, event.Operation = "failure", "api.request"
+		if envelope.Validate(time.Now()) == nil {
+			t.Fatal("queue loss class accepted for unrelated operation")
+		}
+		event.Operation, event.ErrorClass = "telemetry.delivery", "other"
+		if envelope.Validate(time.Now()) == nil {
+			t.Fatal("arbitrary delivery failure accepted")
 		}
 	}
 }

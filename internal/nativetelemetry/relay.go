@@ -103,7 +103,7 @@ func (e Envelope) Validate(now time.Time) error {
 		}
 		seen[id] = true
 		switch event.Operation {
-		case "app.start", "notification.open", "api.request", "app.crash", "app.hang":
+		case "app.start", "notification.open", "api.request", "app.crash", "app.hang", "telemetry.delivery":
 		default:
 			return invalid
 		}
@@ -113,11 +113,15 @@ func (e Envelope) Validate(now time.Time) error {
 			return invalid
 		}
 		switch event.ErrorClass {
-		case "", "transport", "timeout", "unauthorized", "server", "decoding", "crash", "hang", "other":
+		case "", "transport", "timeout", "unauthorized", "server", "decoding", "crash", "hang", "other", "queue_full", "queue_expired":
 		default:
 			return invalid
 		}
 		if (event.Outcome == "failure") != (event.ErrorClass != "") {
+			return invalid
+		}
+		queueLoss := event.ErrorClass == "queue_full" || event.ErrorClass == "queue_expired"
+		if (event.Operation == "telemetry.delivery") != queueLoss {
 			return invalid
 		}
 		if event.Operation == "app.crash" || event.Operation == "app.hang" {
@@ -281,10 +285,10 @@ func (r *Relay) records(ctx context.Context, envelope Envelope) (*collectorlogs.
 		start := uint64(event.Timestamp.Add(-time.Duration(event.DurationMS) * time.Millisecond).UnixNano())
 		logScope.LogRecords = append(logScope.LogRecords, &logs.LogRecord{
 			TimeUnixNano: end, ObservedTimeUnixNano: uint64(time.Now().UnixNano()), SeverityNumber: severity,
-			Body: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: event.Operation}}, Attributes: attributes, TraceId: id[:], SpanId: spanID,
+			Body: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: event.Operation}}, Attributes: attributes, TraceId: id[:], SpanId: spanID, Flags: 1,
 		})
 		traceScope.Spans = append(traceScope.Spans, &trace.Span{
-			TraceId: id[:], SpanId: spanID, Name: event.Operation, Kind: trace.Span_SPAN_KIND_INTERNAL,
+			TraceId: id[:], SpanId: spanID, Flags: 1, Name: event.Operation, Kind: trace.Span_SPAN_KIND_INTERNAL,
 			StartTimeUnixNano: start, EndTimeUnixNano: end, Attributes: attributes, Status: status,
 		})
 	}
