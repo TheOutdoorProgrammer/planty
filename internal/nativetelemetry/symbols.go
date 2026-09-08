@@ -137,19 +137,14 @@ func (s *Symbolizer) Resolve(ctx context.Context, crash Crash) ([]ResolvedFrame,
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	architecture := crash.Architecture
-	reader, err := s.Store.Get(ctx, key)
+	data, err := s.readObject(ctx, key)
 	// MetricKit reports platform architecture; an arm64e device can run an
 	// arm64 app slice. Its exact UUID still has to match the trusted object.
-	if err != nil && architecture == "arm64e" {
+	if err != nil && ctx.Err() == nil && architecture == "arm64e" {
 		architecture = "arm64"
 		key, _ = SymbolKey(crash.ImageUUID, architecture)
-		reader, err = s.Store.Get(ctx, key)
+		data, err = s.readObject(ctx, key)
 	}
-	if err != nil {
-		return nil, err
-	}
-	defer func() { _ = reader.Close() }()
-	data, err := io.ReadAll(io.LimitReader(reader, MaxSymbolBytes+1))
 	if err != nil {
 		return nil, err
 	}
@@ -211,6 +206,18 @@ func (s *Symbolizer) Resolve(ctx context.Context, crash Crash) ([]ResolvedFrame,
 		return nil, errors.New("native symbolication unexpected output")
 	}
 	return frames, nil
+}
+
+func (s *Symbolizer) readObject(ctx context.Context, key string) ([]byte, error) {
+	reader, err := s.Store.Get(ctx, key)
+	if err != nil {
+		return nil, err
+	}
+	// MinIO defers object errors until Read. Close this candidate before
+	// attempting a compatible architecture within the same request deadline.
+	data, readErr := io.ReadAll(io.LimitReader(reader, MaxSymbolBytes+1))
+	closeErr := reader.Close()
+	return data, errors.Join(readErr, closeErr)
 }
 
 func safeSymbol(value string, limit int) bool {

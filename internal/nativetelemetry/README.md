@@ -12,4 +12,6 @@ Crash and hang records contain one app image UUID, architecture, and up to 64 of
 
 Trusted CI symbol publication uses a separate HTTP handler outside application bearer authentication. The app credential cannot authorize that handler. `InspectSymbols`, `ValidateSymbols`, and `SymbolKey` are shared by the publisher, upload handler, and resolver. The store's `Get` interface reuses existing photo storage without exposing symbol objects through photo URLs.
 
+MetricKit reports the device architecture, so an arm64e report can use an arm64 app image with the exact same UUID. If fetching the arm64e object fails, including a deferred MinIO read error, the resolver closes that reader before trying arm64 within the original deadline. Each read is bounded to 64 MiB plus one overflow byte; successfully read objects with invalid identity or size are rejected without fallback.
+
 Run `go test -race ./...` for schema, authentication, collector failure, and Mach-O fixture coverage. The real LLVM subprocess test runs when `llvm-symbolizer` is on PATH, or with `PLANTY_TEST_SYMBOLIZER_IMAGE` set to an image whose entrypoint is the symbolizer binary. See `testdata/README.md` for fixture provenance.
