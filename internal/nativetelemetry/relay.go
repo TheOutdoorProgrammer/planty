@@ -201,9 +201,13 @@ func (r *Relay) ServeHTTP(w http.ResponseWriter, request *http.Request) {
 		w.WriteHeader(http.StatusTooManyRequests)
 		return
 	}
-	ctx, cancel := context.WithTimeout(request.Context(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(request.Context(), 8*time.Second)
 	defer cancel()
-	logRequest, traceRequest := r.records(ctx, envelope)
+	// Optional symbols must leave time for both durable collector writes within
+	// the mobile client's ten-second request budget.
+	symbolContext, cancelSymbols := context.WithTimeout(ctx, time.Second)
+	logRequest, traceRequest := r.records(symbolContext, envelope)
+	cancelSymbols()
 	if r.forward(ctx, "traces", traceRequest, new(collectortrace.ExportTraceServiceResponse)) != nil || r.forward(ctx, "logs", logRequest, new(collectorlogs.ExportLogsServiceResponse)) != nil {
 		w.Header().Set("Retry-After", "60")
 		w.WriteHeader(http.StatusServiceUnavailable)
@@ -270,7 +274,10 @@ func (r *Relay) records(ctx context.Context, envelope Envelope) (*collectorlogs.
 	for _, event := range envelope.Events {
 		id := uuid.MustParse(event.ID)
 		spanID := id[8:]
-		attributes := []*common.KeyValue{textAttribute("operation", event.Operation), textAttribute("outcome", event.Outcome)}
+		attributes := []*common.KeyValue{
+			textAttribute("operation", event.Operation), textAttribute("outcome", event.Outcome),
+			textAttribute("event.timestamp", event.Timestamp.UTC().Format(time.RFC3339Nano)),
+		}
 		status := &trace.Status{Code: trace.Status_STATUS_CODE_OK}
 		severity := logs.SeverityNumber_SEVERITY_NUMBER_INFO
 		if event.Outcome == "failure" {
@@ -283,8 +290,11 @@ func (r *Relay) records(ctx context.Context, envelope Envelope) (*collectorlogs.
 		}
 		end := uint64(event.Timestamp.UnixNano())
 		start := uint64(event.Timestamp.Add(-time.Duration(event.DurationMS) * time.Millisecond).UnixNano())
+		// Loki rejects sufficiently late or out-of-order records. Log receipt
+		// now and retain occurrence time separately, including in the trace.
+		observed := uint64(time.Now().UnixNano())
 		logScope.LogRecords = append(logScope.LogRecords, &logs.LogRecord{
-			TimeUnixNano: end, ObservedTimeUnixNano: uint64(time.Now().UnixNano()), SeverityNumber: severity,
+			TimeUnixNano: observed, ObservedTimeUnixNano: observed, SeverityNumber: severity,
 			Body: &common.AnyValue{Value: &common.AnyValue_StringValue{StringValue: event.Operation}}, Attributes: attributes, TraceId: id[:], SpanId: spanID, Flags: 1,
 		})
 		traceScope.Spans = append(traceScope.Spans, &trace.Span{
