@@ -96,6 +96,10 @@ final class IsolatedStubTransport {
 
     var requests: [URLRequest] { responder.requests }
 
+    func respond(using handler: @escaping StubResponder.Handler) {
+        responder.install(handler)
+    }
+
     func client(
         baseURL: String = "https://planty.test",
         token: String? = "s3cret",

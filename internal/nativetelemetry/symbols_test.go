@@ -54,12 +54,16 @@ func TestSymbolsValidateRealMachOIdentityAndBounds(t *testing.T) {
 }
 
 type fixtureStore struct {
-	data []byte
-	key  string
+	data       []byte
+	key        string
+	missingKey string
 }
 
 func (s *fixtureStore) Get(_ context.Context, key string) (io.ReadCloser, error) {
 	s.key = key
+	if key == s.missingKey {
+		return nil, os.ErrNotExist
+	}
 	return io.NopCloser(bytes.NewReader(s.data)), nil
 }
 
@@ -76,6 +80,21 @@ func TestSymbolizerRejectsMismatchedImageBeforeExecuting(t *testing.T) {
 	}
 }
 
+func TestArchitectureFallbackStillRequiresExactImageUUID(t *testing.T) {
+	const differentUUID = "8d6c4d58-85dc-4b1f-bd26-8d20319b646c"
+	store := &fixtureStore{
+		data:       fixtureSymbols(t),
+		missingKey: "native-symbols/" + differentUUID + "/arm64e/symbols.dwarf",
+	}
+	symbolizer := &Symbolizer{Store: store, Command: "must-never-run"}
+	_, err := symbolizer.Resolve(context.Background(), Crash{
+		ImageUUID: differentUUID, Architecture: "arm64e", Frames: []Frame{{Offset: 0x328}},
+	})
+	if !errors.Is(err, ErrInvalidSymbols) || store.key != "native-symbols/"+differentUUID+"/arm64/symbols.dwarf" {
+		t.Fatalf("fallback accepted another image: %s %v", store.key, err)
+	}
+}
+
 func TestLLVMSymbolizerResolvesRealDSYM(t *testing.T) {
 	command, err := exec.LookPath("llvm-symbolizer")
 	if image := os.Getenv("PLANTY_TEST_SYMBOLIZER_IMAGE"); image != "" {
@@ -84,7 +103,7 @@ func TestLLVMSymbolizerResolvesRealDSYM(t *testing.T) {
 		}
 		t.Setenv("PLANTY_TEST_SYMBOLIZER_IMAGE", image)
 		command = filepath.Join(t.TempDir(), "symbolizer")
-		wrapper := "#!/bin/sh\nsymbol_file=\"${1#--obj=}\"\nexec docker run --rm -i --user \"$(id -u):$(id -g)\" -v \"$symbol_file:$symbol_file:ro\" \"$PLANTY_TEST_SYMBOLIZER_IMAGE\" \"$@\"\n"
+		wrapper := "#!/bin/sh\nsymbol_file=\"${1#--obj=}\"\nexec docker run --rm -i --entrypoint llvm-symbolizer --user \"$(id -u):$(id -g)\" -v \"$symbol_file:$symbol_file:ro\" \"$PLANTY_TEST_SYMBOLIZER_IMAGE\" \"$@\"\n"
 		if err := os.WriteFile(command, []byte(wrapper), 0700); err != nil {
 			t.Fatal(err)
 		}
@@ -102,6 +121,11 @@ func TestLLVMSymbolizerResolvesRealDSYM(t *testing.T) {
 	}
 	if store.key != "native-symbols/"+fixtureUUID+"/arm64/symbols.dwarf" {
 		t.Fatal("symbol lookup escaped private namespace")
+	}
+	store.missingKey = "native-symbols/" + fixtureUUID + "/arm64e/symbols.dwarf"
+	frames, err = symbolizer.Resolve(context.Background(), Crash{ImageUUID: fixtureUUID, Architecture: "arm64e", Frames: []Frame{{Offset: 0x328}}})
+	if err != nil || len(frames) != 1 || frames[0].Function != "native_crash_site" || store.key != "native-symbols/"+fixtureUUID+"/arm64/symbols.dwarf" {
+		t.Fatalf("platform architecture did not resolve the exact app UUID: %#v %v", frames, err)
 	}
 }
 

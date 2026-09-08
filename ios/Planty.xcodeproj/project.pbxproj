@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		DA0000000000000000000001 /* NativeTelemetry in Frameworks */ = {isa = PBXBuildFile; productRef = DA0000000000000000000002 /* NativeTelemetry */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		2A0000000000000000000001 /* Planty.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Planty.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		2A0000000000000000000002 /* PlantyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PlantyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -31,6 +35,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				DA0000000000000000000001 /* NativeTelemetry in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +89,7 @@
 			);
 			name = Planty;
 			packageProductDependencies = (
+				DA0000000000000000000002 /* NativeTelemetry */,
 			);
 			productName = Planty;
 			productReference = 2A0000000000000000000001 /* Planty.app */;
@@ -141,6 +147,9 @@
 			mainGroup = 4A0000000000000000000001;
 			minimizedProjectReferenceProxies = 1;
 			preferredProjectObjectVersion = 77;
+			packageReferences = (
+				DA0000000000000000000003 /* NativeTelemetry */,
+			);
 			productRefGroup = 4A0000000000000000000002 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -378,6 +387,20 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		DA0000000000000000000003 /* NativeTelemetry */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = Packages/NativeTelemetry;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		DA0000000000000000000002 /* NativeTelemetry */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = NativeTelemetry;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6A0000000000000000000001 /* Project object */;
 }

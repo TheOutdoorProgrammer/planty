@@ -6,3 +6,5 @@ xcuserdata/
 DerivedData/
 build/
 *.xcresult
+.build/
+.swiftpm/

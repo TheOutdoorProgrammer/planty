@@ -1,4 +1,5 @@
 import Foundation
+import NativeTelemetry
 
 /// URLSession implementation of the contract. Holds no state beyond the
 /// configuration it was built with, so a settings change makes a new one.
@@ -6,6 +7,7 @@ struct PlantyClient: PlantyAPI {
     let configuration: PlantyConfiguration
     let session: URLSession
     let images: ImageRepository?
+    let telemetry: @Sendable (NativeEvent) async -> Void
 
     /// The session used for anything waiting on a model. Injected alongside the
     /// ordinary one so a test can drive both through the same stub.
@@ -15,11 +17,13 @@ struct PlantyClient: PlantyAPI {
         configuration: PlantyConfiguration,
         session: URLSession = .plantyDefault,
         patientSession: URLSession? = nil,
-        images: ImageRepository? = nil
+        images: ImageRepository? = nil,
+        telemetry: @escaping @Sendable (NativeEvent) async -> Void = { await PlantyTelemetry.shared.record($0) }
     ) {
         self.configuration = configuration
         self.session = session
         self.images = images
+        self.telemetry = telemetry
         self.patientSession = patientSession ?? (session === URLSession.plantyDefault
             ? .plantyPatient
             : session)
@@ -446,21 +450,48 @@ extension PlantyClient {
     }
 
     func perform(_ request: URLRequest, patient: Bool = false) async throws -> Data {
+        var request = request
+        let eventID = NativeTraceContext.attach(to: &request) ?? UUID()
+        let started = ContinuousClock.now
+        let timestamp = Date()
         let data: Data
         let response: URLResponse
         do {
             (data, response) = try await (patient ? patientSession : session).data(for: request)
         } catch {
-            throw PlantyError.from(error)
+            let failure = PlantyError.from(error)
+            await recordRequest(eventID, timestamp: timestamp, started: started, failure: failure)
+            throw failure
         }
 
         guard let http = response as? HTTPURLResponse else {
+            await recordRequest(eventID, timestamp: timestamp, started: started, failure: .transport(""))
             throw PlantyError.transport("The service answered with no status.")
         }
         guard (200..<300).contains(http.statusCode) else {
-            throw statusError(http.statusCode, data)
+            let failure = statusError(http.statusCode, data)
+            await recordRequest(eventID, timestamp: timestamp, started: started, failure: failure)
+            throw failure
         }
+        await recordRequest(eventID, timestamp: timestamp, started: started)
         return data
+    }
+
+    private func recordRequest(
+        _ id: UUID, timestamp: Date, started: ContinuousClock.Instant, failure: PlantyError? = nil
+    ) async {
+        let durationMS = min(max(elapsedMS(since: started), 0), 3_600_000)
+        await telemetry(NativeEvent(
+            id: id, timestamp: timestamp.addingTimeInterval(Double(durationMS) / 1_000), operation: .apiRequest,
+            outcome: failure == nil ? .success : (failure == .cancelled ? .cancelled : .failure),
+            durationMS: durationMS,
+            errorClass: failure.map { PlantyTelemetry.classification(for: $0) } ?? .none
+        ))
+    }
+
+    private func elapsedMS(since started: ContinuousClock.Instant) -> Int {
+        let duration = started.duration(to: .now).components
+        return Int(min(max(duration.seconds, 0), 3_600) * 1_000 + duration.attoseconds / 1_000_000_000_000_000)
     }
 
     func statusError(_ status: Int, _ data: Data) -> PlantyError {
@@ -476,6 +507,7 @@ extension PlantyClient {
         do {
             return try PlantyCoders.decoder().decode(type, from: data)
         } catch {
+            Task { await PlantyTelemetry.shared.record(error: .decoding("")) }
             throw PlantyError.from(error)
         }
     }

@@ -70,8 +70,15 @@ jobs:
           context: .
           platforms: linux/amd64
           push: false
+          load: true
+          tags: planty-native-ci:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Resolve a real dSYM with the runtime image
+        env:
+          PLANTY_TEST_SYMBOLIZER_IMAGE: planty-native-ci:latest
+        run: go test -count=1 -run TestLLVMSymbolizerResolvesRealDSYM ./internal/nativetelemetry
 
   ios:
     runs-on: [self-hosted, macOS, ARM64, mini-2, release, planty]
@@ -80,6 +87,9 @@ jobs:
 
       - name: Toolchain
         run: xcodebuild -version
+
+      - name: Native telemetry tests
+        run: swift test --package-path ios/Packages/NativeTelemetry
 
       - name: Test
         working-directory: ios

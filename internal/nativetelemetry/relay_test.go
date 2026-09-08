@@ -112,12 +112,69 @@ func TestRelayWaitsForCollectorAndPreservesOriginalIdentity(t *testing.T) {
 	if span.Name != "notification.open" || log.Body.GetStringValue() != span.Name || !bytes.Equal(span.TraceId, log.TraceId) || !bytes.Equal(span.SpanId, log.SpanId) || span.Flags != 1 || log.Flags != 1 {
 		t.Fatal("native trace and log lost their correlation")
 	}
-	if span.EndTimeUnixNano != uint64(envelope.Events[0].Timestamp.UnixNano()) || log.TimeUnixNano != span.EndTimeUnixNano {
-		t.Fatal("replay timestamp was replaced with receipt time")
+	if span.EndTimeUnixNano != uint64(envelope.Events[0].Timestamp.UnixNano()) {
+		t.Fatal("trace lost its original occurrence time")
+	}
+	var occurrence string
+	for _, attr := range log.Attributes {
+		if attr.Key == "event.timestamp" {
+			occurrence = attr.Value.GetStringValue()
+		}
+	}
+	if occurrence != envelope.Events[0].Timestamp.Format(time.RFC3339Nano) || log.TimeUnixNano != log.ObservedTimeUnixNano || time.Since(time.Unix(0, int64(log.TimeUnixNano))) > 5*time.Second {
+		t.Fatal("delayed log must arrive now and preserve occurrence time separately")
 	}
 	attrs := logPayload.ResourceLogs[0].Resource.Attributes
 	if attrs[0].Value.GetStringValue() != "planty-ios" || attrs[1].Value.GetStringValue() != "1.1" || attrs[2].Value.GetStringValue() != "165" {
 		t.Fatal("originating app identity was not preserved")
+	}
+}
+
+type unavailableSymbolResolver struct{}
+
+func (unavailableSymbolResolver) Resolve(ctx context.Context, _ Crash) ([]ResolvedFrame, error) {
+	<-ctx.Done()
+	return nil, ctx.Err()
+}
+
+func TestSlowSymbolsCannotPreventDiagnosticDelivery(t *testing.T) {
+	var mu sync.Mutex
+	var delivered []string
+	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if r.URL.Path == "/v1/logs" {
+			var logs collectorlogs.ExportLogsServiceRequest
+			if err := proto.Unmarshal(body, &logs); err != nil {
+				t.Error(err)
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+			records := logs.ResourceLogs[0].ScopeLogs[0].LogRecords
+			if len(records) != 16 || bytes.Count(body, []byte("unresolved")) != 16 {
+				t.Error("symbol outage lost a crash or invented resolved frames")
+			}
+		}
+		mu.Lock()
+		delivered = append(delivered, r.URL.Path)
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer collector.Close()
+	envelope := fixtureEnvelope()
+	envelope.Events = nil
+	for range 16 {
+		envelope.Events = append(envelope.Events, Event{
+			ID: uuid.NewString(), Timestamp: time.Now().UTC(), Operation: "app.crash", Outcome: "failure", ErrorClass: "crash",
+			Crash: &Crash{ImageUUID: fixtureUUID, Architecture: "arm64", Frames: []Frame{{Offset: 0x328}}},
+		})
+	}
+	relay, _ := New(collector.URL, unavailableSymbolResolver{})
+	started := time.Now()
+	response := requestEnvelope(t, relay, envelope)
+	mu.Lock()
+	defer mu.Unlock()
+	if response.Code != http.StatusNoContent || len(delivered) != 2 || time.Since(started) > 3*time.Second {
+		t.Fatalf("symbol lookup starved durable export: status=%d signals=%v elapsed=%s", response.Code, delivered, time.Since(started))
 	}
 }
 
@@ -233,6 +290,26 @@ func TestCrashRetainsOnlyBoundedUnresolvedFrames(t *testing.T) {
 	}
 }
 
+func TestCrashWithoutAppFramesStillExportsFailure(t *testing.T) {
+	for _, operation := range []string{"app.crash", "app.hang"} {
+		envelope := fixtureEnvelope()
+		event := &envelope.Events[0]
+		event.Operation, event.Outcome, event.ErrorClass = operation, "failure", strings.TrimPrefix(operation, "app.")
+		if err := envelope.Validate(time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		relay, _ := New("", nil)
+		logs, traces := relay.records(context.Background(), envelope)
+		wire, _ := proto.Marshal(logs)
+		if !bytes.Contains(wire, []byte("unavailable")) || bytes.Contains(wire, []byte("crash.image.uuid")) || bytes.Contains(wire, []byte("exception.stacktrace")) {
+			t.Fatal("a report without app frames was lost or invented a stack")
+		}
+		if traces.ResourceSpans[0].ScopeSpans[0].Spans[0].Status.Code != 2 || logs.ResourceLogs[0].ScopeLogs[0].LogRecords[0].SeverityNumber != 17 {
+			t.Fatal("minimal crash report lost error severity")
+		}
+	}
+}
+
 func TestQueueLossReportsUseOnlyDedicatedFailureClasses(t *testing.T) {
 	for _, class := range []string{"queue_full", "queue_expired"} {
 		envelope := fixtureEnvelope()
@@ -244,7 +321,13 @@ func TestQueueLossReportsUseOnlyDedicatedFailureClasses(t *testing.T) {
 		relay, _ := New("", nil)
 		logs, _ := relay.records(context.Background(), envelope)
 		record := logs.ResourceLogs[0].ScopeLogs[0].LogRecords[0]
-		if record.Body.GetStringValue() != "telemetry.delivery" || record.Attributes[2].Value.GetStringValue() != class {
+		var errorClass string
+		for _, attr := range record.Attributes {
+			if attr.Key == "error.type" {
+				errorClass = attr.Value.GetStringValue()
+			}
+		}
+		if record.Body.GetStringValue() != "telemetry.delivery" || errorClass != class {
 			t.Fatal("queue loss signal lost its static classification")
 		}
 		event.Outcome = "success"

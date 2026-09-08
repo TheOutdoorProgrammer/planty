@@ -104,7 +104,17 @@ Crash and hang events include only app-image `image_uuid`, `architecture` (`arm6
 
 From that trusted release job, `planty publish-symbols <archive-dSYMs-directory>` reads the existing `PLANTY_BASE_URL` and GitHub's `ACTIONS_ID_TOKEN_REQUEST_URL` / `ACTIONS_ID_TOKEN_REQUEST_TOKEN`. The job needs `id-token: write`. The command validates each archived object and publishes it without placing a long-lived upload credential in CI, printing credentials, or exposing symbols in public releases or images. Symbol publication must finish before distributing the corresponding native build.
 
-[ADR 0033](adr/0033-relay-bounded-native-diagnostics-and-retain-private-release.md) records the capture and transport choices. The backend intake does not by itself instrument already-installed clients. MetricKit delivery is controlled by iOS and may be delayed or absent; finite local replay and collector storage also prevent a guarantee of capturing every crash.
+The iOS app records startup, notification opens, API outcomes and MetricKit crash or hang diagnostics. API requests carry sampled W3C trace context that matches their persisted completion event. Its bounded disk queue prioritizes failures over routine events and retains loss reports across restarts. Delivery pauses while the app is inactive and resumes with the existing app configuration. Only the approved diagnostic fields enter this queue.
+
+Delayed diagnostics are logged at receipt time so Loki's ingestion limits do not discard old or out-of-order events. The original occurrence time remains in `event.timestamp` and the trace. Symbol lookup has a shared one-second budget per batch; a slow symbol store leaves explicit unresolved frames while the relay delivers the diagnostic.
+
+A MetricKit crash or hang without supported app-image frames still produces a failure event with its original release and build. Its symbolication status is `unavailable`; no image UUID or stack is invented.
+
+The release workflow checks that the signed app and its dSYM have matching image UUIDs, then requires successful private symbol publication before staging the IPA for distribution. Dry runs validate that match without publishing symbols. Deploy the symbol endpoint before the first native-instrumented release.
+
+MetricKit reports platform architecture, which can differ from the app slice. If an `arm64e` object is unavailable, symbolication may use a trusted `arm64` object with the exact same binary UUID. The object header is validated before LLVM runs; other architecture or UUID mismatches remain unresolved.
+
+[ADR 0033](adr/0033-relay-bounded-native-diagnostics-and-retain-private-release.md) records the capture and transport choices. Install the new native build to enable capture. MetricKit delivery is controlled by iOS and may be delayed or absent; finite local replay and collector storage also prevent a guarantee of capturing every crash.
 
 ## Repository map
 
