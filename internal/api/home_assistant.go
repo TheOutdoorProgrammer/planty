@@ -48,18 +48,18 @@ func filterDiscoveredActuators(entities []ha.Entity, query string) []ha.Entity {
 
 func (s *Server) discoverHomeAssistantEntities(w http.ResponseWriter, r *http.Request) {
 	if s.homeAssistant == nil {
-		s.fail(w, http.StatusServiceUnavailable, errors.New("Home Assistant discovery is not configured"))
+		s.fail(w, r, http.StatusServiceUnavailable, errors.New("Home Assistant discovery is not configured"))
 		return
 	}
 	role, err := discoveryRole(r.URL.Query().Get("role"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	entities, err := s.homeAssistant.Entities(r.Context())
 	if err != nil {
 		s.log.Warn("Home Assistant discovery failed", "error", err)
-		s.fail(w, http.StatusBadGateway, errors.New("Home Assistant discovery failed"))
+		s.fail(w, r, http.StatusBadGateway, errors.New("Home Assistant discovery failed"))
 		return
 	}
 	entities = filterDiscoveredEntities(entities, role, r.URL.Query().Get("q"))

@@ -28,12 +28,12 @@ func (s *Server) moveIndoors(w http.ResponseWriter, r *http.Request, inside bool
 	var ask shelterRequest
 	if r.Body != nil {
 		if err := json.NewDecoder(r.Body).Decode(&ask); err != nil {
-			s.fail(w, http.StatusBadRequest, errors.New("shelter request must be valid JSON"))
+			s.fail(w, r, http.StatusBadRequest, errors.New("shelter request must be valid JSON"))
 			return
 		}
 	}
 	if !ask.All && len(ask.Slugs) == 0 {
-		s.fail(w, http.StatusBadRequest,
+		s.fail(w, r, http.StatusBadRequest,
 			errors.New("name the plants in slugs, or pass all"))
 		return
 	}
@@ -53,7 +53,7 @@ func (s *Server) moveIndoors(w http.ResponseWriter, r *http.Request, inside bool
 		moved, err = s.store.Unshelter(r.Context(), ask.Slugs)
 	}
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 

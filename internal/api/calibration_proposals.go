@@ -19,7 +19,7 @@ func (s *Server) denyCalibrationProposal(w http.ResponseWriter, r *http.Request)
 func (s *Server) resolveCalibrationProposal(w http.ResponseWriter, r *http.Request, approve bool) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	var request struct {
@@ -27,7 +27,7 @@ func (s *Server) resolveCalibrationProposal(w http.ResponseWriter, r *http.Reque
 	}
 	if r.Body != nil {
 		if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-			s.fail(w, http.StatusBadRequest, err)
+			s.fail(w, r, http.StatusBadRequest, err)
 			return
 		}
 	}
@@ -36,7 +36,7 @@ func (s *Server) resolveCalibrationProposal(w http.ResponseWriter, r *http.Reque
 	}
 	proposal, err := s.store.ResolveCalibrationProposal(r.Context(), id, approve, request.Actor)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, proposal)

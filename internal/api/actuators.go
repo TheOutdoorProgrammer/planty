@@ -18,12 +18,12 @@ func (s *Server) actuatorControl() job.ActuatorControl {
 
 func (s *Server) discoverActuators(w http.ResponseWriter, r *http.Request) {
 	if s.homeAssistant == nil {
-		s.fail(w, http.StatusServiceUnavailable, errors.New("Home Assistant discovery is not configured"))
+		s.fail(w, r, http.StatusServiceUnavailable, errors.New("Home Assistant discovery is not configured"))
 		return
 	}
 	entities, err := s.homeAssistant.Entities(r.Context())
 	if err != nil {
-		s.fail(w, http.StatusBadGateway, errors.New("Home Assistant discovery failed"))
+		s.fail(w, r, http.StatusBadGateway, errors.New("Home Assistant discovery failed"))
 		return
 	}
 	entities = filterDiscoveredActuators(entities, r.URL.Query().Get("q"))
@@ -34,7 +34,7 @@ func (s *Server) discoverActuators(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listActuators(w http.ResponseWriter, r *http.Request) {
 	actuators, err := s.store.Actuators(r.Context())
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	if s.homeAssistant != nil {
@@ -57,7 +57,7 @@ func (s *Server) listActuators(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 	if s.homeAssistant == nil {
-		s.fail(w, http.StatusServiceUnavailable, errors.New("Home Assistant discovery is not configured"))
+		s.fail(w, r, http.StatusServiceUnavailable, errors.New("Home Assistant discovery is not configured"))
 		return
 	}
 	var request struct {
@@ -67,12 +67,12 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		PlantIDs []uuid.UUID        `json:"plant_ids"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	entities, err := s.homeAssistant.Entities(r.Context())
 	if err != nil {
-		s.fail(w, http.StatusBadGateway, errors.New("Home Assistant discovery failed"))
+		s.fail(w, r, http.StatusBadGateway, errors.New("Home Assistant discovery failed"))
 		return
 	}
 	var candidateDomain string
@@ -88,7 +88,7 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if candidateDomain == "" {
-		s.fail(w, http.StatusBadRequest, errors.New("entity_id is not a discovered Home Assistant fan, switch, or light"))
+		s.fail(w, r, http.StatusBadRequest, errors.New("entity_id is not a discovered Home Assistant fan, switch, or light"))
 		return
 	}
 	if request.Kind == "" {
@@ -99,7 +99,7 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 		Kind: request.Kind, PlantIDs: request.PlantIDs,
 	})
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	created.CurrentState = candidateState
@@ -108,7 +108,7 @@ func (s *Server) registerActuator(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) setActuatorState(w http.ResponseWriter, r *http.Request) {
 	if s.actuatorHA == nil {
-		s.fail(w, http.StatusServiceUnavailable, errors.New("Home Assistant actuation is not configured"))
+		s.fail(w, r, http.StatusServiceUnavailable, errors.New("Home Assistant actuation is not configured"))
 		return
 	}
 	id, ok := actuatorID(w, r, s)
@@ -121,11 +121,11 @@ func (s *Server) setActuatorState(w http.ResponseWriter, r *http.Request) {
 		Source plant.Source `json:"source,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if err := s.actuatorControl().SetLight(r.Context(), id, request.On, request.Actor, sourceOrApp(request.Source)); err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{"on": request.On})
@@ -154,7 +154,7 @@ func (s *Server) setActuatorSchedule(w http.ResponseWriter, r *http.Request, kin
 		Source      plant.Source                    `json:"source,omitempty"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	input := plant.ActuatorSchedule{ActuatorID: id, Timezone: request.Timezone, Enabled: request.Enabled}
@@ -176,7 +176,7 @@ func (s *Server) setActuatorSchedule(w http.ResponseWriter, r *http.Request, kin
 		schedule, err = s.store.SetLightSchedule(r.Context(), input, request.Actor, sourceOrApp(request.Source))
 	}
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, schedule)
@@ -202,7 +202,7 @@ func (s *Server) deleteActuatorSchedule(w http.ResponseWriter, r *http.Request, 
 		err = s.store.DeleteLightSchedule(r.Context(), id, "owner", plant.SourceApp)
 	}
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -220,13 +220,13 @@ func (s *Server) updateActuator(w http.ResponseWriter, r *http.Request) {
 		PolicyControlEnabled bool               `json:"policy_control_enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	updated, err := s.store.UpdateActuator(r.Context(), id, request.Name, request.Kind, request.PlantIDs,
 		request.PolicyControlEnabled)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, updated)
@@ -238,7 +238,7 @@ func (s *Server) deleteActuator(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.DeleteActuator(r.Context(), id); err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -246,7 +246,7 @@ func (s *Server) deleteActuator(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) startActuator(w http.ResponseWriter, r *http.Request) {
 	if s.actuatorHA == nil {
-		s.fail(w, http.StatusServiceUnavailable, errors.New("Home Assistant actuation is not configured"))
+		s.fail(w, r, http.StatusServiceUnavailable, errors.New("Home Assistant actuation is not configured"))
 		return
 	}
 	id, ok := actuatorID(w, r, s)
@@ -260,12 +260,12 @@ func (s *Server) startActuator(w http.ResponseWriter, r *http.Request) {
 		IdempotencyKey  uuid.UUID    `json:"idempotency_key"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	lease, created, err := s.actuatorControl().Start(r.Context(), id, request.DurationSeconds, request.Actor, sourceOrApp(request.Source), request.IdempotencyKey)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	status := http.StatusCreated
@@ -277,7 +277,7 @@ func (s *Server) startActuator(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) stopActuator(w http.ResponseWriter, r *http.Request) {
 	if s.actuatorHA == nil {
-		s.fail(w, http.StatusServiceUnavailable, errors.New("Home Assistant actuation is not configured"))
+		s.fail(w, r, http.StatusServiceUnavailable, errors.New("Home Assistant actuation is not configured"))
 		return
 	}
 	id, ok := actuatorID(w, r, s)
@@ -290,12 +290,12 @@ func (s *Server) stopActuator(w http.ResponseWriter, r *http.Request) {
 		IdempotencyKey uuid.UUID    `json:"idempotency_key"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	stopped, err := s.actuatorControl().Stop(r.Context(), id, request.Actor, sourceOrApp(request.Source), request.IdempotencyKey)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{"stopped": stopped})
@@ -308,12 +308,12 @@ func (s *Server) actuatorEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	limit, err := pageLimit(r.URL.Query(), 50)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	events, err := s.store.ActuatorEvents(r.Context(), id, limit)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{"events": events, "count": len(events)})
@@ -322,7 +322,7 @@ func (s *Server) actuatorEvents(w http.ResponseWriter, r *http.Request) {
 func actuatorID(w http.ResponseWriter, r *http.Request, s *Server) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("actuator id must be a UUID: %w", err))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("actuator id must be a UUID: %w", err))
 		return uuid.Nil, false
 	}
 	return id, true

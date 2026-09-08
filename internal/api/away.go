@@ -23,7 +23,7 @@ func (s *Server) listAway(w http.ResponseWriter, r *http.Request) {
 	if raw := r.URL.Query().Get("include_past"); raw != "" {
 		parsed, err := strconv.ParseBool(raw)
 		if err != nil {
-			s.fail(w, http.StatusBadRequest, errors.New("include_past must be true or false"))
+			s.fail(w, r, http.StatusBadRequest, errors.New("include_past must be true or false"))
 			return
 		}
 		includePast = parsed
@@ -31,7 +31,7 @@ func (s *Server) listAway(w http.ResponseWriter, r *http.Request) {
 
 	periods, err := s.store.AwayPeriods(r.Context(), includePast)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{
@@ -43,19 +43,19 @@ func (s *Server) listAway(w http.ResponseWriter, r *http.Request) {
 func (s *Server) updateAway(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 
 	current, err := s.store.AwayPeriod(r.Context(), id)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	var patch awayPatch
 	if err := json.NewDecoder(r.Body).Decode(&patch); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 
@@ -81,13 +81,13 @@ func (s *Server) updateAway(w http.ResponseWriter, r *http.Request) {
 		changed = true
 	}
 	if !changed {
-		s.fail(w, http.StatusBadRequest, errors.New("away period patch changes nothing"))
+		s.fail(w, r, http.StatusBadRequest, errors.New("away period patch changes nothing"))
 		return
 	}
 
 	updated, err := s.store.UpdateAway(r.Context(), id, current)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, updated)
@@ -96,11 +96,11 @@ func (s *Server) updateAway(w http.ResponseWriter, r *http.Request) {
 func (s *Server) cancelAway(w http.ResponseWriter, r *http.Request) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if err := s.store.DeleteAway(r.Context(), id); err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

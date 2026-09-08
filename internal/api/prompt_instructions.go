@@ -22,7 +22,7 @@ type promptInstructionView struct {
 func (s *Server) listPromptInstructions(w http.ResponseWriter, r *http.Request) {
 	stored, err := s.store.PromptInstructions(r.Context())
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -50,13 +50,13 @@ type promptInstructionRequest struct {
 func (s *Server) setPromptInstruction(w http.ResponseWriter, r *http.Request) {
 	job, ok := requestedJob(r)
 	if !ok {
-		s.fail(w, http.StatusNotFound, fmt.Errorf("there is no job %q", r.PathValue("job")))
+		s.fail(w, r, http.StatusNotFound, fmt.Errorf("there is no job %q", r.PathValue("job")))
 		return
 	}
 
 	var request promptInstructionRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("decode prompt instructions: %w", err))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("decode prompt instructions: %w", err))
 		return
 	}
 
@@ -64,7 +64,7 @@ func (s *Server) setPromptInstruction(w http.ResponseWriter, r *http.Request) {
 		Job: job, Instructions: strings.TrimSpace(request.Instructions),
 	})
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	s.ok(w, http.StatusOK, promptInstructionView{
@@ -75,11 +75,11 @@ func (s *Server) setPromptInstruction(w http.ResponseWriter, r *http.Request) {
 func (s *Server) clearPromptInstruction(w http.ResponseWriter, r *http.Request) {
 	job, ok := requestedJob(r)
 	if !ok {
-		s.fail(w, http.StatusNotFound, fmt.Errorf("there is no job %q", r.PathValue("job")))
+		s.fail(w, r, http.StatusNotFound, fmt.Errorf("there is no job %q", r.PathValue("job")))
 		return
 	}
 	if err := s.store.ClearPromptInstruction(r.Context(), job); err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, promptInstructionView{Job: string(job)})

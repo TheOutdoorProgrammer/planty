@@ -36,7 +36,7 @@ type jobView struct {
 func (s *Server) listModels(w http.ResponseWriter, r *http.Request) {
 	providers, err := judge.Providers()
 	if err != nil {
-		s.fail(w, http.StatusServiceUnavailable, err)
+		s.fail(w, r, http.StatusServiceUnavailable, err)
 		return
 	}
 
@@ -60,7 +60,7 @@ func (s *Server) listModels(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listModelAssignments(w http.ResponseWriter, r *http.Request) {
 	assigned, err := s.store.ModelAssignments(r.Context())
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
@@ -96,13 +96,13 @@ type assignmentRequest struct {
 func (s *Server) setModelAssignment(w http.ResponseWriter, r *http.Request) {
 	job, ok := requestedJob(r)
 	if !ok {
-		s.fail(w, http.StatusNotFound, fmt.Errorf("there is no job %q", r.PathValue("job")))
+		s.fail(w, r, http.StatusNotFound, fmt.Errorf("there is no job %q", r.PathValue("job")))
 		return
 	}
 
 	var request assignmentRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("decode assignment: %w", err))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("decode assignment: %w", err))
 		return
 	}
 	request.Provider = strings.TrimSpace(request.Provider)
@@ -112,7 +112,7 @@ func (s *Server) setModelAssignment(w http.ResponseWriter, r *http.Request) {
 		Job: job, Provider: request.Provider, Model: request.Model,
 	})
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	view := jobView{
@@ -128,11 +128,11 @@ func (s *Server) setModelAssignment(w http.ResponseWriter, r *http.Request) {
 func (s *Server) clearModelAssignment(w http.ResponseWriter, r *http.Request) {
 	job, ok := requestedJob(r)
 	if !ok {
-		s.fail(w, http.StatusNotFound, fmt.Errorf("there is no job %q", r.PathValue("job")))
+		s.fail(w, r, http.StatusNotFound, fmt.Errorf("there is no job %q", r.PathValue("job")))
 		return
 	}
 	if err := s.store.ClearModelAssignment(r.Context(), job); err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	view := jobView{Job: string(job), Default: true}

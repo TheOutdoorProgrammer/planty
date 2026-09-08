@@ -19,14 +19,14 @@ const MaxIdentifyBytes = 8 << 20
 // nobody knows which plant it is yet, and it may not be one on record.
 func (s *Server) identify(w http.ResponseWriter, r *http.Request) {
 	if s.judge == nil {
-		s.fail(w, http.StatusServiceUnavailable,
+		s.fail(w, r, http.StatusServiceUnavailable,
 			errors.New("identification needs a judge, and none is configured"))
 		return
 	}
 
 	image, media, err := readImage(w, r, MaxIdentifyBytes)
 	if err != nil {
-		s.fail(w, statusForUpload(err), err)
+		s.fail(w, r, statusForUpload(err), err)
 		return
 	}
 
@@ -35,7 +35,7 @@ func (s *Server) identify(w http.ResponseWriter, r *http.Request) {
 		sighting(r),
 	)
 	if err != nil {
-		s.fail(w, http.StatusBadGateway, err)
+		s.fail(w, r, http.StatusBadGateway, err)
 		return
 	}
 
@@ -49,14 +49,14 @@ func (s *Server) identify(w http.ResponseWriter, r *http.Request) {
 // typing a species name you do not know into a form.
 func (s *Server) plantFromPhoto(w http.ResponseWriter, r *http.Request) {
 	if s.judge == nil || s.photos == nil {
-		s.fail(w, http.StatusServiceUnavailable,
+		s.fail(w, r, http.StatusServiceUnavailable,
 			errors.New("adding a plant from a photograph needs the judge and photo storage"))
 		return
 	}
 
 	image, media, err := readImage(w, r, MaxPhotoBytes)
 	if err != nil {
-		s.fail(w, statusForUpload(err), err)
+		s.fail(w, r, statusForUpload(err), err)
 		return
 	}
 
@@ -69,18 +69,18 @@ func (s *Server) plantFromPhoto(w http.ResponseWriter, r *http.Request) {
 	candidates, err := s.judge.Identify(r.Context(),
 		judge.Frame{Bytes: image, Media: media, TakenAt: takenAt}, seen)
 	if err != nil {
-		s.fail(w, http.StatusBadGateway, err)
+		s.fail(w, r, http.StatusBadGateway, err)
 		return
 	}
 
 	p, err := describedBy(r, candidates)
 	if err != nil {
-		s.fail(w, http.StatusUnprocessableEntity, err)
+		s.fail(w, r, http.StatusUnprocessableEntity, err)
 		return
 	}
 	created, err := s.store.CreatePlant(r.Context(), p)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 

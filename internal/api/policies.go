@@ -29,7 +29,7 @@ func (request policyRequest) policy() policy.Policy {
 func (s *Server) listPolicies(w http.ResponseWriter, r *http.Request) {
 	items, err := s.store.Policies(r.Context())
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{"policies": items, "count": len(items)})
@@ -42,7 +42,7 @@ func (s *Server) getPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	item, err := s.store.Policy(r.Context(), id)
 	if err != nil {
-		s.fail(w, policyStoreStatus(err), err)
+		s.fail(w, r, policyStoreStatus(err), err)
 		return
 	}
 	s.ok(w, http.StatusOK, item)
@@ -55,12 +55,12 @@ func (s *Server) createPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	item := request.policy()
 	if err := (policy.Engine{}).Compile(r.Context(), item.Source); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	created, err := s.store.CreatePolicy(r.Context(), item)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	s.ok(w, http.StatusCreated, created)
@@ -77,12 +77,12 @@ func (s *Server) updatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	item := request.policy()
 	if err := (policy.Engine{}).Compile(r.Context(), item.Source); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	updated, err := s.store.UpdatePolicy(r.Context(), id, item)
 	if err != nil {
-		s.fail(w, policyStoreStatus(err), err)
+		s.fail(w, r, policyStoreStatus(err), err)
 		return
 	}
 	s.ok(w, http.StatusOK, updated)
@@ -94,7 +94,7 @@ func (s *Server) deletePolicy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.store.ArchivePolicy(r.Context(), id); err != nil {
-		s.fail(w, policyStoreStatus(err), err)
+		s.fail(w, r, policyStoreStatus(err), err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -114,17 +114,17 @@ func (s *Server) previewPolicy(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("decode policy preview: %w", err))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("decode policy preview: %w", err))
 		return
 	}
 	item := request.policy()
 	if err := item.Valid(); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	subject, err := s.store.GetPlant(r.Context(), strings.TrimSpace(request.PlantSlug))
 	if err != nil {
-		s.fail(w, policyStoreStatus(err), err)
+		s.fail(w, r, policyStoreStatus(err), err)
 		return
 	}
 	runner := job.PolicyRunner{Store: s.store, Engine: policy.Engine{}}
@@ -133,12 +133,12 @@ func (s *Server) previewPolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	input, err := runner.BuildInput(r.Context(), subject, policy.TriggerPreview)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	result, duration, err := runner.Preview(r.Context(), item, input)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{
@@ -149,7 +149,7 @@ func (s *Server) previewPolicy(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) evaluatePolicy(w http.ResponseWriter, r *http.Request) {
 	if s.policyRunner == nil {
-		s.fail(w, http.StatusServiceUnavailable, errors.New("policy enforcement is not configured"))
+		s.fail(w, r, http.StatusServiceUnavailable, errors.New("policy enforcement is not configured"))
 		return
 	}
 	id, ok := policyID(w, r, s)
@@ -158,27 +158,27 @@ func (s *Server) evaluatePolicy(w http.ResponseWriter, r *http.Request) {
 	}
 	var request policyEvaluationRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	item, err := s.store.Policy(r.Context(), id)
 	if err != nil {
-		s.fail(w, policyStoreStatus(err), err)
+		s.fail(w, r, policyStoreStatus(err), err)
 		return
 	}
 	subject, err := s.store.GetPlant(r.Context(), strings.TrimSpace(request.PlantSlug))
 	if err != nil {
-		s.fail(w, policyStoreStatus(err), err)
+		s.fail(w, r, policyStoreStatus(err), err)
 		return
 	}
 	input, err := s.policyRunner.BuildInput(r.Context(), subject, policy.TriggerManual)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	evaluation, created, err := s.policyRunner.Evaluate(r.Context(), item, input)
 	if err != nil && evaluation.ID == uuid.Nil {
-		s.fail(w, http.StatusBadGateway, err)
+		s.fail(w, r, http.StatusBadGateway, err)
 		return
 	}
 	status := http.StatusOK
@@ -191,21 +191,21 @@ func (s *Server) evaluatePolicy(w http.ResponseWriter, r *http.Request) {
 func (s *Server) listPolicyEvaluations(w http.ResponseWriter, r *http.Request) {
 	limit, err := pageLimit(r.URL.Query(), 50)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	var plantID *uuid.UUID
 	if raw := strings.TrimSpace(r.URL.Query().Get("plant_id")); raw != "" {
 		parsed, err := uuid.Parse(raw)
 		if err != nil {
-			s.fail(w, http.StatusBadRequest, fmt.Errorf("plant_id must be a UUID: %w", err))
+			s.fail(w, r, http.StatusBadRequest, fmt.Errorf("plant_id must be a UUID: %w", err))
 			return
 		}
 		plantID = &parsed
 	}
 	evaluations, err := s.store.PolicyEvaluations(r.Context(), plantID, limit)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]any{"evaluations": evaluations, "count": len(evaluations)})
@@ -220,11 +220,11 @@ func decodePolicyRequest(w http.ResponseWriter, r *http.Request, s *Server) (pol
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("decode policy: %w", err))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("decode policy: %w", err))
 		return policyRequest{}, false
 	}
 	if err := request.policy().Valid(); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return policyRequest{}, false
 	}
 	return request, true
@@ -233,7 +233,7 @@ func decodePolicyRequest(w http.ResponseWriter, r *http.Request, s *Server) (pol
 func policyID(w http.ResponseWriter, r *http.Request, s *Server) (uuid.UUID, bool) {
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("policy id must be a UUID: %w", err))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("policy id must be a UUID: %w", err))
 		return uuid.Nil, false
 	}
 	return id, true

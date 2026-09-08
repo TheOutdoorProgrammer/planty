@@ -34,37 +34,37 @@ type askRequest struct {
 // filing a record first would leave a row for a plant never brought home.
 func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 	if s.judge == nil {
-		s.fail(w, http.StatusServiceUnavailable,
+		s.fail(w, r, http.StatusServiceUnavailable,
 			errors.New("asking about a plant needs a judge, and none is configured"))
 		return
 	}
 
 	var req askRequest
 	if err := json.NewDecoder(io.LimitReader(r.Body, MaxPhotoBytes*2)).Decode(&req); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	if req.Message == "" && req.Photo == "" {
-		s.fail(w, http.StatusBadRequest,
+		s.fail(w, r, http.StatusBadRequest,
 			errors.New("send a question, a photograph, or both"))
 		return
 	}
 
 	prior, conversation, err := s.conversationHistory(r.Context(), uuid.Nil, req.ConversationID)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 
 	shown, attached, err := s.attach(r.Context(), conversation, req.Photo, prior)
 	if err != nil {
-		s.fail(w, statusForPhoto(err), err)
+		s.fail(w, r, statusForPhoto(err), err)
 		return
 	}
 
 	answer, err := s.judge.Ask(r.Context(), req.Message, shown, prior, conversation)
 	if err != nil {
-		s.fail(w, http.StatusBadGateway, err)
+		s.fail(w, r, http.StatusBadGateway, err)
 		return
 	}
 
@@ -75,7 +75,7 @@ func (s *Server) ask(w http.ResponseWriter, r *http.Request) {
 		PhotoID:        attached,
 	})
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 

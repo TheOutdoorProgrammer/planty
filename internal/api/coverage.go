@@ -8,7 +8,7 @@ import (
 func (s *Server) evidenceCoverage(w http.ResponseWriter, r *http.Request) {
 	coverage, err := s.store.EvidenceCoverage(r.Context(), time.Now().UTC())
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	complete := 0

@@ -20,12 +20,12 @@ type completeVerdictRequest struct {
 func (s *Server) completeVerdict(w http.ResponseWriter, r *http.Request) {
 	verdictID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	var body completeVerdictRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	completed, err := s.store.CompleteVerdict(r.Context(), store.VerdictCompletion{
@@ -35,7 +35,7 @@ func (s *Server) completeVerdict(w http.ResponseWriter, r *http.Request) {
 		Body:           body.Body,
 	})
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, completed)
@@ -56,12 +56,12 @@ type resolveReminderRequest struct {
 func (s *Server) resolveReminder(w http.ResponseWriter, r *http.Request) {
 	reminderID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	var body resolveReminderRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	resolved, err := s.store.ResolveReminder(r.Context(), store.ReminderResolution{
@@ -72,7 +72,7 @@ func (s *Server) resolveReminder(w http.ResponseWriter, r *http.Request) {
 		Note:           body.Note,
 	})
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, resolved)
@@ -81,12 +81,12 @@ func (s *Server) resolveReminder(w http.ResponseWriter, r *http.Request) {
 func (s *Server) completeReminder(w http.ResponseWriter, r *http.Request) {
 	reminderID, err := uuid.Parse(r.PathValue("id"))
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	var body completeReminderRequest
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	completed, err := s.store.CompleteReminder(r.Context(), store.ReminderResolution{
@@ -95,7 +95,7 @@ func (s *Server) completeReminder(w http.ResponseWriter, r *http.Request) {
 		DueAt:          body.DueAt,
 	})
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	s.ok(w, http.StatusOK, completed)

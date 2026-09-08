@@ -25,17 +25,17 @@ type healthChangeRequest struct {
 func (s *Server) getPlantHealth(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	limit, err := pageLimit(r.URL.Query(), 50)
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	history, err := s.store.HealthHistory(r.Context(), p.ID, limit)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	var current *plant.HealthEvent
@@ -52,12 +52,12 @@ func (s *Server) getPlantHealth(w http.ResponseWriter, r *http.Request) {
 func (s *Server) addHealthEvent(w http.ResponseWriter, r *http.Request) {
 	p, err := s.store.GetPlant(r.Context(), r.PathValue("slug"))
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	var request healthChangeRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	change := plant.HealthChange{
@@ -70,12 +70,12 @@ func (s *Server) addHealthEvent(w http.ResponseWriter, r *http.Request) {
 	case "delta":
 		change.Delta = &request.Value
 	default:
-		s.fail(w, http.StatusBadRequest, errors.New("kind must be baseline or delta"))
+		s.fail(w, r, http.StatusBadRequest, errors.New("kind must be baseline or delta"))
 		return
 	}
 	event, inserted, err := s.store.RecordHealth(r.Context(), change)
 	if err != nil {
-		s.fail(w, http.StatusInternalServerError, err)
+		s.fail(w, r, http.StatusInternalServerError, err)
 		return
 	}
 	status := http.StatusCreated

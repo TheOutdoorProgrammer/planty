@@ -21,24 +21,24 @@ type pushDeviceRequest struct {
 func (s *Server) registerPushDevice(w http.ResponseWriter, r *http.Request) {
 	var request pushDeviceRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("decode push device: %w", err))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("decode push device: %w", err))
 		return
 	}
 	request.Token = strings.ToLower(strings.TrimSpace(request.Token))
 	request.Environment = strings.ToLower(strings.TrimSpace(request.Environment))
 	if request.Token == "" {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("push token is required"))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("push token is required"))
 		return
 	}
 	if _, err := hex.DecodeString(request.Token); err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("push token is not hexadecimal"))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("push token is not hexadecimal"))
 		return
 	}
 	accepted, err := s.store.UpsertPushDevice(r.Context(), store.PushDevice{
 		Token: request.Token, Environment: request.Environment, InstallationID: request.InstallationID,
 	})
 	if err != nil {
-		s.fail(w, http.StatusBadRequest, err)
+		s.fail(w, r, http.StatusBadRequest, err)
 		return
 	}
 	s.ok(w, http.StatusOK, accepted)
@@ -58,7 +58,7 @@ func (s *Server) pushHealth(w http.ResponseWriter, r *http.Request) {
 		if registered, findErr := s.store.PushDeviceForInstallation(r.Context(), environment, id); findErr == nil {
 			body["registration"] = registered
 		} else if findErr != store.ErrNotFound {
-			s.fail(w, http.StatusInternalServerError, findErr)
+			s.fail(w, r, http.StatusInternalServerError, findErr)
 			return
 		}
 	}
@@ -67,21 +67,21 @@ func (s *Server) pushHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) testPush(w http.ResponseWriter, r *http.Request) {
 	if s.pushSender == nil {
-		s.fail(w, http.StatusServiceUnavailable, fmt.Errorf("APNs is not configured"))
+		s.fail(w, r, http.StatusServiceUnavailable, fmt.Errorf("APNs is not configured"))
 		return
 	}
 	var request pushInstallationRequest
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("decode push test: %w", err))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("decode push test: %w", err))
 		return
 	}
 	request.Environment = strings.ToLower(strings.TrimSpace(request.Environment))
 	if request.InstallationID == uuid.Nil {
-		s.fail(w, http.StatusBadRequest, fmt.Errorf("installation id is required"))
+		s.fail(w, r, http.StatusBadRequest, fmt.Errorf("installation id is required"))
 		return
 	}
 	if err := s.pushSender.SendTest(r.Context(), request.InstallationID, request.Environment); err != nil {
-		s.fail(w, http.StatusBadGateway, err)
+		s.fail(w, r, http.StatusBadGateway, err)
 		return
 	}
 	s.ok(w, http.StatusOK, map[string]string{"status": "accepted_by_apns"})

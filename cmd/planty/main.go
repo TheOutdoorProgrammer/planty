@@ -65,7 +65,7 @@ var (
 	commit  = "none"
 )
 
-func run(log *slog.Logger) error {
+func run(log *slog.Logger) (runErr error) {
 	if len(os.Args) < 2 {
 		fmt.Fprintln(os.Stderr, usage)
 		return errors.New("no command given")
@@ -103,6 +103,17 @@ func run(log *slog.Logger) error {
 			log.Error("flush telemetry", "error", err)
 		}
 	}()
+	if os.Args[1] != "serve" {
+		var finish func(error)
+		ctx, finish = telemetry.StartJob(ctx, os.Args[1])
+		defer func() {
+			if runErr != nil {
+				log.ErrorContext(ctx, "job failed", "job", os.Args[1], "error_type", fmt.Sprintf("%T", runErr))
+			}
+			finish(runErr)
+		}()
+		log = telemetry.WithContext(ctx, log)
+	}
 
 	if os.Args[1] == "agent" {
 		store.SilenceMigrations()
