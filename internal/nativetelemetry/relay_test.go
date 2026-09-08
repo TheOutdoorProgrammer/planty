@@ -290,6 +290,26 @@ func TestCrashRetainsOnlyBoundedUnresolvedFrames(t *testing.T) {
 	}
 }
 
+func TestCrashWithoutAppFramesStillExportsFailure(t *testing.T) {
+	for _, operation := range []string{"app.crash", "app.hang"} {
+		envelope := fixtureEnvelope()
+		event := &envelope.Events[0]
+		event.Operation, event.Outcome, event.ErrorClass = operation, "failure", strings.TrimPrefix(operation, "app.")
+		if err := envelope.Validate(time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		relay, _ := New("", nil)
+		logs, traces := relay.records(context.Background(), envelope)
+		wire, _ := proto.Marshal(logs)
+		if !bytes.Contains(wire, []byte("unavailable")) || bytes.Contains(wire, []byte("crash.image.uuid")) || bytes.Contains(wire, []byte("exception.stacktrace")) {
+			t.Fatal("a report without app frames was lost or invented a stack")
+		}
+		if traces.ResourceSpans[0].ScopeSpans[0].Spans[0].Status.Code != 2 || logs.ResourceLogs[0].ScopeLogs[0].LogRecords[0].SeverityNumber != 17 {
+			t.Fatal("minimal crash report lost error severity")
+		}
+	}
+}
+
 func TestQueueLossReportsUseOnlyDedicatedFailureClasses(t *testing.T) {
 	for _, class := range []string{"queue_full", "queue_expired"} {
 		envelope := fixtureEnvelope()

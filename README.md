@@ -108,6 +108,8 @@ The iOS app records startup, notification opens, API outcomes and MetricKit cras
 
 Delayed diagnostics are logged at receipt time so Loki's ingestion limits do not discard old or out-of-order events. The original occurrence time remains in `event.timestamp` and the trace. Symbol lookup has a shared one-second budget per batch; a slow symbol store leaves explicit unresolved frames while the relay delivers the diagnostic.
 
+A MetricKit crash or hang without supported app-image frames still produces a failure event with its original release and build. Its symbolication status is `unavailable`; no image UUID or stack is invented.
+
 The release workflow checks that the signed app and its dSYM have matching image UUIDs, then requires successful private symbol publication before staging the IPA for distribution. Dry runs validate that match without publishing symbols. Deploy the symbol endpoint before the first native-instrumented release.
 
 MetricKit reports platform architecture, which can differ from the app slice. If an `arm64e` object is unavailable, symbolication may use a trusted `arm64` object with the exact same binary UUID. The object header is validated before LLVM runs; other architecture or UUID mismatches remain unresolved.

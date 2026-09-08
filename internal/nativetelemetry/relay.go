@@ -125,7 +125,7 @@ func (e Envelope) Validate(now time.Time) error {
 			return invalid
 		}
 		if event.Operation == "app.crash" || event.Operation == "app.hang" {
-			if event.Crash == nil || event.Outcome != "failure" || event.ErrorClass != strings.TrimPrefix(event.Operation, "app.") {
+			if event.Outcome != "failure" || event.ErrorClass != strings.TrimPrefix(event.Operation, "app.") {
 				return invalid
 			}
 		} else if event.Crash != nil {
@@ -287,6 +287,8 @@ func (r *Relay) records(ctx context.Context, envelope Envelope) (*collectorlogs.
 		}
 		if event.Crash != nil {
 			attributes = append(attributes, r.crashAttributes(ctx, *event.Crash)...)
+		} else if event.Operation == "app.crash" || event.Operation == "app.hang" {
+			attributes = append(attributes, textAttribute("symbolication.status", "unavailable"))
 		}
 		end := uint64(event.Timestamp.UnixNano())
 		start := uint64(event.Timestamp.Add(-time.Duration(event.DurationMS) * time.Millisecond).UnixNano())
