@@ -56,10 +56,14 @@ final class PlantyTelemetry {
         operation: NativeOperation, outcome: NativeOutcome = .success,
         durationMS: Int = 0, errorClass: NativeErrorClass = .none
     ) async {
-        guard let release else { return }
-        await accept(NativeEvent(
+        await record(NativeEvent(
             operation: operation, outcome: outcome, durationMS: durationMS, errorClass: errorClass
-        ), release: release)
+        ))
+    }
+
+    func record(_ event: NativeEvent) async {
+        guard let release else { return }
+        await accept(event, release: release)
     }
 
     func pauseDelivery() {
@@ -75,20 +79,22 @@ final class PlantyTelemetry {
     }
 
     func record(error: PlantyError, durationMS: Int = 0) async {
-        let classification: NativeErrorClass
-        switch error {
-        case .unauthorized: classification = .unauthorized
-        case .offline, .transport: classification = .transport
-        case .timedOut: classification = .timeout
-        case .server: classification = .server
-        case .decoding: classification = .decoding
-        case .cancelled: classification = .none
-        default: classification = .other
-        }
         await record(
             operation: .apiRequest, outcome: error == .cancelled ? .cancelled : .failure,
-            durationMS: durationMS, errorClass: classification
+            durationMS: durationMS, errorClass: Self.classification(for: error)
         )
+    }
+
+    nonisolated static func classification(for error: PlantyError) -> NativeErrorClass {
+        switch error {
+        case .unauthorized: .unauthorized
+        case .offline, .transport: .transport
+        case .timedOut: .timeout
+        case .server: .server
+        case .decoding: .decoding
+        case .cancelled: .none
+        default: .other
+        }
     }
 
     private func accept(_ event: NativeEvent, release: NativeRelease) async {

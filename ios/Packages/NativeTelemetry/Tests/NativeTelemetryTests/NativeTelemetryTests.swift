@@ -25,6 +25,15 @@ actor RecordingTransport: NativeTransport {
 struct NativeTelemetryTests {
     private let origin = NativeRelease(release: "1.1", build: "165")!
 
+    @Test func replayPreservesSubsecondParentSpanTiming() throws {
+        let timestamp = Date(timeIntervalSince1970: 1_789_000_000.375)
+        let event = NativeEvent(timestamp: timestamp, operation: .apiRequest, durationMS: 125)
+        let encoded = try NativeCoding.encoder().encode(event)
+        let replay = try NativeCoding.decoder().decode(NativeEvent.self, from: encoded)
+        #expect(abs(replay.timestamp.timeIntervalSince(timestamp)) < 0.001)
+        #expect(replay.durationMS == 125)
+    }
+
     @Test func metricKitProjectionDropsPrivateFieldsAndOtherBinaries() throws {
         let fixture = Data("""
         {"private":"notification-body-secret", "callStackTree":{"callStacks":[
@@ -123,7 +132,7 @@ struct NativeTelemetryTests {
         try await queue.enqueue(NativeEvent(
             timestamp: now.addingTimeInterval(-31 * 86_400), operation: .appStart
         ), release: origin)
-        #expect(await queue.counts().pending == 0)
+        #expect(await queue.counts().pending == 1)
         for _ in 0...NativeTelemetryQueue.capacity {
             try await queue.enqueue(NativeEvent(operation: .apiRequest), release: origin)
         }

@@ -6,6 +6,7 @@ public enum NativeOperation: String, Codable, Sendable {
     case apiRequest = "api.request"
     case appCrash = "app.crash"
     case appHang = "app.hang"
+    case telemetryDelivery = "telemetry.delivery"
 }
 
 public enum NativeOutcome: String, Codable, Sendable {
@@ -15,6 +16,8 @@ public enum NativeOutcome: String, Codable, Sendable {
 public enum NativeErrorClass: String, Codable, Sendable {
     case none = ""
     case transport, timeout, unauthorized, server, decoding, crash, hang, other
+    case queueFull = "queue_full"
+    case queueExpired = "queue_expired"
 }
 
 public enum NativeArchitecture: String, Codable, Sendable {
@@ -114,14 +117,27 @@ public struct NativeEnvelope: Codable, Sendable {
 public enum NativeCoding {
     public static func encoder() -> JSONEncoder {
         let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
+        let formatter = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+        encoder.dateEncodingStrategy = .custom { date, encoder in
+            var value = encoder.singleValueContainer()
+            try value.encode(formatter.format(date))
+        }
         encoder.outputFormatting = [.sortedKeys]
         return encoder
     }
 
     public static func decoder() -> JSONDecoder {
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        let fractional = Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+        let legacy = Date.ISO8601FormatStyle()
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let value = try decoder.singleValueContainer()
+            let text = try value.decode(String.self)
+            guard let date = (try? fractional.parse(text)) ?? (try? legacy.parse(text)) else {
+                throw DecodingError.dataCorruptedError(in: value, debugDescription: "Invalid telemetry timestamp")
+            }
+            return date
+        }
         return decoder
     }
 }
