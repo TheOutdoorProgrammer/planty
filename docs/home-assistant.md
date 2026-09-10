@@ -16,6 +16,8 @@ Planty does not call Home Assistant notification services or `script.announce`.
 
 Planty owns daily on/off schedules with multiple windows for registered semantic fans. Disable any recurring Home Assistant automation for the same entity so two controllers cannot fight. Home Assistant may retain an independent maximum-on watchdog sized beyond the longest intended Planty window, because a physical backstop is not a second source of recurring intent.
 
+The `reconcile-actuators` command retries failed reconciliation passes every 15 seconds within a two-minute recovery budget so a brief Home Assistant restart can finish before the job exits. Each pass reads current schedules, leases and device states again; it never replays a stale `turn_on` request. Only an explicit matching `on` or `off` state skips the service call: `unknown` and `unavailable` do not establish that a device is off. Every failed pass produces an error log and span, and a failed final pass or cancellation still fails the job. Existing bounded shutdown cleanup can finish after the recovery deadline. The API's separate reconciliation loop keeps running independently.
+
 ## Mushroom care
 
 Misting is a visual decision: mist when the surface looks dry and no water is beading on the caps.

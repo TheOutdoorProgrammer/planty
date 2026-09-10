@@ -208,8 +208,12 @@ func (c ActuatorControl) reconcileSchedules(ctx context.Context, now time.Time) 
 			continue
 		}
 		if canRead {
+			desiredState := "off"
+			if desired {
+				desiredState = "on"
+			}
 			state, err := reader.State(ctx, actuator.EntityID)
-			if err == nil && (state.State == "on") == desired {
+			if err == nil && state.State == desiredState {
 				continue
 			}
 		}

@@ -147,8 +147,7 @@ func run(log *slog.Logger) (runErr error) {
 	case "verify-water":
 		return job.VerifyWater{Store: db, Log: log, Notifications: notifications}.Run(ctx)
 	case "reconcile-actuators":
-		_, err := actuatorControl(db, log).Reconcile(ctx, time.Now().UTC())
-		return err
+		return runActuatorReconciliation(ctx, actuatorControl(db, log), log)
 	case "prune-photos":
 		return prunePhotos(ctx, db, log)
 	case "daily":
