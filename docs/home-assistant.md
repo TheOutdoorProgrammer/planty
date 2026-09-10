@@ -12,6 +12,8 @@ Home Assistant supplies physical-world inputs and optional actuator calls.
 The configured long-lived token needs only the Home Assistant permissions required for those entities and the optional pump switch.
 Planty does not call Home Assistant notification services or `script.announce`.
 
+Sensor ingest tolerates a restarting Home Assistant listener by retrying connection refusals for up to two minutes, with delays growing from five to twenty seconds. The request and retry waits share that deadline and respect earlier cancellation. Only the states read is retried, before any readings are stored; successful recovery records the newly fetched values once. Retry attempts emit a warning and a trace event. An exhausted deadline still fails the job with the last connection error. Authentication, response decoding, other transport errors, and database writes fail immediately.
+
 ## Greenhouse airflow
 
 Planty owns daily on/off schedules with multiple windows for registered semantic fans. Disable any recurring Home Assistant automation for the same entity so two controllers cannot fight. Home Assistant may retain an independent maximum-on watchdog sized beyond the longest intended Planty window, because a physical backstop is not a second source of recurring intent.
