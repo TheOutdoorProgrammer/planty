@@ -5,17 +5,32 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"syscall"
 	"time"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/ha"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
 	"github.com/TheOutdoorProgrammer/planty/internal/store"
+	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
+
+type ingestStore interface {
+	SensorLinks(context.Context, *uuid.UUID) ([]plant.SensorLink, error)
+	RecordReading(context.Context, plant.Reading) error
+	MoistureRoseAfter(context.Context, uuid.UUID, time.Time, time.Duration) (bool, error)
+}
+
+type ingestHomeAssistant interface {
+	States(context.Context) ([]ha.State, error)
+}
 
 // Ingest pulls the current value of every linked Home Assistant entity.
 type Ingest struct {
-	Store *store.Store
-	HA    *ha.Client
+	Store ingestStore
+	HA    ingestHomeAssistant
 	Log   *slog.Logger
 }
 
@@ -29,7 +44,7 @@ func (i Ingest) Run(ctx context.Context) error {
 		return nil
 	}
 
-	states, err := i.HA.States(ctx)
+	states, err := i.readStates(ctx)
 	if err != nil {
 		return fmt.Errorf("ha states: %w", err)
 	}
@@ -67,6 +82,53 @@ func (i Ingest) Run(ctx context.Context) error {
 
 	i.Log.Info("ingest complete", "stored", stored, "skipped", skipped)
 	return nil
+}
+
+func (i Ingest) readStates(ctx context.Context) (states []ha.State, err error) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
+	defer cancel()
+	ctx, span := otel.Tracer("planty/jobs").Start(ctx, "planty.ingest.states")
+	attempts := 0
+	defer func() {
+		span.SetAttributes(attribute.Int("ha.attempts", attempts))
+		if err != nil {
+			span.SetStatus(codes.Error, "read states failed")
+			span.SetAttributes(attribute.String("error.type", fmt.Sprintf("%T", err)))
+		}
+		span.End()
+	}()
+
+	delay := 5 * time.Second
+	var lastErr error
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, errors.Join(err, lastErr)
+		}
+		attempts++
+		states, err = i.HA.States(ctx)
+		if err == nil {
+			return states, nil
+		}
+		if ctx.Err() != nil {
+			return nil, errors.Join(ctx.Err(), err, lastErr)
+		}
+		// A restarting listener can outlast Kubernetes' short job retry window.
+		// Retry only this read, before any readings are written.
+		if !errors.Is(err, syscall.ECONNREFUSED) {
+			return nil, err
+		}
+		lastErr = err
+		span.AddEvent("connection refused; retrying states")
+		i.Log.WarnContext(ctx, "home assistant connection refused; retrying states", "attempt", attempts, "retry_in", delay)
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return nil, errors.Join(ctx.Err(), lastErr)
+		case <-timer.C:
+		}
+		delay = min(delay*2, 20*time.Second)
+	}
 }
 
 // WateringWindow is how long water has to show up in the soil before the claim
