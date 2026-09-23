@@ -75,8 +75,10 @@ type imageURL struct {
 
 type chatResponse struct {
 	Choices []struct {
-		Message struct {
+		FinishReason string `json:"finish_reason"`
+		Message      struct {
 			Content   string     `json:"content"`
+			Refusal   string     `json:"refusal"`
 			Reasoning string     `json:"reasoning_content"`
 			ToolCalls []toolCall `json:"tool_calls"`
 		} `json:"message"`
@@ -105,8 +107,8 @@ func (b *openaiBackend) Judge(ctx context.Context, req Request) (Outcome, error)
 	return b.converse(ctx, req, messages, box, sessionID)
 }
 
-// call performs one round trip. finish_reason is deliberately ignored: luna
-// returns null on success, so branching on it would reject good answers.
+// call performs one round trip. A null finish_reason is valid on successful
+// responses from providers such as luna; it only diagnoses missing answers.
 func (b *openaiBackend) call(ctx context.Context, body chatRequest) (chatResponse, error) {
 	return b.callWithSession(ctx, body, uuid.Nil)
 }
@@ -162,9 +164,32 @@ func (b *openaiBackend) callWithSession(ctx context.Context, body chatRequest, s
 		return chatResponse{}, fmt.Errorf("%s: %s", b.provider.ID, decoded.Error.Message)
 	}
 	if len(decoded.Choices) == 0 {
-		return chatResponse{}, fmt.Errorf("%s returned no answer", b.provider.ID)
+		return chatResponse{}, b.emptyAnswer(decoded)
 	}
 	return decoded, nil
+}
+
+func (b *openaiBackend) emptyAnswer(reply chatResponse) error {
+	reason := "no choices"
+	if len(reply.Choices) > 0 {
+		choice := reply.Choices[0]
+		if choice.Message.Refusal != "" || choice.FinishReason == "content_filter" {
+			return fmt.Errorf("%s: %w", b.provider.ID, ErrRefused)
+		}
+		switch choice.FinishReason {
+		case "length":
+			reason = "completion token limit reached"
+		case "stop":
+			reason = "empty content after stop"
+		case "tool_calls", "function_call":
+			reason = "missing tool calls"
+		case "":
+			reason = "missing finish reason"
+		default:
+			reason = "unknown finish reason"
+		}
+	}
+	return fmt.Errorf("%s returned no answer: %s", b.provider.ID, reason)
 }
 
 func permanentHTTPStatus(status int) bool {

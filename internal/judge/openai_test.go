@@ -3,6 +3,7 @@ package judge
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -92,6 +93,63 @@ func TestTheSchemaAndEffortReachTheWire(t *testing.T) {
 	}
 	if body.Messages[0].Role != "system" {
 		t.Errorf("the system prompt is not first: %q", body.Messages[0].Role)
+	}
+}
+
+func TestEmptyOpenAIAnswersHaveSafeDiagnostics(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		response string
+		want     string
+		refused  bool
+	}{
+		{"no choices", `{"choices":[]}`, "no choices", false},
+		{"length", `{"choices":[{"finish_reason":"length","message":{"reasoning_content":"private reasoning"}}]}`, "completion token limit reached", false},
+		{"refusal", `{"choices":[{"finish_reason":"stop","message":{"refusal":"private refusal"}}]}`, "model declined the request", true},
+		{"filtered", `{"choices":[{"finish_reason":"content_filter","message":{}}]}`, "model declined the request", true},
+		{"stop", `{"choices":[{"finish_reason":"stop","message":{"content":"  "}}]}`, "empty content after stop", false},
+		{"tool calls", `{"choices":[{"finish_reason":"tool_calls","message":{}}]}`, "missing tool calls", false},
+		{"null", `{"choices":[{"finish_reason":null,"message":{}}]}`, "missing finish reason", false},
+		{"unknown", `{"choices":[{"finish_reason":"private finish reason","message":{"reasoning_content":"private reasoning"}}]}`, "unknown finish reason", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			backend, seen := serve(t, tc.response)
+			_, err := backend.Judge(context.Background(), Request{Turns: []Turn{ask(text("synthetic"))}})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want %q", err, tc.want)
+			}
+			if strings.Contains(err.Error(), "private") {
+				t.Fatalf("private diagnostic leaked: %v", err)
+			}
+			if errors.Is(err, ErrRefused) != tc.refused {
+				t.Fatalf("refusal classification = %v", err)
+			}
+			if len(*seen) != 1 {
+				t.Fatalf("empty answer retried %d times", len(*seen))
+			}
+		})
+	}
+}
+
+func TestNullOpenAIFinishReasonPreservesSuccessfulAnswer(t *testing.T) {
+	backend, _ := serve(t, `{"choices":[{"finish_reason":null,"message":{"content":"ok"}}]}`)
+	out, err := backend.Judge(context.Background(), Request{Turns: []Turn{ask(text("synthetic"))}})
+	if err != nil || out.Answer != "ok" {
+		t.Fatalf("successful null finish reason rejected: %+v, %v", out, err)
+	}
+}
+
+func TestRenderingEmptyOpenAIAnswerRetainsFinishDiagnostic(t *testing.T) {
+	backend, seen := serve(t, replied(t, "Initial assessment"), `{"choices":[{"finish_reason":"length","message":{}}]}`)
+	_, err := backend.Judge(context.Background(), Request{
+		Turns: []Turn{ask(text("synthetic"))}, Schema: probeSchema,
+		Acting: &Acting{Binary: "/bin/echo", Refuse: func(string, []string) string { return "" }},
+	})
+	if err == nil || !strings.Contains(err.Error(), "completion token limit reached") {
+		t.Fatalf("lost render diagnostic: %v", err)
+	}
+	if len(*seen) != 2 {
+		t.Fatalf("render retried acting calls: %d", len(*seen))
 	}
 }
 
