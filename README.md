@@ -67,6 +67,7 @@ The overlay can add household context, priorities, and style preferences, while 
 
 Providers are declared with `PLANTY_PROVIDERS`.
 The configured fallback selected by `PLANTY_JUDGE` can use the Claude Code subscription or the direct Anthropic API, while declared OpenAI-compatible providers use the shared chat-completions harness.
+Claude Code failures retain a bounded diagnostic from the structured output, including organization-disabled subscription access and HTTP error status, without logging raw provider messages, prompts, or stderr.
 Daily assessment and consultation are acting jobs, so they require the Claude Code CLI or OpenAI-compatible harness; the direct Anthropic API fallback remains available only to one-shot jobs that do not execute Planty tools.
 Current photographs can reach any verified vision model, and acting providers must advertise offered-photo access before they can be assigned to consultations.
 The Claude Code CLI and OpenAI-compatible harness can selectively open offered history; the direct Anthropic API remains explicitly ineligible.

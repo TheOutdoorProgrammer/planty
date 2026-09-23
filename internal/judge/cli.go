@@ -30,6 +30,7 @@ type envelope struct {
 	IsError          bool            `json:"is_error"`
 	Subtype          string          `json:"subtype"`
 	StopReason       string          `json:"stop_reason"`
+	APIErrorStatus   int             `json:"api_error_status"`
 	Result           string          `json:"result"`
 	StructuredOutput json.RawMessage `json:"structured_output"`
 }
@@ -88,11 +89,16 @@ func (b *cliBackend) run(ctx context.Context, req Request, resuming bool) (Outco
 	cmd.Env = environment(req.Live)
 
 	if err := cmd.Run(); err != nil {
-		complaint := strings.TrimSpace(stderr.String())
-		if resuming && mentionsAMissingSession(complaint) {
+		if ctx.Err() != nil {
+			return Outcome{}, fmt.Errorf("claude: %w", ctx.Err())
+		}
+		if resuming && mentionsAMissingSession(stderr.String()) {
 			return Outcome{}, errSessionGone
 		}
-		return Outcome{}, fmt.Errorf("claude: %w: %s", err, complaint)
+		if _, diagnostic := outcomeFrom(stdout.Bytes()); diagnostic != nil {
+			return Outcome{}, fmt.Errorf("claude: %w: %w", err, diagnostic)
+		}
+		return Outcome{}, fmt.Errorf("claude: %w", err)
 	}
 	out, err := outcomeFrom(stdout.Bytes())
 	if err != nil {
@@ -319,7 +325,7 @@ func extensionFor(media string) string {
 func answerFrom(raw []byte) (string, error) {
 	var wrapper envelope
 	if err := json.Unmarshal(raw, &wrapper); err != nil {
-		return "", fmt.Errorf("decode claude output: %w: %s", err, truncate(raw))
+		return "", errors.New("decode claude output: invalid JSON")
 	}
 	return answerFromEnvelope(wrapper)
 }
@@ -331,7 +337,7 @@ func answerFromEnvelope(wrapper envelope) (string, error) {
 		return "", ErrRefused
 	}
 	if wrapper.IsError || wrapper.Subtype != "success" {
-		return "", fmt.Errorf("claude reported %s: %s", wrapper.Subtype, wrapper.Result)
+		return "", claudeFailure(wrapper, "")
 	}
 	if len(wrapper.StructuredOutput) > 0 {
 		return string(wrapper.StructuredOutput), nil
@@ -340,6 +346,35 @@ func answerFromEnvelope(wrapper envelope) (string, error) {
 		return "", fmt.Errorf("claude returned no answer")
 	}
 	return wrapper.Result, nil
+}
+
+// Failure fields are provider-controlled too. Only fixed classifications and
+// valid HTTP error statuses may reach logs; result text can contain secrets.
+func claudeFailure(wrapper envelope, code string) error {
+	reason := "execution failed"
+	switch code {
+	case "oauth_org_not_allowed":
+		reason = "organization disabled Claude subscription access (oauth_org_not_allowed)"
+	case "authentication_error":
+		reason = "authentication failed"
+	case "rate_limit_error":
+		reason = "rate limited"
+	case "overloaded_error":
+		reason = "provider overloaded"
+	default:
+		switch wrapper.Subtype {
+		case "error_max_turns":
+			reason = "maximum turns reached"
+		case "error_max_budget_usd":
+			reason = "maximum budget reached"
+		case "error_max_structured_output_retries":
+			reason = "structured output retries exhausted"
+		}
+	}
+	if wrapper.APIErrorStatus >= 400 && wrapper.APIErrorStatus <= 599 {
+		return fmt.Errorf("claude: %s (HTTP %d)", reason, wrapper.APIErrorStatus)
+	}
+	return fmt.Errorf("claude: %s", reason)
 }
 
 func truncate(raw []byte) string {
