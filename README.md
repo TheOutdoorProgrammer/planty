@@ -62,6 +62,7 @@ An active scheduled or manual run is reused so repeated taps do not duplicate mo
 
 Planty chooses a model per job rather than forcing assessment, identification, consultation, postmortem, and owner-update work through one model.
 The iOS Settings screen persists those assignments, and the service rejects a model that lacks the vision, schema, or tool capabilities a job requires.
+Only jobs without an assignment use the configured fallback. An invalid stored assignment or a failed database lookup stops the request with an error instead of silently selecting another provider.
 Each model job may also carry a user-editable instruction overlay.
 The overlay can add household context, priorities, and style preferences, while safety rules, evidence requirements, response schemas, and tool authority remain immutable in code.
 

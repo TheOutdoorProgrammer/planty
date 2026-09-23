@@ -2,10 +2,12 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/TheOutdoorProgrammer/planty/internal/judge"
 	"github.com/TheOutdoorProgrammer/planty/internal/plant"
+	"github.com/jackc/pgx/v5"
 )
 
 // ModelAssignment is which model answers one job.
@@ -66,21 +68,26 @@ func (s *Store) ClearModelAssignment(ctx context.Context, job judge.Job) error {
 	return err
 }
 
-// For names the model a job should use, satisfying judge.Assignments. A row
-// naming something the catalogue no longer offers is ignored rather than
-// fatal, so removing a model from the table cannot strand a running service.
-func (s *Store) For(ctx context.Context, job judge.Job) (judge.Model, bool) {
+// For names the model a job should use, satisfying judge.Assignments. Only
+// an absent assignment permits fallback; invalid settings must be repaired.
+func (s *Store) For(ctx context.Context, job judge.Job) (judge.Model, bool, error) {
 	var provider, model string
 	err := s.pool.QueryRow(ctx,
 		`SELECT provider, model FROM model_assignments WHERE job = $1`,
 		string(job)).Scan(&provider, &model)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return judge.Model{}, false, nil
+	}
 	if err != nil {
-		return judge.Model{}, false
+		return judge.Model{}, false, err
 	}
 
 	found, ok := judge.Lookup(provider, model)
-	if !ok || found.CanDo(job) != nil {
-		return judge.Model{}, false
+	if !ok {
+		return judge.Model{}, false, fmt.Errorf("%w: there is no model %s/%s", plant.ErrInvalid, provider, model)
 	}
-	return found, true
+	if err := found.CanDo(job); err != nil {
+		return judge.Model{}, false, fmt.Errorf("%w: %s", plant.ErrInvalid, err)
+	}
+	return found, true, nil
 }
