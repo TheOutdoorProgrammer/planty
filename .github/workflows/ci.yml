@@ -132,7 +132,7 @@ jobs:
           PLANTY_DATABASE_URL: postgres://postgres:planty@localhost:5432/planty?sslmode=disable
         run: go run ./cmd/planty seed
 
-      - name: Store integration tests
+      - name: Store and job integration tests
         env:
           PLANTY_TEST_DATABASE_URL: postgres://postgres:planty@localhost:5432/planty?sslmode=disable
-        run: go test -race ./internal/store/...
+        run: go test -race ./internal/store/... ./internal/job/...

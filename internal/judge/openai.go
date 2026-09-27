@@ -148,6 +148,10 @@ func (b *openaiBackend) callWithSession(ctx context.Context, body chatRequest, s
 		return chatResponse{}, err
 	}
 	if response.StatusCode >= 300 {
+		if b.provider.ID == "opencode-go" && response.StatusCode == http.StatusTooManyRequests &&
+			decoded.Error != nil && decoded.Error.Message == "Go usage limit exceeded" {
+			return chatResponse{}, permanent(fmt.Errorf("%s returned 429: %w", b.provider.ID, ErrQuotaExhausted))
+		}
 		message := truncate(payload)
 		if decoded.Error != nil {
 			message = decoded.Error.Message

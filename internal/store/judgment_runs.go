@@ -33,8 +33,9 @@ type JudgmentResult struct {
 
 // JudgmentResultInput is what a worker learned after judging one plant.
 type JudgmentResultInput struct {
-	PlantID        uuid.UUID
-	Succeeded      bool
+	PlantID   uuid.UUID
+	Succeeded bool
+	// Zero on a failed result records deferred work without inventing an attempt.
 	Attempts       int
 	Model          string
 	OriginalError  string
@@ -78,7 +79,10 @@ func (s *Store) RecordJudgmentResult(ctx context.Context, id uuid.UUID, succeede
 // aggregate counts in one transaction. An existing failed row may be retried;
 // an existing success is immutable so a retry cannot duplicate good work.
 func (s *Store) RecordJudgmentPlantResult(ctx context.Context, id uuid.UUID, result JudgmentResultInput) error {
-	if result.Attempts < 1 {
+	if result.Attempts < 0 {
+		return fmt.Errorf("judgment attempts cannot be negative")
+	}
+	if result.Succeeded && result.Attempts == 0 {
 		result.Attempts = 1
 	}
 	tx, err := s.pool.Begin(ctx)
@@ -131,7 +135,7 @@ func (s *Store) RecordJudgmentPlantResult(ctx context.Context, id uuid.UUID, res
 			UPDATE judgment_results SET
 				succeeded = $3,
 				attempts = attempts + $4,
-				model = $5,
+				model = CASE WHEN $4 = 0 THEN model ELSE $5 END,
 				original_error = CASE WHEN original_error = '' THEN $6 ELSE original_error END,
 				original_output = CASE WHEN original_output = '' THEN $7 ELSE original_output END,
 				final_error = $8,
