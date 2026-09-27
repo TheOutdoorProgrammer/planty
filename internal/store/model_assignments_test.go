@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"testing"
@@ -12,8 +13,8 @@ import (
 func TestAnAssignmentRoundTripsAndIsReadBackAsAModel(t *testing.T) {
 	s, ctx := testStore(t)
 
-	if _, ok := s.For(ctx, judge.JobAssess); ok {
-		t.Fatal("a job had an assignment before one was made")
+	if _, ok, err := s.For(ctx, judge.JobAssess); ok || err != nil {
+		t.Fatalf("unassigned job: found=%v err=%v", ok, err)
 	}
 
 	err := s.SetModelAssignment(ctx, ModelAssignment{
@@ -23,9 +24,9 @@ func TestAnAssignmentRoundTripsAndIsReadBackAsAModel(t *testing.T) {
 		t.Fatalf("SetModelAssignment: %v", err)
 	}
 
-	got, ok := s.For(ctx, judge.JobAssess)
-	if !ok {
-		t.Fatal("the assignment did not come back")
+	got, ok, err := s.For(ctx, judge.JobAssess)
+	if !ok || err != nil {
+		t.Fatalf("the assignment did not come back: found=%v err=%v", ok, err)
 	}
 	if got.Ref() != "opencode-go/qwen3.8-max" {
 		t.Errorf("got %s", got.Ref())
@@ -45,8 +46,8 @@ func TestAnAssignmentRoundTripsAndIsReadBackAsAModel(t *testing.T) {
 	if err := s.ClearModelAssignment(ctx, judge.JobAssess); err != nil {
 		t.Fatalf("ClearModelAssignment: %v", err)
 	}
-	if _, ok := s.For(ctx, judge.JobAssess); ok {
-		t.Error("the assignment survived being cleared")
+	if _, ok, err := s.For(ctx, judge.JobAssess); ok || err != nil {
+		t.Errorf("cleared assignment: found=%v err=%v", ok, err)
 	}
 }
 
@@ -62,9 +63,9 @@ func TestReassigningAJobReplacesRatherThanDuplicates(t *testing.T) {
 		}
 	}
 
-	got, ok := s.For(ctx, judge.JobIdentify)
-	if !ok || got.ID != "mimo-v2.5" {
-		t.Errorf("the second assignment did not win: %+v", got)
+	got, ok, err := s.For(ctx, judge.JobIdentify)
+	if !ok || err != nil || got.ID != "mimo-v2.5" {
+		t.Errorf("the second assignment did not win: %+v, %v", got, err)
 	}
 }
 
@@ -93,20 +94,49 @@ func TestTheStoreRefusesAModelThatCannotDoTheJob(t *testing.T) {
 	}
 }
 
-// A row naming something the catalogue stopped offering must not strand the
-// service; the job quietly falls back to its default instead.
-func TestARowNamingAnUnknownModelFallsBack(t *testing.T) {
-	s, ctx := testStore(t)
+func TestInvalidStoredAssignmentsReturnAnError(t *testing.T) {
+	for _, tc := range []struct {
+		name, provider, model, reason string
+	}{
+		{"retired model", "opencode-go", "retired-model", "there is no model"},
+		{"unknown provider", "retired-provider", "qwen3.8-max", "there is no model"},
+		{"missing vision", "opencode-go", "deepseek-v4-flash", "images"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, ctx := testStore(t)
+			if _, err := s.pool.Exec(ctx,
+				`INSERT INTO model_assignments (job, provider, model) VALUES ($1, $2, $3)
+				 ON CONFLICT (job) DO UPDATE SET provider = EXCLUDED.provider, model = EXCLUDED.model`,
+				string(judge.JobAssess), tc.provider, tc.model); err != nil {
+				t.Fatalf("seed: %v", err)
+			}
+			t.Cleanup(func() { _ = s.ClearModelAssignment(ctx, judge.JobAssess) })
 
-	if _, err := s.pool.Exec(ctx,
-		`INSERT INTO model_assignments (job, provider, model) VALUES ($1, $2, $3)
-		 ON CONFLICT (job) DO UPDATE SET provider = EXCLUDED.provider, model = EXCLUDED.model`,
-		string(judge.JobPostmortem), "opencode-go", "retired-model"); err != nil {
-		t.Fatalf("seed: %v", err)
+			_, ok, err := s.For(ctx, judge.JobAssess)
+			if ok || !errors.Is(err, plant.ErrInvalid) {
+				t.Fatalf("invalid assignment: found=%v err=%v", ok, err)
+			}
+			if !strings.Contains(err.Error(), tc.reason) {
+				t.Errorf("error does not explain invalid assignment: %v", err)
+			}
+		})
 	}
-	t.Cleanup(func() { _ = s.ClearModelAssignment(ctx, judge.JobPostmortem) })
+}
 
-	if _, ok := s.For(ctx, judge.JobPostmortem); ok {
-		t.Error("a row naming an unknown model was honoured")
-	}
+func TestAssignmentReadFailureDoesNotLookUnassigned(t *testing.T) {
+	t.Run("canceled context", func(t *testing.T) {
+		s, ctx := testStore(t)
+		ctx, cancel := context.WithCancel(ctx)
+		cancel()
+		if _, ok, err := s.For(ctx, judge.JobAssess); ok || !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled lookup: found=%v err=%v", ok, err)
+		}
+	})
+	t.Run("closed database", func(t *testing.T) {
+		s, ctx := testStore(t)
+		s.Close()
+		if _, ok, err := s.For(ctx, judge.JobAssess); ok || err == nil {
+			t.Fatalf("unavailable lookup: found=%v err=%v", ok, err)
+		}
+	})
 }

@@ -69,11 +69,14 @@ An active scheduled or manual run is reused so repeated taps do not duplicate mo
 
 Planty chooses a model per job rather than forcing assessment, identification, consultation, postmortem, and owner-update work through one model.
 The iOS Settings screen persists those assignments, and the service rejects a model that lacks the vision, schema, or tool capabilities a job requires.
+Only jobs without an assignment use the configured fallback. An invalid stored assignment or a failed database lookup stops the request with an error instead of silently selecting another provider.
 Each model job may also carry a user-editable instruction overlay.
 The overlay can add household context, priorities, and style preferences, while safety rules, evidence requirements, response schemas, and tool authority remain immutable in code.
 
 Providers are declared with `PLANTY_PROVIDERS`.
 The configured fallback selected by `PLANTY_JUDGE` can use the Claude Code subscription or the direct Anthropic API, while declared OpenAI-compatible providers use the shared chat-completions harness.
+Claude Code failures retain a bounded diagnostic from the structured output, including organization-disabled subscription access and HTTP error status, without logging raw provider messages, prompts, or stderr.
+Empty OpenAI-compatible replies report a bounded finish-reason diagnostic, distinguishing token limits, refusals, missing choices, and missing tool calls without exposing provider content.
 Daily assessment and consultation are acting jobs, so they require the Claude Code CLI or OpenAI-compatible harness; the direct Anthropic API fallback remains available only to one-shot jobs that do not execute Planty tools.
 Current photographs can reach any verified vision model, and acting providers must advertise offered-photo access before they can be assigned to consultations.
 The Claude Code CLI and OpenAI-compatible harness can selectively open offered history; the direct Anthropic API remains explicitly ineligible.

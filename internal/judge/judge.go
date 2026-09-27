@@ -40,9 +40,10 @@ type Judge struct {
 	acting *Acting
 }
 
-// Assignments names the model a job should use.
+// Assignments names the model a job should use. Only an absent assignment
+// returns false with no error; lookup failures must not select the fallback.
 type Assignments interface {
-	For(ctx context.Context, job Job) (Model, bool)
+	For(ctx context.Context, job Job) (Model, bool, error)
 }
 
 // Assigned attaches the store the assignments live in.
@@ -73,7 +74,11 @@ func (j *Judge) dispatch(ctx context.Context, req Request) (Outcome, error) {
 	backend, model := j.fallback, ""
 
 	if j.assigned != nil && req.Job != "" {
-		if chosen, ok := j.assigned.For(ctx, req.Job); ok {
+		chosen, ok, err := j.assigned.For(ctx, req.Job)
+		if err != nil {
+			return Outcome{}, fmt.Errorf("model assignment for %s: %w", req.Job, err)
+		}
+		if ok {
 			if err := chosen.CanDo(req.Job); err != nil {
 				return Outcome{}, err
 			}

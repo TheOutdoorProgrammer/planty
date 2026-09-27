@@ -355,7 +355,7 @@ func (b *openaiBackend) converse(ctx context.Context, req Request, messages []ch
 		}
 		if len(answer.ToolCalls) == 0 {
 			if strings.TrimSpace(answer.Content) == "" {
-				return Outcome{}, fmt.Errorf("%s returned no answer", b.provider.ID)
+				return Outcome{}, b.emptyAnswer(reply)
 			}
 			if box != nil && len(req.Schema) > 0 {
 				return b.render(ctx, req, messages, answer.Content, out, sessionID)
@@ -412,7 +412,7 @@ func (b *openaiBackend) render(ctx context.Context, req Request, messages []chat
 	}
 	answer := reply.Choices[0].Message.Content
 	if strings.TrimSpace(answer) == "" {
-		return Outcome{}, fmt.Errorf("%s could not render its answer", b.provider.ID)
+		return Outcome{}, b.emptyAnswer(reply)
 	}
 	out.Answer = answer
 	return out, nil

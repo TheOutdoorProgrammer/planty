@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -19,8 +20,10 @@ const (
 // interesting is a content block on a message; the final result arrives as its
 // own line carrying the same envelope the plain json format would have given.
 type streamLine struct {
-	Type    string `json:"type"`
-	Message struct {
+	Type              string `json:"type"`
+	Error             string `json:"error"`
+	IsAPIErrorMessage bool   `json:"is_api_error_message"`
+	Message           struct {
 		Role    string `json:"role"`
 		Content []struct {
 			Type      string          `json:"type"`
@@ -44,6 +47,7 @@ type streamLine struct {
 func outcomeFrom(raw []byte) (Outcome, error) {
 	var out Outcome
 	var final *envelope
+	var failureCode string
 	// Results arrive on later lines and are only theirs by id: two calls can
 	// be in flight at once, and pairing them by order swaps their outputs.
 	at := map[string]int{}
@@ -64,6 +68,9 @@ func outcomeFrom(raw []byte) (Outcome, error) {
 			shot := event.envelope
 			final = &shot
 			continue
+		}
+		if event.Type == "assistant" && event.IsAPIErrorMessage {
+			failureCode = event.Error
 		}
 
 		for _, block := range event.Message.Content {
@@ -88,7 +95,13 @@ func outcomeFrom(raw []byte) (Outcome, error) {
 	}
 
 	if final == nil {
-		return Outcome{}, fmt.Errorf("claude produced no result: %s", truncate(raw))
+		if failureCode != "" {
+			return Outcome{}, claudeFailure(envelope{}, failureCode)
+		}
+		return Outcome{}, errors.New("claude produced no result")
+	}
+	if final.StopReason != "refusal" && (final.IsError || final.Subtype != "success") {
+		return Outcome{}, claudeFailure(*final, failureCode)
 	}
 	answer, err := answerFromEnvelope(*final)
 	if err != nil {

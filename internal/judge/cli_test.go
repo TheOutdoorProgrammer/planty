@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -167,6 +169,82 @@ func TestAFailedRunIsNotAnEmptyVerdict(t *testing.T) {
 		if _, err := answerFrom([]byte(raw)); err == nil {
 			t.Errorf("%s was accepted as an answer", raw)
 		}
+	}
+}
+
+func TestCLIFailuresPreserveSafeStreamDiagnostics(t *testing.T) {
+	const denied = `{"type":"assistant","is_api_error_message":true,"error":"oauth_org_not_allowed","message":{"role":"assistant","content":[{"type":"text","text":"private-provider-message"}]}}
+{"type":"result","is_error":true,"subtype":"success","api_error_status":403,"terminal_reason":"api_error","result":"private-provider-message"}`
+	for _, tc := range []struct {
+		name   string
+		stdout string
+		stderr string
+		exit   int
+		want   string
+	}{
+		{"subscription blocked", denied, "", 1, "organization disabled Claude subscription access (oauth_org_not_allowed) (HTTP 403)"},
+		{"error with zero exit", denied, "", 0, "oauth_org_not_allowed"},
+		{"incomplete stream", strings.Split(denied, "\n")[0], "", 1, "oauth_org_not_allowed"},
+		{"unknown error", `{"type":"assistant","is_api_error_message":true,"error":"private-provider-message"}
+{"type":"result","is_error":true,"subtype":"private-provider-message","api_error_status":503,"result":"private-provider-message"}`, "private-provider-message", 1, "execution failed (HTTP 503)"},
+		{"malformed output", "private-provider-message", "private-provider-message", 1, "claude produced no result"},
+		{"success envelope with failed process", `{"type":"result","subtype":"success","result":"private-provider-message"}`, "private-provider-message", 1, "exit status 1"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			binary := filepath.Join(t.TempDir(), "claude")
+			script := fmt.Sprintf("#!/bin/sh\ncat <<'STDOUT'\n%s\nSTDOUT\ncat >&2 <<'STDERR'\n%s\nSTDERR\nexit %d\n", tc.stdout, tc.stderr, tc.exit)
+			if err := os.WriteFile(binary, []byte(script), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			_, err := newCLIBackend(binary, "model").Judge(context.Background(), Request{Turns: []Turn{ask(text("private prompt"))}})
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("got %v, want %q", err, tc.want)
+			}
+			if strings.Contains(err.Error(), "private-provider-message") || strings.Contains(err.Error(), "private prompt") {
+				t.Fatalf("failure leaked private content: %v", err)
+			}
+			var exitErr *exec.ExitError
+			if tc.exit != 0 && !errors.As(err, &exitErr) {
+				t.Fatalf("lost the process error: %v", err)
+			}
+		})
+	}
+}
+
+func TestCLIParsingErrorsDoNotExposeContent(t *testing.T) {
+	for _, raw := range []string{
+		`{"is_error":true,"subtype":"private-provider-message","result":"private-provider-message"}`,
+		`{"subtype": "private-provider-message", broken JSON`,
+	} {
+		_, err := answerFrom([]byte(raw))
+		if err == nil || strings.Contains(err.Error(), "private-provider-message") {
+			t.Fatalf("unsafe parsing error: %v", err)
+		}
+	}
+}
+
+func TestCLIUnmarkedMessagesCannotClassifyFailures(t *testing.T) {
+	_, err := outcomeFrom([]byte(`{"type":"assistant","error":"oauth_org_not_allowed","message":{"content":[]}}
+{"type":"result","is_error":true,"subtype":"error_during_execution","api_error_status":99999}`))
+	if err == nil || err.Error() != "claude: execution failed" {
+		t.Fatalf("untrusted fields reached diagnostics: %v", err)
+	}
+}
+
+func TestCLIRecoveredAPIErrorKeepsSuccessfulAnswer(t *testing.T) {
+	out, err := outcomeFrom([]byte(`{"type":"assistant","is_api_error_message":true,"error":"rate_limit_error"}
+{"type":"result","is_error":false,"subtype":"success","structured_output":{"action":"none"}}`))
+	if err != nil || out.Answer != `{"action":"none"}` {
+		t.Fatalf("recovered API error discarded the answer: %+v, %v", out, err)
+	}
+}
+
+func TestCLICancellationPreservesContextError(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := newCLIBackend("/bin/sh", "model").Judge(ctx, Request{Turns: []Turn{ask(text("hi"))}})
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("lost context cancellation: %v", err)
 	}
 }
 
