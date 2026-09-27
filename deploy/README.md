@@ -15,6 +15,7 @@ Flux reconciles the completed copies in the private `flux` repository, so reposi
 | `secret.yaml.example` | Template for API, database, Home Assistant, model-provider, APNs, and MinIO credentials. |
 
 Every CronJob imports the same `planty-secrets` Secret as the service.
+Scheduled commands wait up to five minutes for a transient PostgreSQL connection failure before starting work, with ten-second connection attempts and jittered backoff. Authentication and configuration failures still fail immediately. Migrations and job side effects are never replayed by this wait; interactive commands retain their immediate connection check. Retry warnings and a `database.connect` span expose the wait, and an exhausted deadline still fails the Job.
 The live deployment must override the empty Home Assistant and object-storage endpoints and must configure a weather entity that actually supports a daily forecast.
 
 The API service account may read Planty's CronJobs and read or create Jobs in the `planty` namespace.
