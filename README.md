@@ -53,6 +53,13 @@ Scheduled work is one command per Kubernetes CronJob:
 
 The iOS app can launch these same CronJob templates from Settings.
 When Today reports that Planty needs a fresh look, Run fresh check launches `planty daily`, follows the Kubernetes Job to completion, and reloads the result.
+
+When OpenCode reports that its usage allowance is exhausted, the daily check stops
+further model work for that batch and sends an incomplete-check notification.
+Deferred plants remain failed with zero additional attempts, so retrying failed
+judgments after the allowance resets preserves successful assessments. Ordinary
+rate limits do not trigger this batch stop. Incomplete checks never run garden
+incident detection, and quota exhaustion remains a failed job even if push succeeds.
 An active scheduled or manual run is reused so repeated taps do not duplicate model calls or notifications.
 
 `planty autopsy <slug>` is an on-demand model job.

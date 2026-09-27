@@ -2,6 +2,9 @@ package judge
 
 import "errors"
 
+// ErrQuotaExhausted means the provider's usage allowance must reset before more work can succeed.
+var ErrQuotaExhausted = errors.New("model usage quota exhausted")
+
 type permanentError struct {
 	cause error
 }
