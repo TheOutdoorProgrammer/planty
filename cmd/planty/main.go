@@ -58,8 +58,20 @@ func main() {
 	log = slog.New(telemetry.LogHandler(log.Handler()))
 	if err := run(log); err != nil {
 		log.Error("planty", "error", err)
-		os.Exit(1)
+		os.Exit(commandExitCode(err))
 	}
+}
+
+func commandExitCode(err error) int {
+	if err == nil {
+		return 0
+	}
+	// The daily Job's podFailurePolicy stops a fresh batch from replacing a
+	// partially successful run when provider allowance cannot recover on retry.
+	if errors.Is(err, judge.ErrQuotaExhausted) {
+		return 3
+	}
+	return 1
 }
 
 var (

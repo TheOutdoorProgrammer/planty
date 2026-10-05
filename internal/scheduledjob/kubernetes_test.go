@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"regexp"
 	"sort"
 	"strings"
@@ -53,6 +54,12 @@ func TestUnknownJobNeverReachesKubernetes(t *testing.T) {
 func TestStartCopiesTheCronJobTemplateAndBoundsItsLifetime(t *testing.T) {
 	var mu sync.Mutex
 	var created jobRequest
+	failurePolicy := map[string]any{"rules": []any{map[string]any{
+		"action": "FailJob",
+		"onExitCodes": map[string]any{
+			"containerName": "daily", "operator": "In", "values": []any{float64(3)},
+		},
+	}}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer test-token" {
 			t.Errorf("authorization header = %q", r.Header.Get("Authorization"))
@@ -65,7 +72,10 @@ func TestStartCopiesTheCronJobTemplateAndBoundsItsLifetime(t *testing.T) {
 					"schedule": "0 8 * * *",
 					"jobTemplate": map[string]any{
 						"metadata": map[string]any{"labels": map[string]string{"template": "daily"}},
-						"spec":     map[string]any{"backoffLimit": 1, "template": map[string]any{"spec": map[string]any{"restartPolicy": "Never"}}},
+						"spec": map[string]any{
+							"backoffLimit": 1, "podFailurePolicy": failurePolicy,
+							"template": map[string]any{"spec": map[string]any{"restartPolicy": "Never"}},
+						},
 					},
 				},
 				"status": map[string]any{"active": []any{}},
@@ -113,6 +123,9 @@ func TestStartCopiesTheCronJobTemplateAndBoundsItsLifetime(t *testing.T) {
 	}
 	if created.Spec["backoffLimit"] != float64(1) {
 		t.Errorf("CronJob spec was not copied: %#v", created.Spec)
+	}
+	if !reflect.DeepEqual(created.Spec["podFailurePolicy"], failurePolicy) {
+		t.Errorf("manual run lost the quota failure policy: %#v", created.Spec)
 	}
 }
 
