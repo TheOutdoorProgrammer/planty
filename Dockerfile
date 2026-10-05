@@ -1,32 +1,28 @@
-# Claude Code ships a native musl build, so the judge backend costs one static
-# binary rather than a Node runtime.
-FROM alpine:3.22 AS claude
+# Codex's native musl build keeps subscription authentication in the supported
+# app-server without adding a Node runtime.
+FROM alpine:3.22 AS codex
 
-ARG CLAUDE_VERSION=stable
+ARG CODEX_VERSION=0.154.0
 
 # Alpine drops old package versions, so pinning here breaks the build the week
 # it lands rather than the year it matters.
 # hadolint ignore=DL3018
-RUN apk add --no-cache curl jq
+RUN apk add --no-cache curl
 
 SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 RUN set -eux; \
     case "$(uname -m)" in \
-      aarch64) platform=linux-arm64-musl ;; \
-      x86_64)  platform=linux-x64-musl ;; \
+      aarch64) platform=aarch64-unknown-linux-musl; expected=583b48df32804213bdcd338c2e5adb06b34340821fa757a726cc0a524fa33c27 ;; \
+      x86_64) platform=x86_64-unknown-linux-musl; expected=d7e18b2597ae8f242f5f31ee9e90deef48dbc9edd634d9868fb6435d08c07f02 ;; \
       *) echo "unsupported architecture $(uname -m)" >&2; exit 1 ;; \
     esac; \
-    base=https://downloads.claude.ai/claude-code-releases; \
-    version="$CLAUDE_VERSION"; \
-    if [ "$version" = stable ] || [ "$version" = latest ]; then \
-      version="$(curl -fsSL "$base/$version")"; \
-    fi; \
-    expected="$(curl -fsSL "$base/$version/manifest.json" \
-      | jq -er --arg p "$platform" '.platforms[$p].checksum')"; \
-    curl -fsSL -o /tmp/claude "$base/$version/$platform/claude"; \
-    echo "$expected  /tmp/claude" | sha256sum -c -; \
-    install -D -m 0755 /tmp/claude /out/claude; \
-    /out/claude --version
+    base="https://github.com/openai/codex/releases/download/rust-v$CODEX_VERSION"; \
+    curl -fsSL -o /tmp/codex.tar.gz "$base/codex-$platform.tar.gz"; \
+    echo "$expected  /tmp/codex.tar.gz" | sha256sum -c -; \
+    tar -xzf /tmp/codex.tar.gz -C /tmp; \
+    install -D -m 0755 "/tmp/codex-$platform" /out/codex; \
+    /out/codex --version; \
+    /out/codex app-server --help >/dev/null
 
 FROM alpine:3.22 AS symbols
 
@@ -35,11 +31,8 @@ RUN apk add --no-cache llvm20
 
 FROM alpine:3.22
 
-# The CLI shells out and reads its own config, so this cannot be distroless.
-# bash specifically: the Bash tool runs bash, not busybox sh, and without it
-# every command the model tries comes back as a broken shell.
 # hadolint ignore=DL3018
-RUN apk add --no-cache ca-certificates libgcc libstdc++ bash llvm20-libs libcurl \
+RUN apk add --no-cache ca-certificates libgcc libstdc++ llvm20-libs libcurl \
     && adduser -D -u 65532 -h /home/planty planty
 
 COPY --from=symbols /usr/lib/llvm20/bin/llvm-symbolizer /usr/local/bin/llvm-symbolizer
@@ -71,12 +64,10 @@ RUN set -eu; \
 # the old absolute path so existing manifests and runbooks keep working.
 RUN ln -s /usr/local/bin/planty /planty
 
-COPY --from=claude /out/claude /usr/local/bin/claude
+COPY --from=codex /out/codex /usr/local/bin/codex
 
-# Claude Code writes here every run, so it is a volume in the deployment and
-# the image only guarantees the path exists and belongs to the user.
 ENV HOME=/home/planty
-RUN mkdir -p /home/planty/.claude && chown -R 65532:65532 /home/planty
+RUN mkdir -p /home/planty/.codex && chown -R 65532:65532 /home/planty
 
 # Numeric so Kubernetes runAsUser and the host both resolve it.
 USER 65532:65532

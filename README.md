@@ -74,18 +74,45 @@ Each model job may also carry a user-editable instruction overlay.
 The overlay can add household context, priorities, and style preferences, while safety rules, evidence requirements, response schemas, and tool authority remain immutable in code.
 
 Providers are declared with `PLANTY_PROVIDERS`.
-The configured fallback selected by `PLANTY_JUDGE` can use the Claude Code subscription or the direct Anthropic API, while declared OpenAI-compatible providers use the shared chat-completions harness.
-Claude Code failures retain a bounded diagnostic from the structured output, including organization-disabled subscription access and HTTP error status, without logging raw provider messages, prompts, or stderr.
+The owned deployment selects Astra (`gpt-6-astra`) through a Codex subscription, using the supported local app-server protocol.
+The container includes pinned Codex 0.154.0 and no Claude binary. Claude is retired in the owned deployment.
+Codex requires ChatGPT authentication and never falls back to metered API billing.
+Legacy Anthropic and OpenAI-compatible backends remain separately configurable; the latter use the shared chat-completions harness.
 Empty OpenAI-compatible replies report a bounded finish-reason diagnostic, distinguishing token limits, refusals, missing choices, and missing tool calls without exposing provider content.
-Daily assessment and consultation are acting jobs, so they require the Claude Code CLI or OpenAI-compatible harness; the direct Anthropic API fallback remains available only to one-shot jobs that do not execute Planty tools.
+Daily assessment and consultation are acting jobs, so they require a backend with constrained Planty tools; the direct Anthropic API remains available only to one-shot jobs that do not execute them.
 Current photographs can reach any verified vision model, and acting providers must advertise offered-photo access before they can be assigned to consultations.
-The Claude Code CLI and OpenAI-compatible harness can selectively open offered history; the direct Anthropic API remains explicitly ineligible.
+Codex and the OpenAI-compatible harness can selectively open offered history; the direct Anthropic API remains explicitly ineligible.
 The OpenAI-compatible harness gives the prompt and photo tool the same numbered catalogue, with explicit zero-based arguments and recoverable validation errors.
 Selected images follow the complete batch of text tool replies as user image content, so providers receive the Chat Completions vision format even when several photos are opened together.
 Photo access emits `model.photo.open` spans with the offered count, selected index, and outcome, without photograph bytes, labels, or conversation content.
 
-[ADR 0001](adr/0001-buy-judgments-through-the-claude-code-cli.md) explains the subscription-backed default.
+[ADR 0034](adr/0034-use-astra-through-the-codex-subscription-app-server.md) replaces the Claude subscription choice in [ADR 0001](adr/0001-buy-judgments-through-the-claude-code-cli.md).
 [ADR 0007](adr/0007-choose-a-model-per-job.md) records per-job selection, and [ADR 0008](adr/0008-run-the-acting-loop-in-the-openai-compatible-harness.md) records the later shared tool loop.
+
+### Codex subscription setup
+
+Create a dedicated Planty login with the supported Codex login flow. Use an absolute, writable home belonging to the service user:
+
+```sh
+export PLANTY_CODEX_HOME="$HOME/.local/share/planty-codex"
+install -d -m 700 "$PLANTY_CODEX_HOME"
+CODEX_HOME="$PLANTY_CODEX_HOME" codex -c 'cli_auth_credentials_store="file"' login
+export PLANTY_JUDGE=codex
+export PLANTY_JUDGE_MODEL=gpt-6-astra
+export PLANTY_PROVIDERS='[{"id":"codex","kind":"codex"}]'
+planty serve
+```
+
+Authenticate this home independently. Do not deploy a clone of an actively used personal login: concurrent refreshes of the same session can invalidate credentials, as documented in [Codex CI authentication](https://developers.openai.com/codex/auth/ci-cd-auth).
+Keep `auth.json` private to the service user, with mode0600, and never commit it or bake it into the image.
+Set `PLANTY_CODEX_BIN` only when the pinned executable is outside `PATH`.
+
+For Kubernetes, mount persistent `/codex` at `PLANTY_CODEX_HOME` in the API and daily job, owned by UID/GID65532. Seed its dedicated login once; do not overwrite refreshed credentials on startup.
+Planty holds a file lock throughout each request so those processes serialize access to the shared login. Requests may queue behind ongoing judgments.
+The current single-node deployment uses ReadWriteOnce storage; multi-node deployment requires compatible placement or storage.
+
+Codex receives explicit empty environments and only Planty's authorized dynamic tools. It cannot use a native shell or filesystem tool, and the subprocess does not inherit application secrets.
+After changing providers, update existing model assignments through Settings or the validated model-assignment API. Stored assignments are never silently replaced by the default.
 
 ## Integrations and boundaries
 
@@ -162,9 +189,12 @@ MetricKit reports platform architecture, which can differ from the app slice. If
 ```sh
 go test -race ./...
 PLANTY_TEST_DATABASE_URL=postgres://... go test ./internal/store/...
+PLANTY_LIVE_CODEX=1 PLANTY_CODEX_HOME=/absolute/dedicated/codex-home \
+  go test ./internal/judge -run '^TestLiveCodexSubscriptionCapabilities$' -count=1
 ```
 
 SQL behavior gets integration coverage because a query can compile, satisfy every mock, and still be rejected by PostgreSQL.
+The opt-in Codex test uses the subscription for synthetic vision, schema, history, offered-photo and constrained-tool probes. Its tool stub cannot actuate a plant.
 The iOS test command is documented in [ios/README.md](ios/README.md).
 
 ## License

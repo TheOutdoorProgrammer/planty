@@ -40,10 +40,10 @@ func identifySchema() (map[string]any, error) {
 				"items": {
 					"type": "object",
 					"additionalProperties": false,
-					"required": ["common_name", "confidence"],
+					"required": ["common_name", "scientific_name", "confidence"],
 					"properties": {
 						"common_name": {"type": "string"},
-						"scientific_name": {"type": "string"},
+						"scientific_name": {"type": ["string", "null"]},
 						"confidence": {
 							"type": "number",
 							"description": "What you would bet, not how the picture feels"

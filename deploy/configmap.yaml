@@ -14,21 +14,15 @@ data:
   PLANTY_HA_URL: ""
   PLANTY_WEATHER_ENTITY: "weather.nws_home"
 
-  # Which way judgments get bought: "cli" runs the Claude Code binary against a
-  # subscription, "api" meters tokens against ANTHROPIC_API_KEY. Unset, a key
-  # wins if the secret carries one.
-  PLANTY_JUDGE: "cli"
+  PLANTY_JUDGE: "codex"
+  PLANTY_JUDGE_MODEL: "gpt-6-astra"
+  PLANTY_CODEX_HOME: "/codex"
   PLANTY_FRIEND_NAME: "friend"
 
-  # Where models can be reached. An openai provider whose key is absent is
-  # skipped rather than offered, so removing the key disables it. Which model
-  # answers which job is chosen in the app, not here.
+  # Only the owner's Codex subscription is offered for model assignments.
   PLANTY_PROVIDERS: |
     [
-      {"id": "claude", "kind": "claude"},
-      {"id": "opencode-go", "kind": "openai",
-       "base_url": "https://opencode.ai/zen/go/v1",
-       "api_key_env": "OPENCODE_API_KEY"}
+      {"id": "codex", "kind": "codex"}
     ]
 
   # Object storage for photos. Leave the endpoint empty to disable the photo

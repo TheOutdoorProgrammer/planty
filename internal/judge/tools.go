@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"os/exec"
 	"regexp"
 	"slices"
@@ -48,6 +49,7 @@ type toolCall struct {
 // the loop cannot reach anything the Acting it was built from did not grant.
 type toolbox struct {
 	acting *Acting
+	live   bool
 	offers []Offer
 	client *http.Client
 }
@@ -230,7 +232,16 @@ func (t *toolbox) runAgent(ctx context.Context, command string) string {
 		return "Refused: " + err.Error()
 	}
 
-	out, err := exec.CommandContext(ctx, t.acting.Binary, parsed[1:]...).CombinedOutput()
+	cmd := exec.CommandContext(ctx, t.acting.Binary, parsed[1:]...)
+	for _, entry := range os.Environ() {
+		if !strings.HasPrefix(entry, "PLANTY_CHAT=") {
+			cmd.Env = append(cmd.Env, entry)
+		}
+	}
+	if t.live {
+		cmd.Env = append(cmd.Env, "PLANTY_CHAT=1")
+	}
+	out, err := cmd.CombinedOutput()
 	body := strings.TrimSpace(string(out))
 	if err != nil && body == "" {
 		return "That command failed: " + err.Error()

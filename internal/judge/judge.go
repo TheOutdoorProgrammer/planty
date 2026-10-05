@@ -1,4 +1,4 @@
-// Package judge asks Claude what to do about a plant, given its record, its
+// Package judge asks a model what to do about a plant, given its record, its
 // readings and what has been done to it lately.
 package judge
 
@@ -28,8 +28,7 @@ type Judge struct {
 	// different provider from the one next to it.
 	backends map[string]Backend
 
-	// fallback answers a job with no assignment, and is what Planty has always
-	// done: the environment's choice of Claude.
+	// fallback answers a job with no assignment using the configured backend.
 	fallback Backend
 
 	// assigned is consulted per call, so a model chosen on the phone takes
@@ -177,7 +176,7 @@ func (j *Judge) DefaultSkills() Skills {
 		return claudeSkills
 	case *apiBackend:
 		return Skills{Vision: true, Schema: true}
-	case *openaiBackend:
+	case *openaiBackend, *codexBackend:
 		return Skills{Vision: true, Schema: true, Tools: true, OfferedPhotos: true}
 	default:
 		return Skills{}
@@ -190,12 +189,21 @@ func backendForProvider(p Provider) Backend {
 		return cliIfInstalled(DefaultModel)
 	case KindOpenAI:
 		return newOpenAIBackend(p, "")
+	case KindCodex:
+		return codexIfConfigured(AstraModel)
 	default:
 		return nil
 	}
 }
 
 func backendFor(choice string) Backend {
+	if choice == "codex" {
+		model := AstraModel
+		if override := os.Getenv("PLANTY_JUDGE_MODEL"); override != "" {
+			model = override
+		}
+		return codexIfConfigured(model)
+	}
 	model := DefaultModel
 	if override := os.Getenv("PLANTY_JUDGE_MODEL"); override != "" {
 		model = override

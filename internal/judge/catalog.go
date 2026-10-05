@@ -97,6 +97,8 @@ var claudeSkills = Skills{Vision: true, Schema: true, Tools: true, OfferedPhotos
 // accepts response_format, answers 200, and ignores it, so it is absent here.
 // openai_live_test.go is what keeps this table honest.
 var known = []Model{
+	{Provider: "codex", ID: AstraModel, Name: "OpenAI Astra (Codex subscription)", Rank: 0,
+		Skills: Skills{Vision: true, Schema: true, Tools: true, OfferedPhotos: true}},
 	{Provider: "claude", ID: "claude-opus-5", Name: "Claude Opus 5", Rank: 1, Skills: claudeSkills},
 	{Provider: "claude", ID: "claude-sonnet-5", Name: "Claude Sonnet 5", Rank: 2, Skills: claudeSkills},
 	{Provider: "claude", ID: "claude-haiku-4-5-20251001", Name: "Claude Haiku 4.5", Rank: 3, Skills: claudeSkills},

@@ -17,6 +17,7 @@ const (
 
 	// KindOpenAI is any endpoint speaking OpenAI chat completions.
 	KindOpenAI Kind = "openai"
+	KindCodex  Kind = "codex"
 )
 
 // Provider is one place models can be reached.
@@ -43,7 +44,7 @@ func (p Provider) validate() error {
 		return fmt.Errorf("a provider needs an id")
 	}
 	switch p.Kind {
-	case KindClaude:
+	case KindClaude, KindCodex:
 	case KindOpenAI:
 		if p.BaseURL == "" {
 			return fmt.Errorf("provider %q needs a base_url", p.ID)
@@ -57,10 +58,9 @@ func (p Provider) validate() error {
 	return nil
 }
 
-// defaultProviders is what Planty knows about with no configuration: the
-// Claude subscription it has always used, and the OpenCode Go subscription,
-// which is dormant until its key is present.
+// Codex stays dormant until its dedicated home and executable are configured.
 var defaultProviders = []Provider{
+	{ID: "codex", Kind: KindCodex},
 	{ID: "claude", Kind: KindClaude},
 	{ID: "opencode-go", Kind: KindOpenAI,
 		BaseURL: "https://opencode.ai/zen/go/v1", APIKeyEnv: "OPENCODE_API_KEY"},
@@ -83,6 +83,9 @@ func Providers() (map[string]Provider, error) {
 			return nil, err
 		}
 		if p.Kind == KindOpenAI && p.Key() == "" {
+			continue
+		}
+		if p.Kind == KindCodex && codexIfConfigured(AstraModel) == nil {
 			continue
 		}
 		out[p.ID] = p

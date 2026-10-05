@@ -179,6 +179,8 @@ spec:
             runAsNonRoot: true
             runAsUser: 65532
             runAsGroup: 65532
+            fsGroup: 65532
+            fsGroupChangePolicy: OnRootMismatch
           containers:
             - name: daily
               image: ghcr.io/theoutdoorprogrammer/planty:latest
@@ -188,11 +190,11 @@ spec:
                     name: planty-config
                 - secretRef:
                     name: planty-secrets
-              # This is the one scheduled job that asks the model anything, so
-              # it is the one that needs somewhere for the CLI to write.
               volumeMounts:
-                - name: claude-home
+                - name: runtime-home
                   mountPath: /home/planty
+                - name: codex-home
+                  mountPath: /codex
                 - name: scratch
                   mountPath: /tmp
               securityContext:
@@ -204,10 +206,12 @@ spec:
                 limits:
                   memory: 1Gi
           volumes:
-            # Bounded so a runaway job is evicted rather than filling the node.
-            - name: claude-home
+            - name: runtime-home
               emptyDir:
                 sizeLimit: 1Gi
+            - name: codex-home
+              persistentVolumeClaim:
+                claimName: planty-codex
             - name: scratch
               emptyDir:
                 sizeLimit: 1Gi
