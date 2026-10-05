@@ -47,6 +47,12 @@ func (s *Store) CompleteVerdict(ctx context.Context, c VerdictCompletion) (plant
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	var locked uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT p.id FROM plants p JOIN verdicts v ON v.plant_id = p.id
+		WHERE v.id = $1 FOR NO KEY UPDATE OF p`, c.VerdictID).Scan(&locked); err != nil {
+		return plant.Observation{}, classify(err)
+	}
+
 	tag, err := tx.Exec(ctx, `
 		INSERT INTO care_completions (idempotency_key, verdict_id, kind, body)
 		VALUES ($1, $2, $3, $4)
@@ -84,12 +90,8 @@ func (s *Store) CompleteVerdict(ctx context.Context, c VerdictCompletion) (plant
 		Source:     plant.SourceApp,
 	}
 
-	created, err := addObservationTx(ctx, tx, o)
+	created, err := completeVerdictTx(ctx, tx, c.VerdictID, o)
 	if err != nil {
-		return plant.Observation{}, err
-	}
-	if _, err := tx.Exec(ctx,
-		`UPDATE verdicts SET acknowledged_at = now() WHERE id = $1`, c.VerdictID); err != nil {
 		return plant.Observation{}, err
 	}
 	if _, err := tx.Exec(ctx, `
@@ -142,6 +144,17 @@ func addObservationTx(ctx context.Context, tx pgx.Tx, o plant.Observation) (plan
 	err := row.Scan(&out.ID, &out.PlantID, &out.Kind, &out.Body,
 		&out.OccurredAt, &out.Source, &out.Actor, &out.CreatedAt)
 	return out, classify(err)
+}
+
+func completeVerdictTx(ctx context.Context, tx pgx.Tx, verdictID uuid.UUID, o plant.Observation) (plant.Observation, error) {
+	created, err := addObservationTx(ctx, tx, o)
+	if err != nil {
+		return plant.Observation{}, err
+	}
+	if _, err := tx.Exec(ctx, `UPDATE verdicts SET acknowledged_at = now() WHERE id = $1`, verdictID); err != nil {
+		return plant.Observation{}, err
+	}
+	return created, nil
 }
 
 func observationTx(ctx context.Context, tx pgx.Tx, id uuid.UUID) (plant.Observation, error) {

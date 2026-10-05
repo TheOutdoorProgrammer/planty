@@ -31,10 +31,11 @@ func New(baseURL, token string) *Client {
 
 // State is one entity's current state.
 type State struct {
-	EntityID    string         `json:"entity_id"`
-	State       string         `json:"state"`
-	Attributes  map[string]any `json:"attributes"`
-	LastChanged time.Time      `json:"last_changed"`
+	EntityID     string         `json:"entity_id"`
+	State        string         `json:"state"`
+	Attributes   map[string]any `json:"attributes"`
+	LastChanged  time.Time      `json:"last_changed"`
+	LastReported time.Time      `json:"last_reported"`
 }
 
 // Float parses the state as a number, which most sensors report.

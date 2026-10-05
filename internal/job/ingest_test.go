@@ -20,9 +20,16 @@ import (
 
 type ingestRecorder struct {
 	*store.Store
-	link     plant.SensorLink
-	readings []plant.Reading
-	writeErr error
+	link       plant.SensorLink
+	readings   []plant.Reading
+	writeErr   error
+	detectErr  error
+	detections int
+}
+
+func (s *ingestRecorder) DetectWatering(context.Context, time.Time) (int, error) {
+	s.detections++
+	return 0, s.detectErr
 }
 
 func (s *ingestRecorder) SensorLinks(context.Context, *uuid.UUID) ([]plant.SensorLink, error) {
@@ -53,6 +60,26 @@ func recoveredStates() []ha.State {
 
 func newIngestRecorder() *ingestRecorder {
 	return &ingestRecorder{link: plant.SensorLink{ID: uuid.New(), HAEntityID: "sensor.soil"}}
+}
+
+func TestIngestDetectsWateringAfterRecordingReports(t *testing.T) {
+	db := newIngestRecorder()
+	reported := time.Now().UTC().Add(-time.Minute)
+	client := ingestStatesFunc(func(context.Context) ([]ha.State, error) {
+		states := recoveredStates()
+		states[0].LastReported = reported
+		return states, nil
+	})
+	if err := (Ingest{Store: db, HA: client, Log: quietLog()}).Run(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if db.detections != 1 || len(db.readings) != 1 || !db.readings[0].ReportedAt.Equal(reported) {
+		t.Fatalf("detections=%d, readings=%+v", db.detections, db.readings)
+	}
+	db.detectErr = errors.New("detector unavailable")
+	if err := (Ingest{Store: db, HA: client, Log: quietLog()}).Run(context.Background()); !errors.Is(err, db.detectErr) {
+		t.Fatalf("error=%v", err)
+	}
 }
 
 func TestIngestRecoversAcrossHomeAssistantRestart(t *testing.T) {
