@@ -103,6 +103,7 @@ func (b *openaiBackend) Judge(ctx context.Context, req Request) (Outcome, error)
 	var box *toolbox
 	if req.Acting != nil || len(req.Offered) > 0 {
 		box = newToolbox(req.Acting, req.Offered...)
+		box.live = req.Live
 	}
 	return b.converse(ctx, req, messages, box, sessionID)
 }

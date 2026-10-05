@@ -10,9 +10,10 @@ Flux reconciles the completed copies in the private `flux` repository, so reposi
 | `namespace.yaml` | The `planty` namespace. |
 | `postgres-cluster.yaml` | A single-instance CloudNativePG cluster. |
 | `deployment.yaml` | The API deployment, ClusterIP service, and namespace-scoped scheduled-job RBAC. |
+| `codex-pvc.yaml` | Shared persistent Codex subscription state for the API and daily job. |
 | `cronjobs.yaml` | Ingest, watering verification, photo pruning, daily, chase, away, thirst, cold, and reminder jobs. |
 | `configmap.yaml` | Public non-secret defaults and provider declarations. |
-| `secret.yaml.example` | Template for API, database, Home Assistant, model-provider, APNs, and MinIO credentials. |
+| `secret.yaml.example` | Template for API, database, Home Assistant, APNs, and MinIO credentials. |
 
 Every CronJob imports the same `planty-secrets` Secret as the service.
 Scheduled commands wait up to five minutes for a transient PostgreSQL connection failure before starting work, with ten-second connection attempts and jittered backoff. Authentication and configuration failures still fail immediately. Migrations and job side effects are never replayed by this wait; interactive commands retain their immediate connection check. Retry warnings and a `database.connect` span expose the wait, and an exhausted deadline still fails the Job.
@@ -34,13 +35,19 @@ The quota exit code requires a matching policy in the live CronJob template.
 `PLANTY_PROVIDERS` declares the available model backends.
 The app chooses and persists one compatible model per model job, while an unassigned job follows the service default.
 
-For the Claude Code subscription backend, run `claude setup-token` on an already signed-in machine and store the result as `CLAUDE_CODE_OAUTH_TOKEN`.
-Do not also set `ANTHROPIC_API_KEY` unless metered Anthropic API use is intentional.
-The Claude CLI writes temporary state, so the deployment and model-using CronJobs mount writable `emptyDir` volumes while the root filesystem remains read-only.
-
-An OpenAI-compatible provider declares its base URL and the environment variable containing its key.
-If that key is absent, the provider is not offered by the model catalogue.
+These templates select `PLANTY_JUDGE=codex`, `PLANTY_JUDGE_MODEL=gpt-6-astra`, and a single `codex` provider. The image includes pinned Codex 0.154.0, with no Claude binary.
+The Codex backend requires ChatGPT subscription authentication and has no metered API fallback.
 Assignments are checked against verified vision, schema, and tool capabilities before they are accepted.
+Existing assignments must be updated through Settings or the model-assignment API after the new provider is configured; changing the fallback does not replace them.
+
+Create a dedicated Planty login using the [supported Codex login flow](https://developers.openai.com/codex/auth/) and file credential storage, as shown in the [project README](../README.md#codex-subscription-setup).
+Do not clone a personal session that is still in use: independent refreshes can invalidate the shared login, as described in [Codex CI authentication](https://developers.openai.com/codex/auth/ci-cd-auth).
+Use a secure channel to seed the dedicated home into the `planty-codex` volume once, then keep that volume writable so Codex can persist refreshed credentials. Never commit the home or copy a static `auth.json` Secret over it on every startup.
+
+The volume's `/codex` directory must belong to UID/GID65532 with mode0700, and `auth.json` must have mode0600. Verify ownership while provisioning: `fsGroup` does not change ownership for every storage driver, including some local-path/hostPath configurations.
+The backend serializes requests with a file lock across API and daily processes, including token refresh. Keep those processes on the same underlying volume; a second copy defeats the lock.
+ReadWriteOnce allows these pods to share a volume on one node. Multi-node clusters need compatible placement or storage. Set the storage class for your environment and retain the volume during upgrades; its requested capacity may not be an enforced quota.
+The home and `/tmp` scratch mounts remain disposable, while `/codex` is persistent. The container root filesystem stays read-only.
 
 ## Photograph storage
 
@@ -63,13 +70,14 @@ Private DNS should still resolve to a private address and TLS should still prote
 
 ## Deployment order
 
-1. Release a multi-architecture image containing `linux/arm64` for the Apple-silicon cluster.
-2. Apply the namespace, encrypted secret, and Postgres cluster, then wait for CloudNativePG readiness.
-3. Apply the deployment and wait for migrations and service readiness.
-4. Verify MinIO readiness, the `photo storage ready` log, and one returned timeline URL from a client-reachable host.
-5. Seed the initial plants and questions with `kubectl -n planty exec deploy/planty -- /planty seed` when the database is new.
-6. Link and calibrate sensors before interpreting moisture-derived care advice.
-7. Run `planty cold`, `planty daily`, and a real APNs delivery check before relying on their schedules.
+1. Release an image supporting the cluster architecture and pin its tag and digest in the deployment overlay. It must contain the Codex backend before applying these provider settings.
+2. Apply the namespace, securely provisioned Secret, and Postgres cluster, then wait for CloudNativePG readiness.
+3. Provision `codex-pvc.yaml`, seed its dedicated subscription login, and verify permissions before starting model workloads.
+4. Apply the completed ConfigMap, deployment and CronJob templates, then verify migrations and service readiness.
+5. Verify MinIO readiness, the `photo storage ready` log, and one returned timeline URL from a client-reachable host.
+6. Seed the initial plants and questions with `kubectl -n planty exec deploy/planty -- /planty seed` only when the database is new. Link and calibrate sensors before interpreting moisture-derived care advice.
+7. Verify Astra's vision, strict schema and constrained tools before updating stored model assignments. After a failed assessment batch, run `planty retry` to preserve existing successes, and confirm a complete ledger plus correlated logs and traces.
+8. For a new installation, run `planty cold`, `planty daily`, and a real APNs delivery check before relying on their schedules.
 
 ## Watering boundary
 

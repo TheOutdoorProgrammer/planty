@@ -6,9 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// Backend performs one judgment call and returns the model's JSON answer. Two
-// exist because the same judgment is bought either metered through the API or
-// against a subscription through the Claude Code CLI.
+// Backend performs one judgment call and returns the model's JSON answer.
 type Backend interface {
 	Judge(ctx context.Context, req Request) (Outcome, error)
 	Name() string
