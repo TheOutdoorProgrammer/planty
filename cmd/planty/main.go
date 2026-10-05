@@ -124,7 +124,7 @@ func run(log *slog.Logger) (runErr error) {
 		store.SilenceMigrations()
 	}
 
-	db, err := store.Open(ctx, dsn)
+	db, err := openDatabase(ctx, os.Args[1], dsn, log)
 	if err != nil {
 		return err
 	}
