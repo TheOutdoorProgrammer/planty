@@ -22,6 +22,13 @@ The API service account may read Planty's CronJobs and read or create Jobs in th
 The manual-run API maps stable code-owned identifiers to exact CronJob names, copies their current job templates, and never accepts an arbitrary Kubernetes resource name or command.
 Manual copies expire seven days after completion, while repeated requests reuse an active scheduled or manual run.
 
+Confirmed model-provider quota exhaustion exits with code 3. The daily Job's
+`podFailurePolicy` marks that failure terminal without rerunning the whole batch;
+otherwise a retry would create a newer empty run that hides partial coverage.
+Other failures exit with code 1 and retain the configured Kubernetes retry budget.
+After provider allowance recovers, use `planty retry` to assess only failed plants.
+The quota exit code requires a matching policy in the live CronJob template.
+
 ## Judge configuration
 
 `PLANTY_PROVIDERS` declares the available model backends.

@@ -165,6 +165,13 @@ spec:
   jobTemplate:
     spec:
       backoffLimit: 1
+      podFailurePolicy:
+        rules:
+          - action: FailJob
+            onExitCodes:
+              containerName: daily
+              operator: In
+              values: [3]
       template:
         spec:
           restartPolicy: Never
