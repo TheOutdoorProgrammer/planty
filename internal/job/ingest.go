@@ -21,6 +21,7 @@ type ingestStore interface {
 	SensorLinks(context.Context, *uuid.UUID) ([]plant.SensorLink, error)
 	RecordReading(context.Context, plant.Reading) error
 	MoistureRoseAfter(context.Context, uuid.UUID, time.Time, time.Duration) (bool, error)
+	DetectWatering(context.Context, time.Time) (int, error)
 }
 
 type ingestHomeAssistant interface {
@@ -74,13 +75,18 @@ func (i Ingest) Run(ctx context.Context) error {
 			Value:        value,
 			Unit:         state.Unit(),
 			TakenAt:      time.Now().UTC(),
+			ReportedAt:   &state.LastReported,
 		}); err != nil {
 			return fmt.Errorf("record %s: %w", link.HAEntityID, err)
 		}
 		stored++
 	}
 
-	i.Log.Info("ingest complete", "stored", stored, "skipped", skipped)
+	detected, err := i.Store.DetectWatering(ctx, time.Now().UTC())
+	if err != nil {
+		return fmt.Errorf("detect watering: %w", err)
+	}
+	i.Log.InfoContext(ctx, "ingest complete", "stored", stored, "skipped", skipped, "watering_detected", detected)
 	return nil
 }
 

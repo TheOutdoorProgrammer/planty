@@ -91,6 +91,12 @@ func (s *Store) ResolveReminder(ctx context.Context, resolution ReminderResoluti
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	var locked uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT p.id FROM plants p JOIN reminders r ON r.plant_id = p.id
+		WHERE r.id = $1 FOR NO KEY UPDATE OF p`, resolution.ReminderID).Scan(&locked); err != nil {
+		return ResolvedReminder{}, classify(err)
+	}
+
 	var reminder plant.Reminder
 	if err := tx.QueryRow(ctx, `
 		SELECT `+reminderColumns+`

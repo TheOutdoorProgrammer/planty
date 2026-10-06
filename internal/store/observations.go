@@ -19,17 +19,20 @@ func (s *Store) AddObservation(ctx context.Context, o plant.Observation) (plant.
 	if err := o.Valid(); err != nil {
 		return plant.Observation{}, err
 	}
-
-	row := s.pool.QueryRow(ctx, `
-		INSERT INTO observations (plant_id, kind, body, occurred_at, source, actor)
-		VALUES ($1, $2, $3, $4, $5, nullif($6,''))
-		RETURNING id, plant_id, kind, body, occurred_at, source, coalesce(actor,''), created_at`,
-		o.PlantID, o.Kind, o.Body, o.OccurredAt, o.Source, o.Actor)
-
-	var out plant.Observation
-	err := row.Scan(&out.ID, &out.PlantID, &out.Kind, &out.Body,
-		&out.OccurredAt, &out.Source, &out.Actor, &out.CreatedAt)
-	return out, classify(err)
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return plant.Observation{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+	var locked uuid.UUID
+	if err := tx.QueryRow(ctx, `SELECT id FROM plants WHERE id = $1 FOR NO KEY UPDATE`, o.PlantID).Scan(&locked); err != nil {
+		return plant.Observation{}, classify(err)
+	}
+	out, err := addObservationTx(ctx, tx, o)
+	if err != nil {
+		return plant.Observation{}, err
+	}
+	return out, tx.Commit(ctx)
 }
 
 // Observations returns a plant's history, newest first.

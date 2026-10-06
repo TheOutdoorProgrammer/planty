@@ -14,6 +14,27 @@ It also refuses to turn watering into a timer.
 `planty water` is manual-only, persists every attempt, and receives an independent Home Assistant maximum-runtime cutoff.
 The scheduled verifier observes delivery after the probes settle, but no scheduled job starts the pump.
 
+For hand-watered plants with an open **water** action, sensor ingestion can record
+the watering and clear that action automatically. Detection requires a calibrated
+soil probe assigned to that plant for at least 24 hours, with calibration unchanged
+for three hours. Within a three-hour window, at least three fresh reports must
+establish a stable baseline over 30 minutes, followed by two independent reports
+at least ten minutes apart that remain at least 20% of the probe's dry-to-wet range
+above that baseline. Baseline variation must stay within 10% of the range;
+reports and gaps between reports must be no older than 45 minutes.
+
+The recorded event is labeled as sensor-detected watering and includes the raw
+readings and their references. Its timestamp is the first elevated report.
+Cached Home Assistant states cannot confirm an event. Recent watering, repotting,
+or moving observations suppress inference, and sensor reassignment restarts the
+24-hour settling period. Existing links also start that settling period when the
+feature is first installed. Plants without qualifying evidence or an open water
+action still use manual care logging. Detection runs on the existing 20-minute
+ingest schedule and never starts a pump.
+
+[ADR 0035](adr/0035-recognize-hand-watering-from-sustained-probe-evidence.md)
+records the evidence thresholds and tradeoffs.
+
 ## Surfaces
 
 The Go service is the only owner of state.

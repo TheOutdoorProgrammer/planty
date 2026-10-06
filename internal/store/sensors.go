@@ -176,9 +176,9 @@ func (s *Store) RecordReading(ctx context.Context, r plant.Reading) error {
 		r.TakenAt = time.Now().UTC()
 	}
 	_, err := s.pool.Exec(ctx, `
-		INSERT INTO readings (sensor_link_id, value, unit, taken_at)
-		VALUES ($1, $2, nullif($3,''), $4)`,
-		r.SensorLinkID, r.Value, r.Unit, r.TakenAt)
+		INSERT INTO readings (sensor_link_id, value, unit, taken_at, reported_at)
+		VALUES ($1, $2, nullif($3,''), $4, $5)`,
+		r.SensorLinkID, r.Value, r.Unit, r.TakenAt, r.ReportedAt)
 	return err
 }
 

@@ -90,11 +90,12 @@ func (s SensorLink) Valid() error {
 // Reading is one sample. It keys on the link rather than the plant, because the
 // plant a probe serves changes whenever the probe is moved.
 type Reading struct {
-	ID           uuid.UUID `json:"id"`
-	SensorLinkID uuid.UUID `json:"sensor_link_id"`
-	Value        float64   `json:"value"`
-	Unit         string    `json:"unit,omitempty"`
-	TakenAt      time.Time `json:"taken_at"`
+	ID           uuid.UUID  `json:"id"`
+	SensorLinkID uuid.UUID  `json:"sensor_link_id"`
+	Value        float64    `json:"value"`
+	Unit         string     `json:"unit,omitempty"`
+	TakenAt      time.Time  `json:"taken_at"`
+	ReportedAt   *time.Time `json:"-"`
 }
 
 type CalibrationProposalStatus string
