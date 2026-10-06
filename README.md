@@ -32,7 +32,7 @@ feature is first installed. Plants without qualifying evidence or an open water
 action still use manual care logging. Detection runs on the existing 20-minute
 ingest schedule and never starts a pump.
 
-[ADR 0034](adr/0034-recognize-hand-watering-from-sustained-probe-evidence.md)
+[ADR 0035](adr/0035-recognize-hand-watering-from-sustained-probe-evidence.md)
 records the evidence thresholds and tradeoffs.
 
 ## Surfaces

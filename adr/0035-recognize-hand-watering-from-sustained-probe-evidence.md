@@ -1,10 +1,10 @@
-# 34. Recognize hand watering from sustained probe evidence
+# 35. Recognize hand watering from sustained probe evidence
 
 Date: 2026-10-04
 
 ## Status
 
-Proposed.
+Accepted.
 
 ## Context and Problem Statement
 
