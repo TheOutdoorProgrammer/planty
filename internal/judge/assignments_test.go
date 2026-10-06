@@ -89,9 +89,19 @@ func TestDispatchDoesNotFallbackFromInvalidAssignment(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("dispatch error = %v, want %q", err, tc.want)
 			}
+			if !tc.configured && (!errors.Is(err, ErrProviderUnavailable) || Retryable(err)) {
+				t.Fatalf("missing provider was not classified as permanent: %v", err)
+			}
 			if fallback.request.Job != "" || selected.request.Job != "" {
 				t.Fatal("an invalid assignment called a model backend")
 			}
 		})
+	}
+}
+
+func TestDispatchWithoutFallbackRequiresProviderConfiguration(t *testing.T) {
+	_, err := (&Judge{}).dispatch(context.Background(), Request{Job: JobAssess})
+	if !errors.Is(err, ErrProviderUnavailable) || Retryable(err) {
+		t.Fatalf("missing fallback was not classified as permanent: %v", err)
 	}
 }

@@ -5,6 +5,9 @@ import "errors"
 // ErrQuotaExhausted means the provider's usage allowance must reset before more work can succeed.
 var ErrQuotaExhausted = errors.New("model usage quota exhausted")
 
+// ErrProviderUnavailable means local provider configuration must change before work can succeed.
+var ErrProviderUnavailable = errors.New("model provider unavailable")
+
 type permanentError struct {
 	cause error
 }

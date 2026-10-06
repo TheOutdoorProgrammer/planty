@@ -57,7 +57,7 @@ func TestStartCopiesTheCronJobTemplateAndBoundsItsLifetime(t *testing.T) {
 	failurePolicy := map[string]any{"rules": []any{map[string]any{
 		"action": "FailJob",
 		"onExitCodes": map[string]any{
-			"containerName": "daily", "operator": "In", "values": []any{float64(3)},
+			"containerName": "daily", "operator": "In", "values": []any{float64(3), float64(4)},
 		},
 	}}}
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
