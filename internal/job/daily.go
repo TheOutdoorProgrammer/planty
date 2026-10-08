@@ -68,7 +68,7 @@ func (d Daily) Run(ctx context.Context) error {
 		return nil
 	}
 
-	failed, quotaErr, err := d.judgeBatch(ctx, run.ID, plants, func(p plant.Plant) []policy.Evaluation {
+	failed, blockedErr, err := d.judgeBatch(ctx, run.ID, plants, func(p plant.Plant) []policy.Evaluation {
 		return policyDecisions[p.ID]
 	})
 	if err != nil {
@@ -82,7 +82,7 @@ func (d Daily) Run(ctx context.Context) error {
 	}
 
 	// A death is worth understanding, and nobody remembers to ask for it.
-	if quotaErr == nil {
+	if blockedErr == nil {
 		if written, err := (Postmortem{Store: d.Store, Judge: d.Judge, Log: d.Log}).
 			Sweep(ctx); err != nil {
 			d.Log.Error("postmortem sweep failed", "error", err)
@@ -102,18 +102,18 @@ func (d Daily) Run(ctx context.Context) error {
 	}
 	notifyErr := d.notify(ctx, digest)
 	if failed == len(plants) && len(plants) > 0 {
-		return errors.Join(fmt.Errorf("every plant failed judgment (%d)", failed), quotaErr, notifyErr)
+		return errors.Join(fmt.Errorf("every plant failed judgment (%d)", failed), blockedErr, notifyErr)
 	}
-	return errors.Join(quotaErr, notifyErr)
+	return errors.Join(blockedErr, notifyErr)
 }
 
 func (d Daily) judgeBatch(ctx context.Context, runID uuid.UUID, plants []plant.Plant,
-	policies func(plant.Plant) []policy.Evaluation) (failed int, quotaErr error, err error) {
+	policies func(plant.Plant) []policy.Evaluation) (failed int, blockedErr error, err error) {
 	for _, p := range plants {
 		var input store.JudgmentResultInput
-		if quotaErr != nil {
+		if blockedErr != nil {
 			input = store.JudgmentResultInput{
-				PlantID: p.ID, FinalError: "assessment deferred: " + quotaErr.Error(),
+				PlantID: p.ID, FinalError: "assessment deferred: " + blockedErr.Error(),
 			}
 		} else {
 			result, assessErr := d.judgeOne(ctx, runID, p, policies(p))
@@ -121,18 +121,18 @@ func (d Daily) judgeBatch(ctx context.Context, runID uuid.UUID, plants []plant.P
 			if assessErr != nil {
 				d.Log.Error("judgment failed", "plant", p.Slug, "error", assessErr)
 			}
-			if errors.Is(assessErr, judge.ErrQuotaExhausted) {
-				quotaErr = assessErr
+			if errors.Is(assessErr, judge.ErrQuotaExhausted) || errors.Is(assessErr, judge.ErrProviderUnavailable) {
+				blockedErr = assessErr
 			}
 		}
 		if !input.Succeeded {
 			failed++
 		}
 		if err := d.Store.RecordJudgmentPlantResult(ctx, runID, input); err != nil {
-			return failed, quotaErr, fmt.Errorf("record judgment result for %s: %w", p.Slug, err)
+			return failed, blockedErr, fmt.Errorf("record judgment result for %s: %w", p.Slug, err)
 		}
 	}
-	return failed, quotaErr, nil
+	return failed, blockedErr, nil
 }
 
 // AssessPlant runs the same evidence gathering and judgment as the daily job
@@ -301,7 +301,7 @@ func (d Daily) RetryFailed(ctx context.Context) error {
 	for _, prior := range failed {
 		plants = append(plants, prior.Plant)
 	}
-	remaining, quotaErr, err := d.judgeBatch(ctx, run.ID, plants, func(p plant.Plant) []policy.Evaluation {
+	remaining, blockedErr, err := d.judgeBatch(ctx, run.ID, plants, func(p plant.Plant) []policy.Evaluation {
 		return d.currentPolicyResults(ctx, p)
 	})
 	if err != nil {
@@ -311,7 +311,7 @@ func (d Daily) RetryFailed(ctx context.Context) error {
 		return fmt.Errorf("complete judgment retry: %w", err)
 	}
 	if remaining > 0 {
-		return errors.Join(fmt.Errorf("%d plants still failed judgment", remaining), quotaErr)
+		return errors.Join(fmt.Errorf("%d plants still failed judgment", remaining), blockedErr)
 	}
 	d.detectIncidents(ctx, run.ID)
 	return nil

@@ -67,9 +67,12 @@ func commandExitCode(err error) int {
 		return 0
 	}
 	// The daily Job's podFailurePolicy stops a fresh batch from replacing a
-	// partially successful run when provider allowance cannot recover on retry.
+	// partially successful run when provider access cannot recover on retry.
 	if errors.Is(err, judge.ErrQuotaExhausted) {
 		return 3
+	}
+	if errors.Is(err, judge.ErrProviderUnavailable) {
+		return 4
 	}
 	return 1
 }

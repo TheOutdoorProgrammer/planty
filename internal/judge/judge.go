@@ -83,13 +83,13 @@ func (j *Judge) dispatch(ctx context.Context, req Request) (Outcome, error) {
 			}
 			picked, ok := j.backends[chosen.Provider]
 			if !ok {
-				return Outcome{}, fmt.Errorf("provider %q is not configured", chosen.Provider)
+				return Outcome{}, permanent(fmt.Errorf("%w: provider %q is not configured", ErrProviderUnavailable, chosen.Provider))
 			}
 			backend, model = picked, chosen.ID
 		}
 	}
 	if backend == nil {
-		return Outcome{}, fmt.Errorf("nothing can answer %s", req.Job)
+		return Outcome{}, permanent(fmt.Errorf("%w: nothing can answer %s", ErrProviderUnavailable, req.Job))
 	}
 	if req.Job != "" {
 		if gate, ok := backend.(interface{ CanDo(Job) error }); ok {
