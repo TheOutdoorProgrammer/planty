@@ -96,7 +96,7 @@ The overlay can add household context, priorities, and style preferences, while 
 
 Providers are declared with `PLANTY_PROVIDERS`.
 The owned deployment selects Astra (`gpt-6-astra`) through a Codex subscription, using the supported local app-server protocol.
-The container includes pinned Codex 0.154.0 and no Claude binary. Claude is retired in the owned deployment.
+The container includes pinned Codex 0.154.0 and its matching `codex-code-mode-host` companion, plus bubblewrap for Linux sandbox support. The companion must sit beside the Codex executable: text and schema requests can succeed without it while tool calls fail. Claude is retired in the owned deployment.
 Codex requires ChatGPT authentication and never falls back to metered API billing.
 Legacy Anthropic and OpenAI-compatible backends remain separately configurable; the latter use the shared chat-completions harness.
 Empty OpenAI-compatible replies report a bounded finish-reason diagnostic, distinguishing token limits, refusals, missing choices, and missing tool calls without exposing provider content.

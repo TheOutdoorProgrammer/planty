@@ -75,6 +75,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Exercise the packaged Codex tool runtime without credentials
+        run: |
+          go test -c -o "$RUNNER_TEMP/judge.test" ./internal/judge
+          docker run --rm --read-only --network none --cap-drop ALL \
+            --security-opt no-new-privileges --tmpfs /tmp:rw,mode=1777 \
+            -v "$RUNNER_TEMP/judge.test:/judge.test:ro" \
+            -e PLANTY_TEST_CODEX_HOST=/usr/local/bin/codex-code-mode-host \
+            --entrypoint /judge.test planty-native-ci:latest \
+            -test.run '^TestCodexCodeModeHostRuntime$' -test.v
+
       - name: Resolve a real dSYM with the runtime image
         env:
           PLANTY_TEST_SYMBOLIZER_IMAGE: planty-native-ci:latest
